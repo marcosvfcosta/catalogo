@@ -107,14 +107,11 @@ export default function Admin() {
     const { error } = await supabase.storage.from('fotos').upload(nomeArquivo, arquivo, { upsert: true })
     if (error) { alert('Erro ao fazer upload'); setUploadandoFotos(false); return }
     const { data } = supabase.storage.from('fotos').getPublicUrl(nomeArquivo)
-    
     if (produtoId) {
-      // Edição — salva direto no banco
       const ordem = fotosEdicao.length + 1
       await supabase.from('produto_fotos').insert([{ produto_id: produtoId, url: data.publicUrl, ordem }])
       carregarFotosEdicao(produtoId)
     } else {
-      // Cadastro — guarda temporariamente
       setFotosNovas(prev => [...prev, data.publicUrl])
     }
     setUploadandoFotos(false)
@@ -175,15 +172,12 @@ export default function Admin() {
       promocao: novoProduto.promocao, mais_procurado: novoProduto.mais_procurado,
     }]).select()
     if (error) { alert('Erro ao salvar produto'); return }
-
-    // Salva fotos extras
     if (data && data[0] && fotosNovas.length > 0) {
       const produtoId = data[0].id
       for (let i = 0; i < fotosNovas.length; i++) {
         await supabase.from('produto_fotos').insert([{ produto_id: produtoId, url: fotosNovas[i], ordem: i + 1 }])
       }
     }
-
     alert('Produto cadastrado!')
     setNovoProduto({ categoria: 'Celulares', marca: '', modelo: '', memoria: '', cor: '', condicao: '', bateria_saude: '', preco: '', foto_url: '', descricao: '', disponivel: true, destaque: false, lancamento: false, promocao: false, mais_procurado: false })
     setFotosNovas([])
@@ -268,7 +262,6 @@ export default function Admin() {
           <input style={inputStyle} value={editando.bateria_saude || ''} onChange={e => setEditando({ ...editando, bateria_saude: e.target.value })} />
           <label style={labelStyle}>Preço</label>
           <input style={inputStyle} type="number" value={editando.preco || ''} onChange={e => setEditando({ ...editando, preco: Number(e.target.value) })} />
-
           <label style={labelStyle}>Foto principal</label>
           <label style={uploadBox}>
             {uploadando ? '⏳ Enviando...' : '📷 Trocar foto principal'}
@@ -278,7 +271,6 @@ export default function Admin() {
           {editando.foto_url && (
             <img src={editando.foto_url} alt="preview" style={{ width: '100%', maxHeight: 160, objectFit: 'contain', borderRadius: 10, marginBottom: 12 }} />
           )}
-
           <label style={labelStyle}>Fotos extras</label>
           <label style={uploadBox}>
             {uploadandoFotos ? '⏳ Enviando...' : '📸 Adicionar foto extra'}
@@ -296,7 +288,6 @@ export default function Admin() {
               ))}
             </div>
           )}
-
           <label style={labelStyle}>Descrição</label>
           <textarea style={{ ...inputStyle, height: 80 }} value={editando.descricao || ''} onChange={e => setEditando({ ...editando, descricao: e.target.value })} />
           <div style={tagsBox}>
@@ -330,7 +321,6 @@ export default function Admin() {
         <button style={aba === 'hero' ? abaAtiva : abaInativa} onClick={() => setAba('hero')}>🖼 Hero</button>
       </div>
 
-      {/* CADASTRAR */}
       {aba === 'cadastrar' && (
         <div style={formContainer}>
           <h2 style={formTitle}>Novo produto</h2>
@@ -356,7 +346,6 @@ export default function Admin() {
           <input style={inputStyle} placeholder="Ex: 89%" value={novoProduto.bateria_saude} onChange={e => setNovoProduto({ ...novoProduto, bateria_saude: e.target.value })} />
           <label style={labelStyle}>Preço (interno)</label>
           <input style={inputStyle} placeholder="Ex: 2999" value={novoProduto.preco} onChange={e => setNovoProduto({ ...novoProduto, preco: e.target.value })} />
-
           <label style={labelStyle}>Foto principal</label>
           <label style={uploadBox}>
             {uploadando ? '⏳ Enviando foto...' : '📷 Foto principal'}
@@ -366,7 +355,6 @@ export default function Admin() {
           {novoProduto.foto_url && (
             <img src={novoProduto.foto_url} alt="preview" style={{ width: '100%', maxHeight: 160, objectFit: 'contain', borderRadius: 10, marginBottom: 12 }} />
           )}
-
           <label style={labelStyle}>Fotos extras (opcional)</label>
           <label style={uploadBox}>
             {uploadandoFotos ? '⏳ Enviando...' : '📸 Adicionar foto extra'}
@@ -384,7 +372,6 @@ export default function Admin() {
               ))}
             </div>
           )}
-
           <label style={labelStyle}>Descrição</label>
           <textarea style={{ ...inputStyle, height: 80 }} placeholder="Descrição..." value={novoProduto.descricao} onChange={e => setNovoProduto({ ...novoProduto, descricao: e.target.value })} />
           <div style={tagsBox}>
@@ -399,7 +386,6 @@ export default function Admin() {
         </div>
       )}
 
-      {/* LISTA */}
       {aba === 'lista' && (
         <div style={formContainer}>
           <h2 style={formTitle}>Produtos cadastrados</h2>
@@ -434,7 +420,6 @@ export default function Admin() {
         </div>
       )}
 
-      {/* HERO */}
       {aba === 'hero' && (
         <div style={formContainer}>
           <h2 style={formTitle}>🖼 Fotos do Hero</h2>
@@ -470,8 +455,8 @@ export default function Admin() {
 
 const loginPage: React.CSSProperties = { minHeight: '100vh', background: '#050505', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 20, overflowX: 'hidden' }
 const loginBox: React.CSSProperties = { background: '#0f0f0f', border: '1px solid #222', borderRadius: 20, padding: 32, width: '100%', maxWidth: 380, display: 'flex', flexDirection: 'column', gap: 12 }
-const logoMarcas: React.CSSProperties = { color: '#ff6600', fontSize: 32, fontWeight: 900, fontFamily: 'Nunito, sans-serif' }
-const logoMag: React.CSSProperties = { color: '#ff6600', fontSize: 16, fontWeight: 700, fontFamily: 'Nunito, sans-serif', display: 'block', textAlign: 'right', marginTop: -6, opacity: 0.85 }
+const logoMarcas: React.CSSProperties = { color: '#ff6600', fontSize: 32, fontWeight: 900, fontFamily: 'Nunito, sans-serif', display: 'block', textAlign: 'center' }
+const logoMag: React.CSSProperties = { color: '#ff6600', fontSize: 16, fontWeight: 700, fontFamily: 'Nunito, sans-serif', display: 'block', textAlign: 'center', marginTop: -6, opacity: 0.85 }
 const loginSub: React.CSSProperties = { color: '#666', fontSize: 13, textAlign: 'center', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 2 }
 const btnLogin: React.CSSProperties = { background: '#ff6600', color: 'white', border: 'none', borderRadius: 10, padding: '14px', fontSize: 16, fontWeight: 700, cursor: 'pointer', marginTop: 4 }
 const btnVoltar: React.CSSProperties = { background: 'none', color: '#666', border: '1px solid #222', borderRadius: 10, padding: '12px', fontSize: 14, cursor: 'pointer' }
