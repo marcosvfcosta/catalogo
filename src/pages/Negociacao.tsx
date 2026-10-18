@@ -6,6 +6,7 @@ type Negociacao = {
   modelo: string; cor: string; valor_aparelho: number; valor_entrada: number
   parcelas: number; taxa: number; valor_parcela: number; valor_total: number
   observacoes: string; status: string; vendedor: string; created_at: string
+  forma_pagamento?: string | null
 }
 
 type Aparelho = {
@@ -17,10 +18,13 @@ type Entrada = {
   modelo: string; armazenamento: string; estado: string
   possui_defeito: boolean; defeito: string | null; bateria: number | null
   acessorios: string[] | null; status: string
+  interesse?: string | null
 }
 
 const TAXAS = [
-  { label: 'A vista', parcelas: 1, taxa: 4.10 },
+  { label: 'À vista sem juros', parcelas: 1, taxa: 0 },
+  { label: 'Débito sem juros', parcelas: 1, taxa: 0 },
+  { label: 'Crédito 1x', parcelas: 1, taxa: 4.10 },
   { label: '2x', parcelas: 2, taxa: 5.37 },
   { label: '3x', parcelas: 3, taxa: 6.25 },
   { label: '4x', parcelas: 4, taxa: 7.13 },
@@ -81,6 +85,12 @@ const PERIODOS = [
 ] as const
 type Periodo = typeof PERIODOS[number]['k']
 
+// Texto da forma de pagamento (funciona com negociações antigas, sem forma_pagamento)
+function textoPagamento(c: { forma_pagamento?: string | null; parcelas: number }) {
+  if (c.forma_pagamento && c.forma_pagamento.includes('sem juros')) return c.forma_pagamento
+  return c.parcelas === 1 ? 'Crédito 1x' : c.parcelas + 'x'
+}
+
 const fmt = (v: number) => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const norm = (t: string | null | undefined) => (t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 
@@ -115,7 +125,7 @@ export default function Negociacao() {
   const [clientes, setClientes] = useState<Negociacao[]>([])
   const [clienteSelecionado, setClienteSelecionado] = useState<Negociacao | null>(null)
   const [salvando, setSalvando] = useState(false)
-  const [parcelaSelecionada, setParcelaSelecionada] = useState<number | null>(null)
+  const [opcaoPagamento, setOpcaoPagamento] = useState<string | null>(null)
   const [erros, setErros] = useState<Record<string, string>>({})
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [aparelhos, setAparelhos] = useState<Aparelho[]>([])
@@ -244,7 +254,9 @@ export default function Negociacao() {
     carregarAparelhos()
   }
 
-  const taxaAtual = TAXAS.find(t => t.parcelas === parcelaSelecionada) || TAXAS[0]
+  const taxaSelecionada = TAXAS.find(t => t.label === opcaoPagamento) || null
+  const taxaAtual = taxaSelecionada || TAXAS[0]
+  const parcelaSelecionada = taxaSelecionada ? taxaSelecionada.parcelas : null
   const valorAparelho = parseFloat(form.valor_aparelho.replace(',', '.')) || 0
   const valorEntrada = parseFloat(form.valor_entrada.replace(',', '.')) || 0
   const valorFinanciar = Math.max(0, valorAparelho - valorEntrada)
@@ -270,7 +282,7 @@ export default function Negociacao() {
       nome: form.nome, telefone: form.telefone, instagram: form.instagram,
       modelo: form.modelo, cor: form.cor,
       valor_aparelho: valorAparelho, valor_entrada: valorEntrada,
-      parcelas: parcelaSelecionada, taxa: taxaAtual.taxa,
+      parcelas: parcelaSelecionada, taxa: taxaAtual.taxa, forma_pagamento: taxaAtual.label,
       valor_parcela: valorParcela, valor_total: valorTotal,
       observacoes: form.observacoes, vendedor: form.vendedor.trim(), status,
     }
@@ -294,7 +306,7 @@ export default function Negociacao() {
 
   function limpar() {
     setForm({ nome: '', telefone: '', instagram: '', modelo: '', cor: '', valor_aparelho: '', valor_entrada: '', observacoes: '', vendedor: '' })
-    setParcelaSelecionada(null)
+    setOpcaoPagamento(null)
     setErros({})
     setEditandoId(null)
     setBuscaModelo('')
@@ -309,7 +321,10 @@ export default function Negociacao() {
       observacoes: c.observacoes || '', vendedor: c.vendedor || '',
     })
     setBuscaModelo(c.modelo || '')
-    setParcelaSelecionada(c.parcelas)
+    const opcao = TAXAS.find(t => t.label === c.forma_pagamento)
+      || TAXAS.find(t => t.parcelas === c.parcelas && Number(t.taxa) === Number(c.taxa))
+      || TAXAS.find(t => t.parcelas === c.parcelas)
+    setOpcaoPagamento(opcao ? opcao.label : null)
     setEditandoId(c.id)
     setEntradaVinculada(null)
     setClienteSelecionado(null)
@@ -331,7 +346,8 @@ export default function Negociacao() {
     const tel = c.telefone.replace(/\D/g, '')
     const modelo = c.modelo || ''
     const cor = c.cor ? ` ${c.cor}` : ''
-    const parcelas = c.parcelas === 1 ? 'à vista' : `em ${c.parcelas}x de ${fmt(c.valor_parcela)}`
+    const parcelas = c.forma_pagamento && c.forma_pagamento.includes('sem juros') ? c.forma_pagamento.toLowerCase()
+      : c.parcelas === 1 ? 'no crédito 1x' : `em ${c.parcelas}x de ${fmt(c.valor_parcela)}`
     const msg = `Olá ${c.nome}! 👋\n\nSegue o resumo da sua negociação:\n\n📱 *${modelo}${cor}*\n💰 Valor: ${fmt(c.valor_aparelho)}\n📋 Pagamento: ${parcelas}\n💵 Total: ${fmt(c.valor_total)}\n\nQualquer dúvida estou à disposição! 😊\n\n_Marcos Magazine_`
     window.open(`https://wa.me/55${tel}?text=${encodeURIComponent(msg)}`, '_blank')
   }
@@ -341,13 +357,13 @@ export default function Negociacao() {
   function usarEntrada(e: Entrada) {
     setForm({
       nome: e.nome, telefone: e.telefone, instagram: '',
-      modelo: '', cor: '',
+      modelo: e.interesse || '', cor: '',
       valor_aparelho: '', valor_entrada: '',
       observacoes: `Aparelho de entrada: ${resumoEntrada(e)}`,
       vendedor: form.vendedor,
     })
-    setBuscaModelo('')
-    setParcelaSelecionada(null)
+    setBuscaModelo(e.interesse || '')
+    setOpcaoPagamento(null)
     setErros({})
     setEditandoId(null)
     setEntradaVinculada(e)
@@ -361,7 +377,8 @@ export default function Negociacao() {
   }
 
   function whatsAppEntrada(e: Entrada) {
-    const msg = `Olá ${e.nome}! 👋\n\nRecebemos a avaliação do seu *${e.modelo} ${e.armazenamento}* (${e.estado}).\n\nVamos conversar sobre a proposta para usar como entrada? 😊\n\n_Marcos Magazine_`
+    const interesse = e.interesse ? ` na compra do *${e.interesse}*` : ''
+    const msg = `Olá ${e.nome}! 👋\n\nRecebemos a avaliação do seu *${e.modelo} ${e.armazenamento}* (${e.estado}).\n\nVamos conversar sobre a proposta para usar como entrada${interesse}? 😊\n\n_Marcos Magazine_`
     window.open(linkWhatsApp(e.telefone, msg), '_blank')
   }
 
@@ -415,7 +432,7 @@ export default function Negociacao() {
           </div>
           <div style={{ textAlign: 'right' }}>
             <p style={{ color: '#ff6600', fontWeight: 900, fontSize: 18 }}>{fmt(c.valor_parcela)}</p>
-            <p style={{ color: '#888', fontSize: 12 }}>{c.parcelas === 1 ? 'À vista' : c.parcelas + 'x'}</p>
+            <p style={{ color: '#888', fontSize: 12 }}>{textoPagamento(c)}</p>
             <p style={{ color: '#555', fontSize: 11 }}>{new Date(c.created_at).toLocaleDateString('pt-BR')}</p>
           </div>
         </div>
@@ -440,7 +457,7 @@ export default function Negociacao() {
           <div style={s.detalheCard}><p style={s.detalheLabel}>Vendedor</p><p style={s.detalheValor}>{clienteSelecionado.vendedor || '-'}</p></div>
           <div style={s.detalheCard}><p style={s.detalheLabel}>Valor</p><p style={s.detalheValor}>{fmt(clienteSelecionado.valor_aparelho)}</p></div>
           <div style={s.detalheCard}><p style={s.detalheLabel}>Entrada</p><p style={s.detalheValor}>{fmt(clienteSelecionado.valor_entrada || 0)}</p></div>
-          <div style={s.detalheCard}><p style={s.detalheLabel}>Parcelas</p><p style={s.detalheValor}>{clienteSelecionado.parcelas === 1 ? 'À vista' : clienteSelecionado.parcelas + 'x'} ({clienteSelecionado.taxa}%)</p></div>
+          <div style={s.detalheCard}><p style={s.detalheLabel}>Parcelas</p><p style={s.detalheValor}>{textoPagamento(clienteSelecionado)} ({clienteSelecionado.taxa}%)</p></div>
           <div style={{ ...s.detalheCard, background: 'rgba(255,102,0,0.1)', border: '1px solid #ff6600' }}>
             <p style={s.detalheLabel}>Parcela</p>
             <p style={{ ...s.detalheValor, color: '#ff6600', fontSize: 24, fontWeight: 900 }}>{fmt(clienteSelecionado.valor_parcela)}</p>
@@ -495,6 +512,7 @@ export default function Negociacao() {
             {entradaVinculada && (
               <div style={s.entradaBanner}>
                 <div style={{ flex: 1 }}>
+                  {entradaVinculada.interesse && <p style={{ color: 'white', fontSize: 14, marginBottom: 8 }}>Quer comprar: <b style={{ color: '#ff6600' }}>{entradaVinculada.interesse}</b></p>}
                   <p style={{ color: '#ff6600', fontWeight: 700, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 }}>Aparelho de entrada do cliente</p>
                   <p style={{ color: 'white', fontSize: 15, marginTop: 4 }}>{entradaVinculada.modelo} {entradaVinculada.armazenamento} · {entradaVinculada.estado} · {entradaVinculada.bateria != null ? `Bateria ${entradaVinculada.bateria}%` : ''}</p>
                   {entradaVinculada.possui_defeito
@@ -590,14 +608,17 @@ export default function Negociacao() {
                 {TAXAS.map(t => {
                   const vC = valorFinanciar / (1 - t.taxa / 100)
                   const vP = t.parcelas === 1 ? vC : vC / t.parcelas
-                  const ativo = parcelaSelecionada === t.parcelas
+                  const ativo = opcaoPagamento === t.label
+                  const semJuros = t.taxa === 0
                   return (
-                    <div key={t.parcelas} onClick={() => { setParcelaSelecionada(t.parcelas); setErros({...erros, parcelas: ''}) }} style={{ ...s.parcelaCard, border: ativo ? '1px solid #ff6600' : erros.parcelas ? '1px solid #ff4444' : '1px solid #1e1e1e', ...(ativo ? s.parcelaAtiva : {}) }}>
+                    <div key={t.label} onClick={() => { setOpcaoPagamento(t.label); setErros({...erros, parcelas: ''}) }} style={{ ...s.parcelaCard, border: ativo ? '1px solid #ff6600' : erros.parcelas ? '1px solid #ff4444' : '1px solid #1e1e1e', ...(ativo ? s.parcelaAtiva : {}) }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <div style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid ' + (ativo ? '#ff6600' : '#555'), background: ativo ? '#ff6600' : 'transparent', flexShrink: 0 }} />
                           <span style={{ fontWeight: 700, color: ativo ? '#ff6600' : '#fff' }}>{t.label}</span>
-                          <span style={{ color: '#888', fontSize: 12 }}>{t.taxa}%</span>
+                          {semJuros
+                            ? <span style={{ color: '#25D366', fontSize: 11, fontWeight: 700, border: '1px solid #25D366', borderRadius: 10, padding: '1px 8px' }}>0%</span>
+                            : <span style={{ color: '#888', fontSize: 12 }}>{t.taxa}%</span>}
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <p style={{ color: ativo ? '#ff6600' : '#fff', fontWeight: 700, margin: 0 }}>{fmt(vP)}</p>
@@ -611,7 +632,7 @@ export default function Negociacao() {
             </div>
             {parcelaSelecionada && (
               <div style={s.resumoFinal}>
-                <div style={s.resumoItem}><span style={s.resumoItemLabel}>Parcelas</span><span style={s.resumoItemValor}>{parcelaSelecionada === 1 ? 'À vista' : parcelaSelecionada + 'x'}</span></div>
+                <div style={s.resumoItem}><span style={s.resumoItemLabel}>Parcelas</span><span style={s.resumoItemValor}>{taxaAtual.taxa === 0 ? taxaAtual.label : parcelaSelecionada === 1 ? 'Crédito 1x' : parcelaSelecionada + 'x'}</span></div>
                 <div style={s.resumoItem}><span style={s.resumoItemLabel}>Taxa</span><span style={s.resumoItemValor}>{taxaAtual.taxa}%</span></div>
                 <div style={s.resumoItem}><span style={s.resumoItemLabel}>Parcela</span><span style={{ ...s.resumoItemValor, color: '#ff6600', fontSize: 26, fontWeight: 900 }}>{fmt(valorParcela)}</span></div>
                 <div style={s.resumoItem}><span style={s.resumoItemLabel}>Total</span><span style={s.resumoItemValor}>{fmt(valorTotal)}</span></div>
@@ -678,7 +699,7 @@ export default function Negociacao() {
                             <div style={{ textAlign: 'right' }}>
                               <span style={{ ...s.statusBadge, background: c.status === 'Venda Fechada' ? 'rgba(37,211,102,0.15)' : c.status === 'Desistiram' ? 'rgba(255,51,51,0.15)' : 'rgba(255,200,0,0.15)', color: c.status === 'Venda Fechada' ? '#25D366' : c.status === 'Desistiram' ? '#ff3333' : '#ffc800', border: '1px solid ' + (c.status === 'Venda Fechada' ? '#25D366' : c.status === 'Desistiram' ? '#ff3333' : '#ffc800') }}>{c.status === 'Venda Fechada' ? 'Fechada' : c.status === 'Desistiram' ? 'Desistiram' : 'Pendente'}</span>
                               <p style={{ color: '#ff6600', fontWeight: 900, fontSize: 18, marginTop: 8 }}>{fmt(c.valor_parcela)}</p>
-                              <p style={{ color: '#888', fontSize: 12 }}>{c.parcelas === 1 ? 'À vista' : c.parcelas + 'x'}</p>
+                              <p style={{ color: '#888', fontSize: 12 }}>{textoPagamento(c)}</p>
                             </div>
                           </div>
                           <p style={{ color: '#555', fontSize: 11, marginTop: 8 }}>{new Date(c.created_at).toLocaleDateString('pt-BR')}</p>
@@ -818,7 +839,14 @@ export default function Negociacao() {
                           <p style={{ color: '#555', fontSize: 11, marginTop: 6 }}>{new Date(e.created_at).toLocaleDateString('pt-BR')} {new Date(e.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
                         </div>
                       </div>
-                      <p style={{ color: 'white', fontWeight: 700, fontSize: 16, marginTop: 12 }}>{e.modelo} {e.armazenamento}</p>
+                      {e.interesse && (
+                        <div style={s.interesseBox}>
+                          <span style={{ color: '#888', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>Quer comprar</span>
+                          <span style={{ color: '#ff6600', fontWeight: 800, fontSize: 16 }}>{e.interesse}</span>
+                        </div>
+                      )}
+                      <p style={{ color: '#888', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 12 }}>Aparelho de entrada</p>
+                      <p style={{ color: 'white', fontWeight: 700, fontSize: 16, marginTop: 2 }}>{e.modelo} {e.armazenamento}</p>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                         <span style={s.tagEntrada}>{e.estado}</span>
                         {e.bateria != null && <span style={{ ...s.tagEntrada, color: e.bateria < 80 ? '#ffc800' : '#ccc' }}>🔋 {e.bateria}%</span>}
@@ -1005,6 +1033,7 @@ const s: Record<string, React.CSSProperties> = {
   clienteModelo: { fontSize: 14, color: '#aaa', marginBottom: 4 },
   clienteTel: { fontSize: 13, color: '#666' },
   statusBadge: { padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700 },
+  interesseBox: { display: 'flex', flexDirection: 'column', gap: 2, marginTop: 12, padding: '10px 12px', borderRadius: 10, background: 'rgba(255,102,0,0.08)', border: '1px solid rgba(255,102,0,0.35)' },
   tagEntrada: { padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#1a1a1a', color: '#ccc', border: '1px solid #2a2a2a' },
   entradaBanner: { display: 'flex', alignItems: 'flex-start', gap: 16, background: 'rgba(255,102,0,0.08)', border: '1px solid #ff6600', borderRadius: 16, padding: 18, marginBottom: 20 },
   detalheContainer: { padding: '28px 20px', maxWidth: 900, margin: '0 auto' },

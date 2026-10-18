@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../supabase'
 
 // WhatsApp da loja (só dígitos, com 55 + DDD). Se preencher, aparece o botão
@@ -60,6 +60,23 @@ export default function AvaliacaoEntrada() {
   const [erros, setErros] = useState<Record<string, string>>({})
   const [enviando, setEnviando] = useState(false)
   const [enviado, setEnviado] = useState(false)
+  const [interesse, setInteresse] = useState('')
+  const [sugestoes, setSugestoes] = useState<string[]>([])
+
+  // Sugestões de "celular de interesse" a partir dos produtos do catálogo
+  useEffect(() => {
+    supabase.from('produtos_catalogo').select('modelo, memoria, disponivel, categoria')
+      .then(({ data }: { data: any[] | null }) => {
+        const nomes = (data || [])
+          .filter(p => p.disponivel !== false && (!p.categoria || p.categoria === 'Celulares'))
+          .map(p => `${p.modelo}${p.memoria ? ' ' + p.memoria : ''}`.trim())
+        setSugestoes(Array.from(new Set(nomes)))
+      })
+  }, [])
+
+  const sugestoesFiltradas = interesse.trim().length >= 2
+    ? sugestoes.filter(n => n.toLowerCase().includes(interesse.toLowerCase()) && n.toLowerCase() !== interesse.trim().toLowerCase()).slice(0, 6)
+    : []
 
   const modeloFinal = modelo === 'Outro' ? outroModelo.trim() : modelo
   const modelosFiltrados = buscaModelo.trim()
@@ -81,6 +98,7 @@ export default function AvaliacaoEntrada() {
     if (!estado) e.estado = 'Escolha Seminovo ou Vitrine'
     if (!possuiDefeito) e.possuiDefeito = 'Responda se o aparelho possui defeito'
     if (possuiDefeito === 'Sim' && !defeito.trim()) e.defeito = 'Descreva o defeito'
+    if (!interesse.trim()) e.interesse = 'Diga qual celular você quer comprar'
     if (!nome.trim()) e.nome = 'Digite seu nome'
     if (telefone.replace(/\D/g, '').length < 10) e.telefone = 'Digite um WhatsApp válido'
     setErros(e)
@@ -103,6 +121,7 @@ export default function AvaliacaoEntrada() {
       defeito: possuiDefeito === 'Sim' ? defeito.trim() : null,
       bateria,
       acessorios,
+      interesse: interesse.trim(),
     }])
     setEnviando(false)
     if (error) {
@@ -116,11 +135,11 @@ export default function AvaliacaoEntrada() {
   function novaAvaliacao() {
     setBuscaModelo(''); setModelo(''); setOutroModelo(''); setArmazenamento('')
     setEstado(''); setPossuiDefeito(''); setDefeito(''); setBateria(85)
-    setAcessorios([]); setErros({}); setEnviado(false)
+    setAcessorios([]); setInteresse(''); setErros({}); setEnviado(false)
   }
 
   function falarComLoja() {
-    const msg = `Olá! Acabei de enviar a avaliação do meu ${modeloFinal} ${armazenamento} (${estado}) pelo catálogo. Meu nome é ${nome.trim()}.`
+    const msg = `Olá! Acabei de enviar a avaliação do meu ${modeloFinal} ${armazenamento} (${estado}) pelo catálogo. Tenho interesse no ${interesse.trim()}. Meu nome é ${nome.trim()}.`
     window.open(`https://wa.me/${LOJA_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank')
   }
 
@@ -134,6 +153,7 @@ export default function AvaliacaoEntrada() {
         <div style={s.checkCircle}>✓</div>
         <h1 style={{ ...s.titulo, marginTop: 20 }}>Recebemos sua avaliação!</h1>
         <p style={{ color: '#aaa', fontSize: 15, marginTop: 8 }}>{modeloFinal} {armazenamento} · {estado}</p>
+        <p style={{ color: '#ff6600', fontSize: 15, marginTop: 4, fontWeight: 700 }}>Interesse: {interesse.trim()}</p>
         <p style={{ color: '#777', fontSize: 14, marginTop: 16, lineHeight: 1.6 }}>
           Nossa equipe vai analisar e te chamar no WhatsApp<br />com a proposta para usar como entrada.
         </p>
@@ -229,8 +249,23 @@ export default function AvaliacaoEntrada() {
           </div>
         </div>
 
+        <div style={{ ...s.section, borderColor: erros.interesse ? '#ff4444' : '#ff6600' }}>
+          <h3 style={s.sectionTitle}><span style={{ ...s.num, background: '#ff6600', color: 'white' }}>7</span> Qual celular você quer comprar?</h3>
+          <p style={{ color: '#666', fontSize: 13, marginBottom: 12, marginTop: -6 }}>O aparelho que você quer levar usando o seu como entrada</p>
+          <input style={{ ...s.input, borderColor: erros.interesse ? '#ff4444' : '#2a2a2a' }} value={interesse}
+            onChange={e => { setInteresse(e.target.value); limparErro('interesse') }} placeholder="Ex: iPhone 16 Pro Max 256GB" />
+          {sugestoesFiltradas.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+              {sugestoesFiltradas.map(n => (
+                <button key={n} type="button" style={s.chip} onClick={() => { setInteresse(n); limparErro('interesse') }}>{n}</button>
+              ))}
+            </div>
+          )}
+          {erros.interesse && <p style={s.erro}>{erros.interesse}</p>}
+        </div>
+
         <div style={s.section}>
-          <h3 style={s.sectionTitle}><span style={s.num}>7</span> Seus dados</h3>
+          <h3 style={s.sectionTitle}><span style={s.num}>8</span> Seus dados</h3>
           <label style={s.label}>Nome</label>
           <input style={{ ...s.input, borderColor: erros.nome ? '#ff4444' : '#2a2a2a' }} value={nome}
             onChange={e => { setNome(e.target.value); limparErro('nome') }} placeholder="Seu nome completo" />
