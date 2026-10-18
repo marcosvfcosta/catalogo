@@ -31,7 +31,7 @@ type HeroImagem = {
 
 const categorias = [
   { nome: 'Celulares',    img: 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public/categorias/celulares.png' },
-  { nome: 'Capas',        img: '/categoria-capas.png' },
+    { nome: 'Capas',        img: 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public/categorias/capas.png' },
   { nome: 'Tablet',       img: 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public/categorias/tablet.png' },
   { nome: 'Carregadores', img: 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public/categorias/carregadores%20(1).png' },
   { nome: 'Fones',        img: 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public/categorias/fones.png' },
