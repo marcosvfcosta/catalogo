@@ -35,6 +35,27 @@ type ProdutoFoto = {
   ordem: number
 }
 
+type Aparelho = {
+  id: string
+  modelo: string
+  cores: string[]
+  fotos: Record<string, string[]>
+}
+
+const CORES_LISTA = ["Preto","Branco","Vermelho","Azul","Verde","Amarelo","Rosa","Roxo","Laranja","Cinza","Dourado","Prata","Titânio Natural","Titânio Preto","Titânio Branco","Titânio Deserto","Meia-Noite","Estelar","Azul-Sierra","Rosa-Claro","Verde-Água","Azul-Alpino","Verde-Floresta","Vermelho-Produto","Luz das Estrelas","Azul-Pacífico","Roxo-Profundo","Cobre","Bordô"]
+
+const CORES_HEX: Record<string, string> = {
+  "Preto": "#1a1a1a", "Branco": "#f5f5f5", "Vermelho": "#c0392b", "Azul": "#2980b9",
+  "Verde": "#27ae60", "Amarelo": "#f1c40f", "Rosa": "#e91e8c", "Roxo": "#8e44ad",
+  "Laranja": "#e67e22", "Cinza": "#7f8c8d", "Dourado": "#d4af37", "Prata": "#bdc3c7",
+  "Titânio Natural": "#8a8272", "Titânio Preto": "#2d2926", "Titânio Branco": "#e8e4dc",
+  "Titânio Deserto": "#c2a882", "Meia-Noite": "#1c2340", "Estelar": "#f0ece2",
+  "Azul-Sierra": "#4a7fa5", "Rosa-Claro": "#f4a7b9", "Verde-Água": "#00b4d8",
+  "Azul-Alpino": "#5b8db8", "Verde-Floresta": "#2d6a4f", "Vermelho-Produto": "#a4161a",
+  "Luz das Estrelas": "#f8f4e8", "Azul-Pacífico": "#005f73", "Roxo-Profundo": "#4a0e5e",
+  "Cobre": "#b87333", "Bordô": "#6d1a2a"
+}
+
 export default function Admin() {
   const navigate = useNavigate()
   const [logado, setLogado] = useState(false)
@@ -42,7 +63,7 @@ export default function Admin() {
   const [senha, setSenha] = useState('')
   const [erroLogin, setErroLogin] = useState('')
   const [produtos, setProdutos] = useState<Produto[]>([])
-  const [aba, setAba] = useState<'cadastrar' | 'lista' | 'hero'>('cadastrar')
+  const [aba, setAba] = useState<'cadastrar' | 'lista' | 'aparelhos' | 'hero'>('cadastrar')
   const [uploadando, setUploadando] = useState(false)
   const [uploadandoHero, setUploadandoHero] = useState(false)
   const [uploadandoFotos, setUploadandoFotos] = useState(false)
@@ -50,6 +71,14 @@ export default function Admin() {
   const [heroImagens, setHeroImagens] = useState<HeroImagem[]>([])
   const [fotosNovas, setFotosNovas] = useState<string[]>([])
   const [fotosEdicao, setFotosEdicao] = useState<ProdutoFoto[]>([])
+
+  const [aparelhos, setAparelhos] = useState<Aparelho[]>([])
+  const [novoModelo, setNovoModelo] = useState('')
+  const [coresSelecionadas, setCoresSelecionadas] = useState<string[]>([])
+  const [fotosAparelho, setFotosAparelho] = useState<Record<string, string[]>>({})
+  const [uploadandoFotoAp, setUploadandoFotoAp] = useState<string | null>(null)
+  const [editandoAparelho, setEditandoAparelho] = useState<Aparelho | null>(null)
+  const [salvandoAparelho, setSalvandoAparelho] = useState(false)
 
   const [novoProduto, setNovoProduto] = useState({
     categoria: 'Celulares',
@@ -60,7 +89,7 @@ export default function Admin() {
   })
 
   useEffect(() => {
-    if (logado) { carregarProdutos(); carregarHeroImagens() }
+    if (logado) { carregarProdutos(); carregarHeroImagens(); carregarAparelhos() }
   }, [logado])
 
   async function carregarProdutos() {
@@ -76,6 +105,11 @@ export default function Admin() {
   async function carregarFotosEdicao(produtoId: string) {
     const { data } = await supabase.from('produto_fotos').select('*').eq('produto_id', produtoId).order('ordem')
     setFotosEdicao(data || [])
+  }
+
+  async function carregarAparelhos() {
+    const { data } = await supabase.from('aparelhos').select('*').order('modelo')
+    setAparelhos(data || [])
   }
 
   async function uploadFotoPrincipal(arquivo: File) {
@@ -209,7 +243,69 @@ export default function Admin() {
     carregarProdutos()
   }
 
-  // ─── LOGIN ───────────────────────────────────
+  function toggleCorAdmin(cor: string) {
+    if (editandoAparelho) {
+      const novas = editandoAparelho.cores.includes(cor) ? editandoAparelho.cores.filter(c => c !== cor) : [...editandoAparelho.cores, cor]
+      setEditandoAparelho({ ...editandoAparelho, cores: novas })
+    } else {
+      setCoresSelecionadas(prev => prev.includes(cor) ? prev.filter(c => c !== cor) : [...prev, cor])
+    }
+  }
+
+  async function uploadFotoAparelho(cor: string, arquivo: File) {
+    setUploadandoFotoAp(cor)
+    const ext = arquivo.name.split('.').pop()
+    const nomeArquivo = `ap_${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from('fotos').upload(nomeArquivo, arquivo, { upsert: true })
+    if (error) { alert('Erro upload'); setUploadandoFotoAp(null); return }
+    const { data } = supabase.storage.from('fotos').getPublicUrl(nomeArquivo)
+    if (editandoAparelho) {
+      const fotosAtuais = editandoAparelho.fotos[cor] || []
+      setEditandoAparelho({ ...editandoAparelho, fotos: { ...editandoAparelho.fotos, [cor]: [...fotosAtuais, data.publicUrl] } })
+    } else {
+      setFotosAparelho(prev => ({ ...prev, [cor]: [...(prev[cor] || []), data.publicUrl] }))
+    }
+    setUploadandoFotoAp(null)
+  }
+
+  function removerFotoAparelho(cor: string, url: string) {
+    if (editandoAparelho) {
+      const novas = (editandoAparelho.fotos[cor] || []).filter(f => f !== url)
+      setEditandoAparelho({ ...editandoAparelho, fotos: { ...editandoAparelho.fotos, [cor]: novas } })
+    } else {
+      setFotosAparelho(prev => ({ ...prev, [cor]: (prev[cor] || []).filter(f => f !== url) }))
+    }
+  }
+
+  async function salvarAparelho() {
+    const modelo = editandoAparelho ? editandoAparelho.modelo : novoModelo.trim()
+    const cores = editandoAparelho ? editandoAparelho.cores : coresSelecionadas
+    const fotos = editandoAparelho ? editandoAparelho.fotos : fotosAparelho
+    if (!modelo) { alert('Informe o modelo'); return }
+    if (cores.length === 0) { alert('Selecione ao menos uma cor'); return }
+    setSalvandoAparelho(true)
+    if (editandoAparelho) {
+      await supabase.from('aparelhos').update({ modelo, cores, fotos }).eq('id', editandoAparelho.id)
+      setEditandoAparelho(null)
+    } else {
+      await supabase.from('aparelhos').insert([{ modelo, cores, fotos }])
+      setNovoModelo('')
+      setCoresSelecionadas([])
+      setFotosAparelho({})
+    }
+    setSalvandoAparelho(false)
+    carregarAparelhos()
+  }
+
+  async function excluirAparelho(id: string) {
+    if (!confirm('Excluir este aparelho?')) return
+    await supabase.from('aparelhos').delete().eq('id', id)
+    carregarAparelhos()
+  }
+
+  const coresAtivas = editandoAparelho ? editandoAparelho.cores : coresSelecionadas
+  const fotosAtivas = editandoAparelho ? editandoAparelho.fotos : fotosAparelho
+
   if (!logado) {
     return (
       <div style={loginPage}>
@@ -230,7 +326,6 @@ export default function Admin() {
     )
   }
 
-  // ─── TELA DE EDIÇÃO ──────────────────────────
   if (editando) {
     return (
       <div style={adminPage}>
@@ -304,7 +399,6 @@ export default function Admin() {
     )
   }
 
-  // ─── PAINEL PRINCIPAL ─────────────────────────
   return (
     <div style={adminPage}>
       <div style={adminHeader}>
@@ -318,6 +412,7 @@ export default function Admin() {
       <div style={abasContainer}>
         <button style={aba === 'cadastrar' ? abaAtiva : abaInativa} onClick={() => setAba('cadastrar')}>+ Cadastrar</button>
         <button style={aba === 'lista' ? abaAtiva : abaInativa} onClick={() => setAba('lista')}>📦 ({produtos.length})</button>
+        <button style={aba === 'aparelhos' ? abaAtiva : abaInativa} onClick={() => setAba('aparelhos')}>🤝</button>
         <button style={aba === 'hero' ? abaAtiva : abaInativa} onClick={() => setAba('hero')}>🖼 Hero</button>
       </div>
 
@@ -413,6 +508,98 @@ export default function Admin() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
                   <button style={btnEditar} onClick={() => { setEditando(p); carregarFotosEdicao(p.id) }}>✏️</button>
                   <button style={btnExcluir} onClick={() => excluirProduto(p.id)}>🗑</button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {aba === 'aparelhos' && (
+        <div style={formContainer}>
+          <h2 style={formTitle}>🤝 Aparelhos p/ Negociação</h2>
+          <div style={{ background: '#0a0a0a', border: '1px solid #222', borderRadius: 14, padding: 16, marginBottom: 24 }}>
+            <p style={{ color: '#ff6600', fontWeight: 700, fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
+              {editandoAparelho ? '✏️ Editando: ' + editandoAparelho.modelo : '+ Novo aparelho'}
+            </p>
+            <label style={labelStyle}>Modelo</label>
+            <input
+              style={inputStyle}
+              placeholder="Ex: iPhone 16 Pro Max"
+              value={editandoAparelho ? editandoAparelho.modelo : novoModelo}
+              onChange={e => editandoAparelho ? setEditandoAparelho({ ...editandoAparelho, modelo: e.target.value }) : setNovoModelo(e.target.value)}
+            />
+            <label style={labelStyle}>Cores disponíveis</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+              {CORES_LISTA.map(cor => {
+                const sel = coresAtivas.includes(cor)
+                return (
+                  <button key={cor} onClick={() => toggleCorAdmin(cor)} title={cor} style={{
+                    width: 32, height: 32, borderRadius: '50%', border: sel ? '3px solid #ff6600' : '2px solid #333',
+                    background: CORES_HEX[cor], cursor: 'pointer', padding: 0,
+                    boxShadow: sel ? '0 0 0 2px #ff6600' : 'none', flexShrink: 0,
+                    outline: 'none', transition: 'all 0.15s'
+                  }} />
+                )
+              })}
+            </div>
+            {coresAtivas.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={labelStyle}>Fotos por cor</label>
+                {coresAtivas.map(cor => (
+                  <div key={cor} style={{ marginBottom: 14, background: '#111', borderRadius: 10, padding: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <div style={{ width: 18, height: 18, borderRadius: '50%', background: CORES_HEX[cor], border: '1px solid #333', flexShrink: 0 }} />
+                      <span style={{ color: '#ccc', fontSize: 13, fontWeight: 600 }}>{cor}</span>
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#1a1a1a', border: '1px dashed #333', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', color: '#aaa', fontSize: 12, marginBottom: 6 }}>
+                      {uploadandoFotoAp === cor ? '⏳ Enviando...' : '📷 Adicionar foto'}
+                      <input type="file" accept="image/*" style={{ display: 'none' }}
+                        onChange={e => { const f = e.target.files?.[0]; if (f) uploadFotoAparelho(cor, f) }} />
+                    </label>
+                    {(fotosAtivas[cor] || []).length > 0 && (
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {(fotosAtivas[cor] || []).map((url, i) => (
+                          <div key={i} style={{ position: 'relative' }}>
+                            <img src={url} style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8, border: '1px solid #333' }} />
+                            <button onClick={() => removerFotoAparelho(cor, url)}
+                              style={{ position: 'absolute', top: -4, right: -4, background: '#7a1111', border: 'none', color: 'white', borderRadius: '50%', width: 18, height: 18, cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button style={btnSalvar} onClick={salvarAparelho} disabled={salvandoAparelho}>
+                {salvandoAparelho ? '⏳ Salvando...' : '✅ Salvar aparelho'}
+              </button>
+              {editandoAparelho && (
+                <button style={{ ...btnSecundario, padding: '14px 16px' }} onClick={() => setEditandoAparelho(null)}>Cancelar</button>
+              )}
+            </div>
+          </div>
+          <h3 style={{ color: '#aaa', fontSize: 14, fontWeight: 700, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 }}>
+            Cadastrados ({aparelhos.length})
+          </h3>
+          {aparelhos.length === 0 ? (
+            <p style={{ color: '#555', textAlign: 'center', padding: 30 }}>Nenhum aparelho cadastrado.</p>
+          ) : (
+            aparelhos.map(ap => (
+              <div key={ap.id} style={{ background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 12, padding: 12, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontWeight: 700, fontSize: 15, color: '#fff', marginBottom: 6 }}>{ap.modelo}</p>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {(ap.cores || []).map(cor => (
+                      <div key={cor} title={cor} style={{ width: 20, height: 20, borderRadius: '50%', background: CORES_HEX[cor] || '#555', border: '1px solid #333' }} />
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button style={btnEditar} onClick={() => { setEditandoAparelho(ap); window.scrollTo(0, 0) }}>✏️</button>
+                  <button style={btnExcluir} onClick={() => excluirAparelho(ap.id)}>🗑</button>
                 </div>
               </div>
             ))

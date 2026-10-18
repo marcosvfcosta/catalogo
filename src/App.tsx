@@ -46,7 +46,13 @@ const marcas = [
   { nome: 'Realme',   img: 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public/marcas/realme%20(2).png' },
 ]
 
-type FiltroEspecial = 'destaques' | 'lancamentos' | 'promocoes' | 'mais_procurados' | null
+// iPad (inclusive iPadOS 13+, que se identifica como Mac com tela de toque)
+const ehIpad = typeof navigator !== 'undefined' && (
+  /iPad/.test(navigator.userAgent) ||
+  (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
+)
+
+type FiltroEspecial ='destaques' | 'lancamentos' | 'promocoes' | 'mais_procurados' | null
 
 function App() {
   const navigate = useNavigate()
@@ -371,6 +377,8 @@ function App() {
         <nav>
           <p className={!filtroEspecial && !categoriaAtiva && !marcaAtiva ? 'active' : ''} onClick={() => { setFiltroEspecial(null); setCategoriaAtiva(null); setMarcaAtiva(null); setMenuAberto(false) }}>⌂ Início</p>
           <p onClick={() => { setMenuAberto(false); navigate('/comparar') }}>⚖ Comparar Celulares</p>
+          <p onClick={() => { setMenuAberto(false); navigate('/entrada') }}>⇄ Avaliar meu usado</p>
+          {ehIpad && <p onClick={() => { setMenuAberto(false); navigate('/negociacao') }} style={{ color: '#ff6600', fontWeight: 700 }}>💼 Negociação</p>}
           <p className={filtroEspecial === 'destaques' ? 'active' : ''} onClick={() => ativarFiltroEspecial('destaques')}>☆ Destaques</p>
           <p className={filtroEspecial === 'lancamentos' ? 'active' : ''} onClick={() => ativarFiltroEspecial('lancamentos')}>🚀 Lançamentos</p>
           <p className={filtroEspecial === 'promocoes' ? 'active' : ''} onClick={() => ativarFiltroEspecial('promocoes')}>🏷 Promoções</p>
@@ -424,6 +432,18 @@ function App() {
             ))}
           </div>
         )}
+
+        {/* Banner: avaliação do aparelho usado (leva para /entrada) */}
+        <style>{bannerEntradaAnimacoes}</style>
+        <div className="mmBannerEntrada" style={bannerEntrada.banner} onClick={() => navigate('/entrada')}>
+          <span style={bannerEntrada.novo}>NOVO</span>
+          <div style={bannerEntrada.icone}>⇄</div>
+          <div style={{ flex: 1 }}>
+            <p style={bannerEntrada.titulo}>Tem um iPhone usado?</p>
+            <p style={bannerEntrada.texto}>Avalie aqui e use como entrada no seu novo</p>
+          </div>
+          <span style={bannerEntrada.seta}>→</span>
+        </div>
 
         <Section title="Categorias" />
         <section className="categories">
@@ -497,7 +517,28 @@ const detalheStyles: Record<string, React.CSSProperties> = {
   whatsappBtn: { background: '#25D366', border: 'none', color: 'white', padding: '16px 32px', borderRadius: 14, cursor: 'pointer', fontSize: 17, fontWeight: 700, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 },
 }
 
-const adminGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 25 }
+const bannerEntradaAnimacoes = `
+@keyframes mmBrilho { 0% { transform: translateX(-120%) skewX(-20deg) } 60%, 100% { transform: translateX(320%) skewX(-20deg) } }
+@keyframes mmPulso { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,102,0,0.55) } 50% { box-shadow: 0 0 0 8px rgba(255,102,0,0) } }
+@keyframes mmGira { 0%, 70% { transform: rotate(0) } 85%, 100% { transform: rotate(180deg) } }
+@keyframes mmSeta { 0%, 100% { transform: translateX(0) } 50% { transform: translateX(6px) } }
+@keyframes mmNovo { 0%, 100% { transform: scale(1) } 50% { transform: scale(1.12) } }
+.mmBannerEntrada { position: relative; overflow: hidden; animation: mmPulso 2s ease-in-out infinite; transition: transform 0.15s; -webkit-tap-highlight-color: transparent; }
+.mmBannerEntrada:active { transform: scale(0.97); }
+.mmBannerEntrada::after { content: ''; position: absolute; top: 0; left: 0; width: 40%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent); animation: mmBrilho 3s ease-in-out infinite; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .mmBannerEntrada, .mmBannerEntrada *, .mmBannerEntrada::after { animation: none !important; } }
+`
+
+const bannerEntrada: Record<string, React.CSSProperties> = {
+  banner: { display: 'flex', alignItems: 'center', gap: 14, margin: '18px 16px', padding: '16px 18px', borderRadius: 16, background: 'rgba(255,102,0,0.12)', border: '1px solid #ff6600', cursor: 'pointer', fontFamily: 'Poppins, sans-serif' },
+  novo: { position: 'absolute', top: 8, right: 12, background: '#ff6600', color: 'white', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 10, animation: 'mmNovo 1.5s ease-in-out infinite' },
+  icone: { width: 44, height: 44, borderRadius: '50%', background: '#ff6600', color: 'white', fontSize: 22, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, animation: 'mmGira 3s ease-in-out infinite' },
+  titulo: { color: 'white', fontWeight: 800, fontSize: 16, margin: 0 },
+  texto: { color: '#ff9a55', fontSize: 13, margin: '2px 0 0' },
+  seta: { color: '#ff6600', fontSize: 24, fontWeight: 900, display: 'inline-block', animation: 'mmSeta 1s ease-in-out infinite' },
+}
+
+const adminGrid ={ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 25 }
 const adminCard = { background: '#111', border: '1px solid #222', borderRadius: 12, padding: 22 }
 const adminInput: React.CSSProperties = { width: '100%', padding: 12, marginBottom: 12, borderRadius: 8, border: '1px solid #333', background: '#050505', color: '#fff', fontSize: 15 }
 const adminButton: React.CSSProperties = { width: '100%', padding: 14, borderRadius: 8, border: 'none', background: '#ff6600', color: '#fff', fontWeight: 'bold', cursor: 'pointer', fontSize: 16 }
