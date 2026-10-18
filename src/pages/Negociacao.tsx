@@ -439,6 +439,14 @@ export default function Negociacao() {
     carregarEntradas()
   }
 
+  async function excluirEntrada(e: Entrada) {
+    if (!confirm(`Excluir a avaliação de ${e.nome}?\n\nIsso não pode ser desfeito.`)) return
+    const { error } = await supabase.from('entradas').delete().eq('id', e.id)
+    if (error) { alert('Não foi possível excluir: ' + error.message); return }
+    if (entradaVinculada?.id === e.id) setEntradaVinculada(null)
+    carregarEntradas()
+  }
+
   function whatsAppEntrada(e: Entrada) {
     const interesse = e.interesse ? ` na compra do *${e.interesse}*` : ''
     const msg = `Olá ${e.nome}! 👋\n\nRecebemos a avaliação do seu *${e.modelo} ${e.armazenamento}* (${e.estado}).\n\nVamos conversar sobre a proposta para usar como entrada${interesse}? 😊\n\n_Marcos Magazine_`
@@ -927,6 +935,7 @@ export default function Negociacao() {
                         {e.status === 'Arquivada'
                           ? <button style={{ ...s.btnLimpar, padding: '10px 14px', fontSize: 13 }} onClick={() => alterarStatusEntrada(e.id, 'Nova')}>Reabrir</button>
                           : <button style={{ ...s.btnLimpar, padding: '10px 14px', fontSize: 13 }} onClick={() => alterarStatusEntrada(e.id, 'Arquivada')}>Arquivar</button>}
+                        <button style={{ ...s.btnExcluir, padding: '10px 14px', fontSize: 13 }} onClick={() => excluirEntrada(e)} aria-label="Excluir avaliação">🗑️ Excluir</button>
                       </div>
                     </div>
                   ))}
