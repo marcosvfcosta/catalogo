@@ -42,6 +42,24 @@ type Aparelho = {
   fotos: Record<string, string[]>
 }
 
+type CapaModelo = {
+  id: string
+  marca: string
+  modelo: string
+  foto_url: string | null
+  ordem: number
+}
+
+type CapaFoto = {
+  id: string
+  modelo_id: string
+  tipo: string
+  url: string
+}
+
+const CAPAS_MARCAS = ['Apple', 'Samsung', 'Xiaomi', 'Motorola', 'Outra']
+const CAPAS_TIPOS = ['Feminino', 'Masculino', 'Transparente', 'Decorado', 'Case']
+
 const CORES_LISTA = ["Preto","Branco","Vermelho","Azul","Verde","Amarelo","Rosa","Roxo","Laranja","Cinza","Dourado","Prata","Titânio Natural","Titânio Preto","Titânio Branco","Titânio Deserto","Meia-Noite","Estelar","Azul-Sierra","Rosa-Claro","Verde-Água","Azul-Alpino","Verde-Floresta","Vermelho-Produto","Luz das Estrelas","Azul-Pacífico","Roxo-Profundo","Cobre","Bordô"]
 
 const CORES_HEX: Record<string, string> = {
@@ -63,7 +81,7 @@ export default function Admin() {
   const [senha, setSenha] = useState('')
   const [erroLogin, setErroLogin] = useState('')
   const [produtos, setProdutos] = useState<Produto[]>([])
-  const [aba, setAba] = useState<'cadastrar' | 'lista' | 'aparelhos' | 'hero'>('cadastrar')
+  const [aba, setAba] = useState<'cadastrar' | 'lista' | 'capas' | 'aparelhos' | 'hero'>('cadastrar')
   const [uploadando, setUploadando] = useState(false)
   const [uploadandoHero, setUploadandoHero] = useState(false)
   const [uploadandoFotos, setUploadandoFotos] = useState(false)
@@ -80,6 +98,18 @@ export default function Admin() {
   const [editandoAparelho, setEditandoAparelho] = useState<Aparelho | null>(null)
   const [salvandoAparelho, setSalvandoAparelho] = useState(false)
 
+  // ─── Capas ───
+  const [capasModelos, setCapasModelos] = useState<CapaModelo[]>([])
+  const [capasFotos, setCapasFotos] = useState<CapaFoto[]>([])
+  const [capaForm, setCapaForm] = useState({ marca: 'Apple', modelo: '', foto_url: '' })
+  const [capaEditandoId, setCapaEditandoId] = useState<string | null>(null)
+  const [capaSalvando, setCapaSalvando] = useState(false)
+  const [capaUploadModelo, setCapaUploadModelo] = useState(false)
+  const [capaAberta, setCapaAberta] = useState<CapaModelo | null>(null)
+  const [capaTipo, setCapaTipo] = useState(CAPAS_TIPOS[0])
+  const [capaEnviando, setCapaEnviando] = useState<{ feitas: number; total: number } | null>(null)
+  const [capaBusca, setCapaBusca] = useState('')
+
   const [novoProduto, setNovoProduto] = useState({
     categoria: 'Celulares',
     marca: '', modelo: '', memoria: '', cor: '', condicao: '',
@@ -89,7 +119,7 @@ export default function Admin() {
   })
 
   useEffect(() => {
-    if (logado) { carregarProdutos(); carregarHeroImagens(); carregarAparelhos() }
+    if (logado) { carregarProdutos(); carregarHeroImagens(); carregarAparelhos(); carregarCapas() }
   }, [logado])
 
   async function carregarProdutos() {
@@ -110,6 +140,96 @@ export default function Admin() {
   async function carregarAparelhos() {
     const { data } = await supabase.from('aparelhos').select('*').order('modelo')
     setAparelhos(data || [])
+  }
+
+  // ─── Capas: funções ───
+  async function carregarCapas() {
+    const [m, f] = await Promise.all([
+      supabase.from('capas_modelos').select('*').order('ordem').order('modelo'),
+      supabase.from('capas_fotos').select('*').order('created_at', { ascending: false }),
+    ])
+    setCapasModelos(m.data || [])
+    setCapasFotos(f.data || [])
+  }
+
+  async function enviarArquivoCapa(arquivo: File, prefixo: string) {
+    const ext = (arquivo.name.split('.').pop() || 'jpg').toLowerCase()
+    const nomeArquivo = `capas/${prefixo}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`
+    const { error } = await supabase.storage.from('fotos').upload(nomeArquivo, arquivo, { upsert: true, contentType: arquivo.type })
+    if (error) throw error
+    return supabase.storage.from('fotos').getPublicUrl(nomeArquivo).data.publicUrl
+  }
+
+  async function uploadFotoModeloCapa(arquivo: File) {
+    setCapaUploadModelo(true)
+    try {
+      const url = await enviarArquivoCapa(arquivo, 'modelo')
+      setCapaForm(prev => ({ ...prev, foto_url: url }))
+    } catch {
+      alert('Erro ao enviar a foto do modelo')
+    }
+    setCapaUploadModelo(false)
+  }
+
+  function limparCapaForm() {
+    setCapaForm({ marca: 'Apple', modelo: '', foto_url: '' })
+    setCapaEditandoId(null)
+  }
+
+  async function salvarCapaModelo() {
+    const modelo = capaForm.modelo.trim()
+    if (!modelo) { alert('Informe o modelo do celular'); return }
+    setCapaSalvando(true)
+    const dados = { marca: capaForm.marca, modelo, foto_url: capaForm.foto_url || null }
+    const { error } = capaEditandoId
+      ? await supabase.from('capas_modelos').update(dados).eq('id', capaEditandoId)
+      : await supabase.from('capas_modelos').insert([dados])
+    setCapaSalvando(false)
+    if (error) { alert('Erro ao salvar: ' + error.message); return }
+    limparCapaForm()
+    carregarCapas()
+  }
+
+  function editarCapaModelo(m: CapaModelo) {
+    setCapaForm({ marca: m.marca || 'Apple', modelo: m.modelo, foto_url: m.foto_url || '' })
+    setCapaEditandoId(m.id)
+    window.scrollTo(0, 0)
+  }
+
+  async function excluirCapaModelo(m: CapaModelo) {
+    const qtd = capasFotos.filter(f => f.modelo_id === m.id).length
+    if (!confirm(`Excluir ${m.modelo}${qtd ? ` e as ${qtd} capinhas dele` : ''}?`)) return
+    await supabase.from('capas_fotos').delete().eq('modelo_id', m.id)
+    await supabase.from('capas_modelos').delete().eq('id', m.id)
+    if (capaAberta?.id === m.id) setCapaAberta(null)
+    carregarCapas()
+  }
+
+  async function uploadCapinhas(arquivos: File[]) {
+    if (!capaAberta || arquivos.length === 0) return
+    setCapaEnviando({ feitas: 0, total: arquivos.length })
+    let falhas = 0
+    for (let i = 0; i < arquivos.length; i++) {
+      try {
+        const url = await enviarArquivoCapa(arquivos[i], 'capa')
+        const { error } = await supabase.from('capas_fotos').insert([{ modelo_id: capaAberta.id, tipo: capaTipo, url }])
+        if (error) falhas++
+      } catch {
+        falhas++
+      }
+      setCapaEnviando({ feitas: i + 1, total: arquivos.length })
+    }
+    setCapaEnviando(null)
+    if (falhas) alert(`${falhas} foto(s) não foram enviadas. Tente de novo.`)
+    carregarCapas()
+  }
+
+  async function excluirCapinha(f: CapaFoto) {
+    if (!confirm('Excluir esta capinha?')) return
+    await supabase.from('capas_fotos').delete().eq('id', f.id)
+    const caminho = f.url.split('/object/public/fotos/')[1]
+    if (caminho) await supabase.storage.from('fotos').remove([decodeURIComponent(caminho)])
+    carregarCapas()
   }
 
   async function uploadFotoPrincipal(arquivo: File) {
@@ -412,6 +532,7 @@ export default function Admin() {
       <div style={abasContainer}>
         <button style={aba === 'cadastrar' ? abaAtiva : abaInativa} onClick={() => setAba('cadastrar')}>+ Cadastrar</button>
         <button style={aba === 'lista' ? abaAtiva : abaInativa} onClick={() => setAba('lista')}>📦 ({produtos.length})</button>
+        <button style={aba === 'capas' ? abaAtiva : abaInativa} onClick={() => { setAba('capas'); setCapaAberta(null) }}>📱 Capas</button>
         <button style={aba === 'aparelhos' ? abaAtiva : abaInativa} onClick={() => setAba('aparelhos')}>🤝</button>
         <button style={aba === 'hero' ? abaAtiva : abaInativa} onClick={() => setAba('hero')}>🖼 Hero</button>
       </div>
@@ -512,6 +633,125 @@ export default function Admin() {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {aba === 'capas' && !capaAberta && (
+        <div style={formContainer}>
+          <h2 style={formTitle}>📱 Capas do catálogo</h2>
+          <div style={{ background: '#0a0a0a', border: '1px solid #222', borderRadius: 14, padding: 16, marginBottom: 24 }}>
+            <p style={{ color: '#ff6600', fontWeight: 700, fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
+              {capaEditandoId ? '✏️ Editando modelo' : '+ Novo modelo'}
+            </p>
+            <label style={labelStyle}>Marca</label>
+            <select style={inputStyle} value={capaForm.marca} onChange={e => setCapaForm({ ...capaForm, marca: e.target.value })}>
+              {CAPAS_MARCAS.map(m => <option key={m}>{m}</option>)}
+            </select>
+            <label style={labelStyle}>Modelo</label>
+            <input style={inputStyle} placeholder="Ex: iPhone 17 Pro Max / 18 Pro Max" value={capaForm.modelo}
+              onChange={e => setCapaForm({ ...capaForm, modelo: e.target.value })} />
+            <label style={labelStyle}>Foto do celular (aparece na lista)</label>
+            <label style={uploadBox}>
+              {capaUploadModelo ? '⏳ Enviando...' : capaForm.foto_url ? '📷 Trocar foto' : '📷 Escolher foto'}
+              <input type="file" accept="image/*" style={{ display: 'none' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) uploadFotoModeloCapa(f); e.target.value = '' }} />
+            </label>
+            {capaForm.foto_url && (
+              <img src={capaForm.foto_url} alt="modelo" style={{ width: 90, height: 110, objectFit: 'cover', borderRadius: 10, marginBottom: 12, border: '1px solid #333' }} />
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button style={btnSalvar} onClick={salvarCapaModelo} disabled={capaSalvando}>
+                {capaSalvando ? '⏳ Salvando...' : capaEditandoId ? '✅ Salvar alteração' : '✅ Cadastrar modelo'}
+              </button>
+              {capaEditandoId && (
+                <button style={{ ...btnSecundario, padding: '14px 16px', marginTop: 8 }} onClick={limparCapaForm}>Cancelar</button>
+              )}
+            </div>
+          </div>
+
+          <input style={inputStyle} placeholder="⌕ Buscar modelo..." value={capaBusca} onChange={e => setCapaBusca(e.target.value)} />
+          <h3 style={{ color: '#aaa', fontSize: 14, fontWeight: 700, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 }}>
+            Modelos ({capasModelos.length})
+          </h3>
+          {capasModelos.length === 0 ? (
+            <p style={{ color: '#555', textAlign: 'center', padding: 30 }}>Nenhum modelo cadastrado ainda.</p>
+          ) : (
+            capasModelos
+              .filter(m => !capaBusca.trim() || m.modelo.toLowerCase().includes(capaBusca.toLowerCase().trim()))
+              .map(m => {
+                const qtd = capasFotos.filter(f => f.modelo_id === m.id).length
+                return (
+                  <div key={m.id} style={produtoCard}>
+                    {m.foto_url
+                      ? <img src={m.foto_url} alt={m.modelo} style={{ width: 56, height: 66, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
+                      : <div style={{ ...semFoto, width: 56, height: 66 }}>📱</div>}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>{m.modelo}</p>
+                      <p style={{ color: qtd ? '#25D366' : '#ff9a55', fontSize: 12, margin: '4px 0 0' }}>
+                        {qtd ? `${qtd} capinha(s) no catálogo` : 'Sem capinhas — não aparece no catálogo'}
+                      </p>
+                      <button style={{ marginTop: 8, background: '#ff6600', border: 'none', color: 'white', fontWeight: 700, borderRadius: 8, padding: '8px 12px', fontSize: 13, cursor: 'pointer' }}
+                        onClick={() => { setCapaAberta(m); setCapaTipo(CAPAS_TIPOS[0]); window.scrollTo(0, 0) }}>
+                        📷 Capinhas
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+                      <button style={btnEditar} onClick={() => editarCapaModelo(m)}>✏️</button>
+                      <button style={btnExcluir} onClick={() => excluirCapaModelo(m)}>🗑</button>
+                    </div>
+                  </div>
+                )
+              })
+          )}
+        </div>
+      )}
+
+      {aba === 'capas' && capaAberta && (
+        <div style={formContainer}>
+          <button style={{ ...btnSecundario, marginBottom: 16 }} onClick={() => setCapaAberta(null)}>← Voltar aos modelos</button>
+          <h2 style={{ ...formTitle, marginBottom: 4 }}>{capaAberta.modelo}</h2>
+          <p style={{ color: '#888', fontSize: 13, marginBottom: 16 }}>Escolha o tipo e adicione as fotos das capinhas</p>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+            {CAPAS_TIPOS.map(t => {
+              const qtd = capasFotos.filter(f => f.modelo_id === capaAberta.id && f.tipo === t).length
+              const ativo = t === capaTipo
+              return (
+                <button key={t} onClick={() => setCapaTipo(t)} style={{
+                  padding: '9px 14px', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                  border: ativo ? '1px solid #ff6600' : '1px solid #2a2a2a',
+                  background: ativo ? '#ff6600' : '#111', color: ativo ? 'white' : '#ddd',
+                }}>
+                  {t}{qtd ? ` (${qtd})` : ''}
+                </button>
+              )
+            })}
+          </div>
+
+          <label style={{ ...uploadBox, borderColor: '#ff6600', color: '#ff6600' }}>
+            {capaEnviando
+              ? `⏳ Enviando ${capaEnviando.feitas} de ${capaEnviando.total}...`
+              : `＋ Adicionar fotos em "${capaTipo}"`}
+            <span style={{ color: '#777', fontSize: 12 }}>Pode escolher várias de uma vez</span>
+            <input type="file" accept="image/*" multiple style={{ display: 'none' }} disabled={!!capaEnviando}
+              onChange={e => { const fs = Array.from(e.target.files || []) as File[]; e.target.value = ''; uploadCapinhas(fs) }} />
+          </label>
+
+          {(() => {
+            const lista = capasFotos.filter(f => f.modelo_id === capaAberta.id && f.tipo === capaTipo)
+            if (lista.length === 0) return <p style={{ color: '#555', textAlign: 'center', padding: 30 }}>Nenhuma capinha em {capaTipo} ainda.</p>
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 10 }}>
+                {lista.map(f => (
+                  <div key={f.id} style={{ position: 'relative' }}>
+                    <img src={f.url} alt="capinha" style={{ width: '100%', aspectRatio: '3 / 4', objectFit: 'cover', borderRadius: 10, border: '1px solid #333', display: 'block' }} />
+                    <button onClick={() => excluirCapinha(f)}
+                      style={{ position: 'absolute', top: 4, right: 4, background: '#7a1111', border: 'none', color: 'white', borderRadius: '50%', width: 26, height: 26, cursor: 'pointer', fontSize: 12 }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
         </div>
       )}
 
@@ -649,9 +889,9 @@ const btnLogin: React.CSSProperties = { background: '#ff6600', color: 'white', b
 const btnVoltar: React.CSSProperties = { background: 'none', color: '#666', border: '1px solid #222', borderRadius: 10, padding: '12px', fontSize: 14, cursor: 'pointer' }
 const adminPage: React.CSSProperties = { minHeight: '100vh', background: '#050505', color: 'white', paddingBottom: 40, overflowX: 'hidden', maxWidth: '100vw' }
 const adminHeader: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: '#080808', borderBottom: '1px solid #1a1a1a', position: 'sticky', top: 0, zIndex: 100 }
-const abasContainer: React.CSSProperties = { display: 'flex', gap: 0, borderBottom: '1px solid #1a1a1a' }
-const abaAtiva: React.CSSProperties = { flex: 1, padding: '14px', background: 'none', color: '#ff6600', border: 'none', borderBottom: '3px solid #ff6600', fontSize: 14, fontWeight: 700, cursor: 'pointer' }
-const abaInativa: React.CSSProperties = { flex: 1, padding: '14px', background: 'none', color: '#666', border: 'none', borderBottom: '3px solid transparent', fontSize: 14, cursor: 'pointer' }
+const abasContainer: React.CSSProperties = { display: 'flex', gap: 0, borderBottom: '1px solid #1a1a1a', overflowX: 'auto' }
+const abaAtiva: React.CSSProperties = { flex: 1, padding: '14px 10px', whiteSpace: 'nowrap', background: 'none', color: '#ff6600', border: 'none', borderBottom: '3px solid #ff6600', fontSize: 14, fontWeight: 700, cursor: 'pointer' }
+const abaInativa: React.CSSProperties = { flex: 1, padding: '14px 10px', whiteSpace: 'nowrap', background: 'none', color: '#666', border: 'none', borderBottom: '3px solid transparent', fontSize: 14, cursor: 'pointer' }
 const formContainer: React.CSSProperties = { padding: '20px 16px', maxWidth: '100%', width: '100%', boxSizing: 'border-box', overflowX: 'hidden' }
 const formTitle: React.CSSProperties = { color: '#ff6600', fontSize: 20, fontWeight: 800, marginBottom: 20 }
 const labelStyle: React.CSSProperties = { color: '#aaa', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4, display: 'block' }

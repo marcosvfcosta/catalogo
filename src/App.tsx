@@ -31,6 +31,7 @@ type HeroImagem = {
 
 const categorias = [
   { nome: 'Celulares',    img: 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public/categorias/celulares.png' },
+  { nome: 'Capas',        img: '/categoria-capas.png' },
   { nome: 'Tablet',       img: 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public/categorias/tablet.png' },
   { nome: 'Carregadores', img: 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public/categorias/carregadores%20(1).png' },
   { nome: 'Fones',        img: 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public/categorias/fones.png' },
@@ -449,7 +450,10 @@ function App() {
         <section className="categories">
           {categorias.map(({ nome, img }) => (
             <div className={`categoryCard ${categoriaAtiva === nome ? 'ativo' : ''}`} key={nome}
-              onClick={() => { setCategoriaAtiva(categoriaAtiva === nome ? null : nome); setMarcaAtiva(null); setFiltroEspecial(null) }}>
+              onClick={() => {
+                if (nome === 'Capas') { navigate('/capas'); return }
+                setCategoriaAtiva(categoriaAtiva === nome ? null : nome); setMarcaAtiva(null); setFiltroEspecial(null)
+              }}>
               <div className="categoryImgWrap"><img src={img} alt={nome} /></div>
               <p>{nome}</p>
             </div>
