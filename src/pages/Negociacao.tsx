@@ -130,34 +130,44 @@ function useCelular() {
   return celular
 }
 
+// Neutraliza estilos globais do index.css/App.css que alargam a tela no celular
+const AJUSTE_CELULAR = `
+  html, body { width: 100%; max-width: 100%; overflow-x: hidden; margin: 0; }
+  body { display: block !important; min-width: 0 !important; }
+  #root { width: 100% !important; max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
+  *, *::before, *::after { box-sizing: border-box; }
+`
+
 // No celular, troca as grades de várias colunas por uma coluna só
 function estilos(celular: boolean): Record<string, React.CSSProperties> {
   if (!celular) return base
   return {
     ...base,
-    header: { ...base.header, flexWrap: 'wrap', padding: '12px 14px', gap: 10 },
+    page: { ...base.page, maxWidth: '100vw' },
+    header: { ...base.header, flexWrap: 'wrap', padding: '12px 14px', gap: 10, maxWidth: '100vw', boxSizing: 'border-box' },
     logoM: { ...base.logoM, fontSize: 22 },
     logoMag: { ...base.logoMag, fontSize: 11 },
-    abas: { ...base.abas, width: '100%', order: 3, paddingBottom: 2 },
+    abas: { ...base.abas, width: '100%', maxWidth: 'calc(100vw - 28px)', order: 3, paddingBottom: 2, WebkitOverflowScrolling: 'touch' },
     abaAtiva: { ...base.abaAtiva, padding: '9px 14px', flexShrink: 0 },
     abaInativa: { ...base.abaInativa, padding: '9px 14px', flexShrink: 0 },
-    content: { ...base.content, padding: '18px 12px' },
+    content: { ...base.content, padding: '18px 12px', maxWidth: '100vw' },
     pageTitle: { ...base.pageTitle, fontSize: 24 },
     pageSubtitle: { ...base.pageSubtitle, marginBottom: 18 },
     section: { ...base.section, padding: 16, marginBottom: 14 },
     formGrid2: { ...base.formGrid2, gridTemplateColumns: '1fr', gap: 12 },
-    formGrid3: { ...base.formGrid3, gridTemplateColumns: '1fr', gap: 12 },
+    formGrid3: { ...base.formGrid3, gridTemplateColumns: 'minmax(0, 1fr)', gap: 12 },
     input: { ...base.input, fontSize: 16 },
-    parcelasGrid: { ...base.parcelasGrid, gridTemplateColumns: '1fr' },
-    resumoFinal: { ...base.resumoFinal, gridTemplateColumns: '1fr 1fr', padding: 16, gap: 14 },
+    parcelasGrid: { ...base.parcelasGrid, gridTemplateColumns: 'minmax(0, 1fr)' },
+    parcelaCard: { ...base.parcelaCard, padding: '12px 14px', minWidth: 0 },
+    resumoFinal: { ...base.resumoFinal, gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', padding: 16, gap: 14 },
     botoesRow: { ...base.botoesRow, flexDirection: 'column', alignItems: 'stretch' },
     btnPendente: { ...base.btnPendente, flex: 1, padding: '14px 12px' },
     btnFechar: { ...base.btnFechar, flex: 1, padding: '14px 12px' },
-    clientesGrid: { ...base.clientesGrid, gridTemplateColumns: '1fr', gap: 12 },
+    clientesGrid: { ...base.clientesGrid, gridTemplateColumns: 'minmax(0, 1fr)', gap: 12 },
     clienteCard: { ...base.clienteCard, padding: 16 },
-    detalheContainer: { ...base.detalheContainer, padding: '18px 12px' },
+    detalheContainer: { ...base.detalheContainer, padding: '18px 12px', maxWidth: '100vw' },
     detalheTitle: { ...base.detalheTitle, fontSize: 22, marginBottom: 16 },
-    detalheGrid: { ...base.detalheGrid, gridTemplateColumns: '1fr 1fr', gap: 10 },
+    detalheGrid: { ...base.detalheGrid, gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 10 },
     detalheCard: { ...base.detalheCard, padding: 12 },
     relGrid: { ...base.relGrid, gridTemplateColumns: '1fr', gap: 12 },
     relCard: { ...base.relCard, padding: 18 },
@@ -166,7 +176,7 @@ function estilos(celular: boolean): Record<string, React.CSSProperties> {
     vendedorStats: { ...base.vendedorStats, gap: 12, width: '100%', justifyContent: 'space-between' },
     vendedorStat: { ...base.vendedorStat, minWidth: 0 },
     entradaBanner: { ...base.entradaBanner, flexDirection: 'column', padding: 14 },
-    listaGrid: { ...base.listaGrid, gridTemplateColumns: '1fr' },
+    listaGrid: { ...base.listaGrid, gridTemplateColumns: 'minmax(0, 1fr)' },
   }
 }
 
@@ -495,6 +505,7 @@ export default function Negociacao() {
 
   if (clienteSelecionado) return (
     <div style={s.page}>
+      {celular && <style>{AJUSTE_CELULAR}</style>}
       <header style={s.header}>
         <button style={s.btnBack} onClick={() => setClienteSelecionado(null)}>← Voltar</button>
         <div style={s.logo}><span style={s.logoM}>Marcos</span><span style={s.logoMag}>Magazine</span></div>
@@ -533,6 +544,7 @@ export default function Negociacao() {
 
   return (
     <div style={s.page}>
+      {celular && <style>{AJUSTE_CELULAR}</style>}
       {menuAberto && <div style={s.overlay} onClick={() => setMenuAberto(false)} />}
       <aside style={{ ...s.sidebar, left: menuAberto ? 0 : -280 }}>
         <div style={s.sidebarLogo}><span style={s.logoM}>Marcos</span><span style={s.logoMag}>Magazine</span></div>
@@ -545,7 +557,7 @@ export default function Negociacao() {
           </p>
         </nav>
       </aside>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: '100%' }}>
         <header style={s.header}>
           <button style={s.hamburger} onClick={() => setMenuAberto(!menuAberto)}>☰</button>
           <div style={s.logo}><span style={s.logoM}>Marcos</span><span style={s.logoMag}>Magazine</span></div>
@@ -1031,7 +1043,7 @@ export default function Negociacao() {
 
 const base: Record<string, React.CSSProperties> = {
   listaGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
-  page: { minHeight: '100vh', background: '#050505', color: 'white', fontFamily: 'Poppins, sans-serif', display: 'flex', overflowX: 'hidden' },
+  page: { minHeight: '100vh', background: '#050505', color: 'white', fontFamily: 'Poppins, sans-serif', display: 'flex', overflowX: 'hidden', width: '100%', boxSizing: 'border-box' },
   overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 150 },
   sidebar: { position: 'fixed', top: 0, width: 260, height: '100vh', background: '#0a0a0a', borderRight: '1px solid #1a1a1a', zIndex: 200, padding: '30px 0', transition: 'left 0.3s ease' },
   sidebarLogo: { padding: '0 20px 25px', borderBottom: '1px solid #1a1a1a', marginBottom: 10 },
@@ -1046,7 +1058,7 @@ const base: Record<string, React.CSSProperties> = {
   abaAtiva: { padding: '10px 18px', borderRadius: 10, border: 'none', background: '#ff6600', color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 },
   abaInativa: { padding: '10px 18px', borderRadius: 10, border: '1px solid #333', background: 'none', color: '#888', cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 },
   badgeNovas: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 20, height: 20, padding: '0 6px', borderRadius: 10, background: '#ff6600', color: 'white', fontSize: 11, fontWeight: 800, marginLeft: 6 },
-  content: { padding: '28px 20px', maxWidth: 1100, width: '100%', margin: '0 auto' },
+  content: { padding: '28px 20px', maxWidth: 1100, width: '100%', margin: '0 auto', boxSizing: 'border-box' },
   pageTitle: { fontSize: 28, fontWeight: 900, color: '#ff6600', fontFamily: 'Nunito, sans-serif', marginBottom: 6 },
   pageSubtitle: { color: '#666', fontSize: 14, marginBottom: 28 },
   section: { background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 16, padding: 24, marginBottom: 20 },
@@ -1090,7 +1102,7 @@ const base: Record<string, React.CSSProperties> = {
   interesseBox: { display: 'flex', flexDirection: 'column', gap: 2, marginTop: 12, padding: '10px 12px', borderRadius: 10, background: 'rgba(255,102,0,0.08)', border: '1px solid rgba(255,102,0,0.35)' },
   tagEntrada: { padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#1a1a1a', color: '#ccc', border: '1px solid #2a2a2a' },
   entradaBanner: { display: 'flex', alignItems: 'flex-start', gap: 16, background: 'rgba(255,102,0,0.08)', border: '1px solid #ff6600', borderRadius: 16, padding: 18, marginBottom: 20 },
-  detalheContainer: { padding: '28px 20px', maxWidth: 900, margin: '0 auto' },
+  detalheContainer: { padding: '28px 20px', maxWidth: 900, margin: '0 auto', boxSizing: 'border-box' },
   detalheTitle: { fontSize: 28, fontWeight: 900, color: '#ff6600', fontFamily: 'Nunito, sans-serif', marginBottom: 24 },
   detalheGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 },
   detalheCard: { background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 12, padding: 16 },
