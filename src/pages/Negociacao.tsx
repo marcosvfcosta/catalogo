@@ -119,7 +119,60 @@ function linkWhatsApp(telefone: string, msg: string) {
   return `https://wa.me/${numero}?text=${encodeURIComponent(msg)}`
 }
 
+// Detecta tela de celular (largura menor que 700px) e acompanha giro de tela
+function useCelular() {
+  const [celular, setCelular] = useState(typeof window !== 'undefined' && window.innerWidth < 700)
+  useEffect(() => {
+    const atualizar = () => setCelular(window.innerWidth < 700)
+    window.addEventListener('resize', atualizar)
+    return () => window.removeEventListener('resize', atualizar)
+  }, [])
+  return celular
+}
+
+// No celular, troca as grades de várias colunas por uma coluna só
+function estilos(celular: boolean): Record<string, React.CSSProperties> {
+  if (!celular) return base
+  return {
+    ...base,
+    header: { ...base.header, flexWrap: 'wrap', padding: '12px 14px', gap: 10 },
+    logoM: { ...base.logoM, fontSize: 22 },
+    logoMag: { ...base.logoMag, fontSize: 11 },
+    abas: { ...base.abas, width: '100%', order: 3, paddingBottom: 2 },
+    abaAtiva: { ...base.abaAtiva, padding: '9px 14px', flexShrink: 0 },
+    abaInativa: { ...base.abaInativa, padding: '9px 14px', flexShrink: 0 },
+    content: { ...base.content, padding: '18px 12px' },
+    pageTitle: { ...base.pageTitle, fontSize: 24 },
+    pageSubtitle: { ...base.pageSubtitle, marginBottom: 18 },
+    section: { ...base.section, padding: 16, marginBottom: 14 },
+    formGrid2: { ...base.formGrid2, gridTemplateColumns: '1fr', gap: 12 },
+    formGrid3: { ...base.formGrid3, gridTemplateColumns: '1fr', gap: 12 },
+    input: { ...base.input, fontSize: 16 },
+    parcelasGrid: { ...base.parcelasGrid, gridTemplateColumns: '1fr' },
+    resumoFinal: { ...base.resumoFinal, gridTemplateColumns: '1fr 1fr', padding: 16, gap: 14 },
+    botoesRow: { ...base.botoesRow, flexDirection: 'column', alignItems: 'stretch' },
+    btnPendente: { ...base.btnPendente, flex: 1, padding: '14px 12px' },
+    btnFechar: { ...base.btnFechar, flex: 1, padding: '14px 12px' },
+    clientesGrid: { ...base.clientesGrid, gridTemplateColumns: '1fr', gap: 12 },
+    clienteCard: { ...base.clienteCard, padding: 16 },
+    detalheContainer: { ...base.detalheContainer, padding: '18px 12px' },
+    detalheTitle: { ...base.detalheTitle, fontSize: 22, marginBottom: 16 },
+    detalheGrid: { ...base.detalheGrid, gridTemplateColumns: '1fr 1fr', gap: 10 },
+    detalheCard: { ...base.detalheCard, padding: 12 },
+    relGrid: { ...base.relGrid, gridTemplateColumns: '1fr', gap: 12 },
+    relCard: { ...base.relCard, padding: 18 },
+    relNumero: { ...base.relNumero, fontSize: 40 },
+    vendedorCard: { ...base.vendedorCard, padding: 14 },
+    vendedorStats: { ...base.vendedorStats, gap: 12, width: '100%', justifyContent: 'space-between' },
+    vendedorStat: { ...base.vendedorStat, minWidth: 0 },
+    entradaBanner: { ...base.entradaBanner, flexDirection: 'column', padding: 14 },
+    listaGrid: { ...base.listaGrid, gridTemplateColumns: '1fr' },
+  }
+}
+
 export default function Negociacao() {
+  const celular = useCelular()
+  const s = estilos(celular)
   const [aba, setAba] = useState<'negociacao' | 'clientes' | 'relatorios' | 'entradas' | 'admin'>('negociacao')
   const [menuAberto, setMenuAberto] = useState(false)
   const [clientes, setClientes] = useState<Negociacao[]>([])
@@ -790,7 +843,7 @@ export default function Negociacao() {
                         </div>
                       </div>
                       {aberto && (
-                        <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        <div style={{ ...s.listaGrid, marginTop: 10 }}>
                           {v.lista.map(c => miniCard(c))}
                         </div>
                       )}
@@ -976,7 +1029,8 @@ export default function Negociacao() {
   )
 }
 
-const s: Record<string, React.CSSProperties> = {
+const base: Record<string, React.CSSProperties> = {
+  listaGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
   page: { minHeight: '100vh', background: '#050505', color: 'white', fontFamily: 'Poppins, sans-serif', display: 'flex', overflowX: 'hidden' },
   overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 150 },
   sidebar: { position: 'fixed', top: 0, width: 260, height: '100vh', background: '#0a0a0a', borderRight: '1px solid #1a1a1a', zIndex: 200, padding: '30px 0', transition: 'left 0.3s ease' },
