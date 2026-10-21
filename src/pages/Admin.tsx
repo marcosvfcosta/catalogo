@@ -181,13 +181,21 @@ export default function Admin() {
     if (!modelo) { alert('Informe o modelo do celular'); return }
     setCapaSalvando(true)
     const dados = { marca: capaForm.marca, modelo, foto_url: capaForm.foto_url || null }
-    const { error } = capaEditandoId
-      ? await supabase.from('capas_modelos').update(dados).eq('id', capaEditandoId)
-      : await supabase.from('capas_modelos').insert([dados])
+    if (capaEditandoId) {
+      const { error } = await supabase.from('capas_modelos').update(dados).eq('id', capaEditandoId)
+      setCapaSalvando(false)
+      if (error) { alert('Erro ao salvar: ' + error.message); return }
+      limparCapaForm()
+      carregarCapas()
+      return
+    }
+    // Modelo novo: já abre a tela das capinhas para adicionar várias fotos
+    const { data, error } = await supabase.from('capas_modelos').insert([dados]).select().single()
     setCapaSalvando(false)
     if (error) { alert('Erro ao salvar: ' + error.message); return }
     limparCapaForm()
-    carregarCapas()
+    await carregarCapas()
+    if (data) { setCapaAberta(data as CapaModelo); setCapaTipo(CAPAS_TIPOS[0]); window.scrollTo(0, 0) }
   }
 
   function editarCapaModelo(m: CapaModelo) {
@@ -650,7 +658,7 @@ export default function Admin() {
             <label style={labelStyle}>Modelo</label>
             <input style={inputStyle} placeholder="Ex: iPhone 17 Pro Max / 18 Pro Max" value={capaForm.modelo}
               onChange={e => setCapaForm({ ...capaForm, modelo: e.target.value })} />
-            <label style={labelStyle}>Foto do celular (aparece na lista)</label>
+            <label style={labelStyle}>Foto do celular (só 1 · aparece na lista de modelos)</label>
             <label style={uploadBox}>
               {capaUploadModelo ? '⏳ Enviando...' : capaForm.foto_url ? '📷 Trocar foto' : '📷 Escolher foto'}
               <input type="file" accept="image/*" style={{ display: 'none' }}
@@ -661,7 +669,7 @@ export default function Admin() {
             )}
             <div style={{ display: 'flex', gap: 8 }}>
               <button style={btnSalvar} onClick={salvarCapaModelo} disabled={capaSalvando}>
-                {capaSalvando ? '⏳ Salvando...' : capaEditandoId ? '✅ Salvar alteração' : '✅ Cadastrar modelo'}
+                {capaSalvando ? '⏳ Salvando...' : capaEditandoId ? '✅ Salvar alteração' : '✅ Cadastrar e adicionar capinhas →'}
               </button>
               {capaEditandoId && (
                 <button style={{ ...btnSecundario, padding: '14px 16px', marginTop: 8 }} onClick={limparCapaForm}>Cancelar</button>
@@ -732,7 +740,7 @@ export default function Admin() {
             {capaEnviando
               ? `⏳ Enviando ${capaEnviando.feitas} de ${capaEnviando.total}...`
               : `＋ Adicionar fotos em "${capaTipo}"`}
-            <span style={{ color: '#777', fontSize: 12 }}>Pode escolher várias de uma vez</span>
+            <span style={{ color: '#777', fontSize: 12, textAlign: 'center' }}>Pode escolher várias de uma vez. No iPhone/iPad, toque em cada foto para marcar e depois em "Adicionar".</span>
             <input type="file" accept="image/*" multiple style={{ display: 'none' }} disabled={!!capaEnviando}
               onChange={e => { const fs = Array.from(e.target.files || []) as File[]; e.target.value = ''; uploadCapinhas(fs) }} />
           </label>
