@@ -421,6 +421,9 @@ export default function Negociacao() {
     setSalvandoLucroId(null)
     if (error) { alert('Erro ao salvar o lucro: ' + error.message); return }
     setLucrosEdit(prev => { const n = { ...prev }; delete n[c.id]; return n })
+    // Fecha o painel sozinho quando não sobrar venda sem lucro no período
+    const faltam = clientesPeriodo.filter(x => x.status === 'Venda Fechada' && x.id !== c.id && x.lucro == null).length
+    if (faltam === 0) setPainelLucro(false)
     carregarClientes()
   }
 
