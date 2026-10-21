@@ -213,12 +213,9 @@ export default function Negociacao() {
   const [filtroEntradas, setFiltroEntradas] = useState('Nova')
   const [entradaVinculada, setEntradaVinculada] = useState<Entrada | null>(null)
   const [linkCopiado, setLinkCopiado] = useState(false)
-  const [lucroEdit, setLucroEdit] = useState('')
-  const [salvandoLucro, setSalvandoLucro] = useState(false)
-
-  useEffect(() => {
-    if (clienteSelecionado) setLucroEdit(clienteSelecionado.lucro != null ? String(clienteSelecionado.lucro).replace('.', ',') : '')
-  }, [clienteSelecionado])
+  const [painelLucro, setPainelLucro] = useState(false)
+  const [lucrosEdit, setLucrosEdit] = useState<Record<string, string>>({})
+  const [salvandoLucroId, setSalvandoLucroId] = useState<string | null>(null)
   const [form, setForm] = useState({
     nome: '', telefone: '', instagram: '',
     modelo: '', cor: '',
@@ -361,7 +358,6 @@ export default function Negociacao() {
       nome: form.nome, telefone: form.telefone, instagram: form.instagram,
       modelo: form.modelo, cor: form.cor,
       valor_aparelho: valorAparelho, valor_entrada: valorEntrada,
-      lucro: form.lucro.trim() ? parseValor(form.lucro) : null,
       parcelas: parcelaSelecionada, taxa: taxaAtual.taxa, forma_pagamento: taxaAtual.label,
       valor_parcela: valorParcela, valor_total: valorTotal,
       observacoes: form.observacoes, vendedor: form.vendedor.trim(), status,
@@ -412,14 +408,19 @@ export default function Negociacao() {
     setAba('negociacao')
   }
 
-  async function salvarLucro() {
-    if (!clienteSelecionado) return
-    setSalvandoLucro(true)
-    const lucro = lucroEdit.trim() ? parseValor(lucroEdit) : null
-    const { error } = await supabase.from('negociacoes').update({ lucro }).eq('id', clienteSelecionado.id)
-    setSalvandoLucro(false)
+  function valorLucroEdit(c: Negociacao) {
+    if (lucrosEdit[c.id] !== undefined) return lucrosEdit[c.id]
+    return c.lucro != null ? String(c.lucro).replace('.', ',') : ''
+  }
+
+  async function salvarLucro(c: Negociacao) {
+    setSalvandoLucroId(c.id)
+    const txt = valorLucroEdit(c)
+    const lucro = txt.trim() ? parseValor(txt) : null
+    const { error } = await supabase.from('negociacoes').update({ lucro }).eq('id', c.id)
+    setSalvandoLucroId(null)
     if (error) { alert('Erro ao salvar o lucro: ' + error.message); return }
-    setClienteSelecionado({ ...clienteSelecionado, lucro })
+    setLucrosEdit(prev => { const n = { ...prev }; delete n[c.id]; return n })
     carregarClientes()
   }
 
@@ -568,17 +569,7 @@ export default function Negociacao() {
             <p style={{ ...s.detalheValor, color: '#ff6600', fontSize: 24, fontWeight: 900 }}>{fmt(clienteSelecionado.valor_parcela)}</p>
           </div>
           <div style={s.detalheCard}><p style={s.detalheLabel}>Total</p><p style={s.detalheValor}>{fmt(clienteSelecionado.valor_total)}</p></div>
-          <div style={{ ...s.detalheCard, border: '1px solid #1f5c37', background: 'rgba(37,211,102,0.06)' }}>
-            <p style={s.detalheLabel}>💰 Lucro</p>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input style={{ ...s.input, padding: '8px 10px', fontSize: 16, flex: 1, minWidth: 0 }} value={lucroEdit} inputMode="decimal"
-                onChange={e => setLucroEdit(e.target.value)} placeholder="0,00" />
-              <button onClick={salvarLucro} disabled={salvandoLucro}
-                style={{ background: '#25D366', border: 'none', color: 'white', fontWeight: 700, borderRadius: 8, padding: '9px 12px', cursor: 'pointer', fontSize: 13, flexShrink: 0 }}>
-                {salvandoLucro ? '...' : 'Salvar'}
-              </button>
-            </div>
-          </div>
+
           <div style={s.detalheCard}><p style={s.detalheLabel}>Data</p><p style={s.detalheValor}>{new Date(clienteSelecionado.created_at).toLocaleDateString('pt-BR')}</p></div>
         </div>
         {clienteSelecionado.observacoes && <div style={{ ...s.detalheCard, marginTop: 12 }}><p style={s.detalheLabel}>Obs</p><p style={s.detalheValor}>{clienteSelecionado.observacoes}</p></div>}
@@ -717,10 +708,6 @@ export default function Negociacao() {
                   <div style={{ ...s.inputPrefix, borderColor: entradaVinculada ? '#ff6600' : '#2a2a2a' }}><span style={s.prefix}>R$</span><input style={{ ...s.input, borderRadius: '0 10px 10px 0' }} value={form.valor_entrada} onChange={e => setForm({ ...form, valor_entrada: e.target.value })} placeholder="0,00" /></div>
                 </div>
                 <div style={s.resumoBox}><p style={s.resumoLabel}>A Financiar</p><p style={s.resumoValor}>{fmt(valorFinanciar)}</p></div>
-              </div>
-              <div style={{ marginTop: 16, maxWidth: 360 }}>
-                <label style={s.label}>💰 Lucro da venda <span style={{ color: '#666', textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>(opcional · só a loja vê)</span></label>
-                <div style={{ ...s.inputPrefix, borderColor: '#1f5c37' }}><span style={{ ...s.prefix, color: '#25D366' }}>R$</span><input style={{ ...s.input, borderRadius: '0 10px 10px 0' }} value={form.lucro} inputMode="decimal" onChange={e => setForm({ ...form, lucro: e.target.value })} placeholder="0,00" /></div>
               </div>
             </div>
             <div style={s.section}>
@@ -889,9 +876,47 @@ export default function Negociacao() {
                   <p style={{ color: '#666', fontSize: 12, textTransform: 'uppercase' }}>💰 Lucro no período</p>
                   <p style={{ color: '#25D366', fontWeight: 900, fontSize: 22 }}>{fmt(totalLucroPeriodo)}</p>
                   {totalSemLucro > 0 && <p style={{ color: '#ffc800', fontSize: 11 }}>{totalSemLucro} venda(s) sem lucro preenchido</p>}
+                  <button onClick={() => setPainelLucro(!painelLucro)}
+                    style={{ marginTop: 6, background: painelLucro ? '#25D366' : 'rgba(37,211,102,0.12)', border: '1px solid #25D366', color: painelLucro ? 'white' : '#25D366', fontWeight: 700, borderRadius: 10, padding: '7px 12px', cursor: 'pointer', fontSize: 13 }}>
+                    {painelLucro ? '✓ Fechar' : '✏️ Preencher lucro'}
+                  </button>
                 </div>
               </div>
             </div>
+
+            {painelLucro && (() => {
+              const fechadas = clientesPeriodo.filter(c => c.status === 'Venda Fechada')
+                .sort((a, b) => (a.lucro == null ? 0 : 1) - (b.lucro == null ? 0 : 1))
+              return (
+                <div style={{ background: '#0f0f0f', border: '1px solid #1f5c37', borderRadius: 14, padding: 14, marginBottom: 20 }}>
+                  <p style={{ color: '#25D366', fontWeight: 800, fontSize: 15, marginBottom: 4 }}>💰 Lucro das vendas fechadas</p>
+                  <p style={{ color: '#777', fontSize: 12, marginBottom: 12 }}>Preencha e toque em Salvar. O total soma no "Lucro no período".</p>
+                  {fechadas.length === 0 ? (
+                    <p style={{ color: '#555', textAlign: 'center', padding: 16 }}>Nenhuma venda fechada no período</p>
+                  ) : fechadas.map(c => (
+                    <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderTop: '1px solid #1a1a1a', flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: 150 }}>
+                        <p style={{ color: 'white', fontWeight: 700, fontSize: 14 }}>{c.nome}</p>
+                        <p style={{ color: '#888', fontSize: 12 }}>{c.modelo || '-'} · {fmt(c.valor_aparelho)} · {new Date(c.created_at).toLocaleDateString('pt-BR')}{c.vendedor ? ' · ' + c.vendedor : ''}</p>
+                        {c.lucro == null && <p style={{ color: '#ffc800', fontSize: 11 }}>sem lucro</p>}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <div style={{ ...s.inputPrefix, borderColor: '#1f5c37', width: 150 }}>
+                          <span style={{ ...s.prefix, color: '#25D366', padding: '10px 10px' }}>R$</span>
+                          <input style={{ ...s.input, borderRadius: '0 10px 10px 0', padding: '10px', fontSize: 16 }} inputMode="decimal" placeholder="0,00"
+                            value={valorLucroEdit(c)} onChange={e => setLucrosEdit(prev => ({ ...prev, [c.id]: e.target.value }))}
+                            onKeyDown={e => e.key === 'Enter' && salvarLucro(c)} />
+                        </div>
+                        <button onClick={() => salvarLucro(c)} disabled={salvandoLucroId === c.id}
+                          style={{ background: '#25D366', border: 'none', color: 'white', fontWeight: 700, borderRadius: 10, padding: '11px 14px', cursor: 'pointer', fontSize: 13 }}>
+                          {salvandoLucroId === c.id ? '...' : 'Salvar'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
             {porVendedor.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 30, color: '#555' }}>Nenhuma negociação no período</div>
             ) : (
