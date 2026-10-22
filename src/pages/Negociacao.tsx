@@ -12,6 +12,7 @@ type Negociacao = {
 
 type Aparelho = {
   id: string; modelo: string; cores: string[]; fotos: Record<string, string[]>
+  preco?: number | null; disponivel?: boolean | null
 }
 
 type Entrada = {
@@ -76,7 +77,7 @@ const CORES_LISTA = [
   { nome: 'Luz das Estrelas', hex: '#f0e8d0' },
 ]
 
-const CORES_HEX: Record<string, string> = {"Preto":"#1a1a1a","Branco":"#f0f0f0","Vermelho (RED)":"#cc0000","Estelar":"#f5e6c8","Meia-Noite":"#1c2026","Titânio Natural":"#c4b49a","Titânio Preto":"#2c2c2c","Titânio Branco":"#e8e4dc","Titânio Desert":"#c8a97a","Titânio Rosa":"#e8b4a0","Azul":"#4a90d9","Azul Sierra":"#5b7fa6","Azul Alpino":"#2d5f8a","Verde":"#5ab878","Verde Alpino":"#4a7c59","Verde Floresta":"#2d5c3a","Rosa":"#e8799e","Roxo":"#7b5ea7","Violeta":"#9b59b6","Amarelo":"#f5c842","Coral":"#ff6b5b","Laranja":"#ff8c00","Ciano":"#00bcd4","Dourado":"#c9a84c","Prateado":"#b0b8c1","Grafite":"#4a4a4a","Azul Pacífico":"#1a4a6b","Luz das Estrelas":"#f0e8d0"}
+const CORES_HEX: Record<string, string> = {"Prata":"#c0c0c0","Lilás":"#c8a2c8","Cinza":"#7f8c8d","Preto":"#1a1a1a","Branco":"#f0f0f0","Vermelho (RED)":"#cc0000","Estelar":"#f5e6c8","Meia-Noite":"#1c2026","Titânio Natural":"#c4b49a","Titânio Preto":"#2c2c2c","Titânio Branco":"#e8e4dc","Titânio Desert":"#c8a97a","Titânio Rosa":"#e8b4a0","Azul":"#4a90d9","Azul Sierra":"#5b7fa6","Azul Alpino":"#2d5f8a","Verde":"#5ab878","Verde Alpino":"#4a7c59","Verde Floresta":"#2d5c3a","Rosa":"#e8799e","Roxo":"#7b5ea7","Violeta":"#9b59b6","Amarelo":"#f5c842","Coral":"#ff6b5b","Laranja":"#ff8c00","Ciano":"#00bcd4","Dourado":"#c9a84c","Prateado":"#b0b8c1","Grafite":"#4a4a4a","Azul Pacífico":"#1a4a6b","Luz das Estrelas":"#f0e8d0"}
 
 const PERIODOS = [
   { k: 'hoje', l: 'Hoje' },
@@ -255,13 +256,16 @@ export default function Negociacao() {
     setBuscaModelo(texto)
     setForm({ ...form, modelo: texto, cor: '' })
     if (texto.length < 2) { setModeloSugestoes([]); return }
-    const sugestoes = aparelhos.filter(a => a.modelo.toLowerCase().includes(texto.toLowerCase()))
+    const sugestoes = aparelhos.filter(a => a.disponivel !== false && a.modelo.toLowerCase().includes(texto.toLowerCase()))
     setModeloSugestoes(sugestoes)
   }
 
   function selecionarAparelho(a: Aparelho) {
     setBuscaModelo(a.modelo)
-    setForm({ ...form, modelo: a.modelo, cor: '' })
+    // Preço de venda vem do cadastro (custo do fornecedor + lucro)
+    const valor = a.preco != null ? String(a.preco).replace('.', ',') : form.valor_aparelho
+    setForm({ ...form, modelo: a.modelo, cor: '', valor_aparelho: valor })
+    setErros({ ...erros, valor_aparelho: '' })
     setModeloSugestoes([])
   }
 
@@ -664,7 +668,7 @@ export default function Negociacao() {
                       {modeloSugestoes.map(a => (
                         <div key={a.id} style={s.sugestaoItem} onClick={() => selecionarAparelho(a)}>
                           <span style={{ color: 'white', fontWeight: 600 }}>{a.modelo}</span>
-                          <span style={{ color: '#666', fontSize: 12 }}>{a.cores.length} cor(es)</span>
+                          <span style={{ color: a.preco != null ? '#25D366' : '#666', fontSize: 12, fontWeight: a.preco != null ? 700 : 400, whiteSpace: 'nowrap' }}>{a.preco != null ? fmt(Number(a.preco)) : `${a.cores.length} cor(es)`}</span>
                         </div>
                       ))}
                     </div>
