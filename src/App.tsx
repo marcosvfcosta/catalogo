@@ -41,9 +41,12 @@ const PARCELAS = 21
 const STORAGE = 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public'
 const CHAVE_SACOLA = 'mm-sacola'
 
-const categorias = [
+type ItemVitrine = { nome: string; img: string | null; capas?: boolean; padrao?: boolean }
+
+// Usadas só se as tabelas do Admin (🏷 Vitrine) ainda estiverem vazias
+const CATEGORIAS_PADRAO: ItemVitrine[] = [
   { nome: 'Celulares',    img: `${STORAGE}/categorias/celulares.png` },
-  { nome: 'Capas',        img: `${STORAGE}/categorias/capas.png` },
+  { nome: 'Capas',        img: `${STORAGE}/categorias/capas.png`, capas: true },
   { nome: 'Tablet',       img: `${STORAGE}/categorias/tablet.png` },
   { nome: 'Carregadores', img: `${STORAGE}/categorias/carregadores%20(1).png` },
   { nome: 'Fones',        img: `${STORAGE}/categorias/fones.png` },
@@ -51,7 +54,7 @@ const categorias = [
   { nome: 'Caixa de som', img: `${STORAGE}/categorias/caixasom%20(1).png` },
 ]
 
-const marcas = [
+const MARCAS_PADRAO: ItemVitrine[] = [
   { nome: 'Apple',    img: `${STORAGE}/marcas/apple.png` },
   { nome: 'Samsung',  img: `${STORAGE}/marcas/samsung.png` },
   { nome: 'Xiaomi',   img: `${STORAGE}/marcas/xiaomi%20(1).png` },
@@ -122,6 +125,8 @@ function App() {
   const navigate = useNavigate()
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [banners, setBanners] = useState<Banner[]>([])
+  const [categorias, setCategorias] = useState<ItemVitrine[]>(CATEGORIAS_PADRAO)
+  const [marcas, setMarcas] = useState<ItemVitrine[]>(MARCAS_PADRAO)
   const [carregando, setCarregando] = useState(true)
   const [menuAberto, setMenuAberto] = useState(false)
   const [buscaAberta, setBuscaAberta] = useState(false)
@@ -143,7 +148,13 @@ function App() {
     Promise.all([
       supabase.from('produtos_catalogo').select('*').order('created_at', { ascending: false }),
       supabase.from('hero_imagens').select('*').eq('ativo', true).order('ordem', { ascending: true }),
-    ]).then(([p, h]) => {
+      supabase.from('catalogo_categorias').select('*').eq('ativo', true).order('ordem'),
+      supabase.from('catalogo_marcas').select('*').eq('ativo', true).order('ordem'),
+    ]).then(([p, h, c, m]) => {
+      const cats = (c.data || []) as { nome: string; foto_url: string | null; tipo: string }[]
+      if (cats.length) setCategorias(cats.map(x => ({ nome: x.nome, img: x.foto_url, capas: x.tipo === 'capas' })))
+      const mrs = (m.data || []) as { nome: string; logo_url: string | null }[]
+      if (mrs.length) setMarcas(mrs.map(x => ({ nome: x.nome, img: x.logo_url, padrao: !!x.logo_url && x.logo_url.includes('/logo_') })))
       setProdutos(((p.data || []) as Produto[]).filter(x => x.disponivel !== false))
       setBanners((h.data || []) as Banner[])
       setCarregando(false)
@@ -456,7 +467,7 @@ function App() {
         <main className="mm-conteudo">
           <div className="mm-chips">
             <button className={!categoriaAtiva && !marcaAtiva && !filtroEspecial ? 'on' : ''} onClick={() => { setCategoriaAtiva(null); setMarcaAtiva(null); setFiltroEspecial(null) }}>Tudo</button>
-            {categorias.filter(c => c.nome !== 'Capas').map(c => (
+            {categorias.filter(c => !c.capas).map(c => (
               <button key={c.nome} className={categoriaAtiva === c.nome ? 'on' : ''}
                 onClick={() => { setCategoriaAtiva(categoriaAtiva === c.nome ? null : c.nome); setMarcaAtiva(null); setFiltroEspecial(null) }}>{c.nome}</button>
             ))}
@@ -469,7 +480,7 @@ function App() {
                 <button className={!marcaAtiva ? 'on' : ''} onClick={() => setMarcaAtiva(null)}><span className="mm-todas">Todas</span></button>
                 {marcasDaCategoria.map(m => (
                   <button key={m.nome} className={mesmaMarca(marcaAtiva, m.nome) ? 'on' : ''} onClick={() => setMarcaAtiva(mesmaMarca(marcaAtiva, m.nome) ? null : m.nome)}>
-                    <img src={m.img} alt={m.nome} />
+                    {m.img ? <img src={m.img} alt={m.nome} className={m.padrao ? 'padrao' : ''} /> : <b className="mm-marca-texto">{m.nome}</b>}
                   </button>
                 ))}
               </div>
@@ -527,8 +538,8 @@ function App() {
           <div className="mm-categorias">
             {categorias.map(c => (
               <button key={c.nome} className="mm-categoria"
-                onClick={() => c.nome === 'Capas' ? navigate('/capas') : aplicarFiltro({ categoria: c.nome })}>
-                <span><img src={c.img} alt="" /></span>
+                onClick={() => c.capas ? navigate('/capas') : aplicarFiltro({ categoria: c.nome })}>
+                <span>{c.img ? <img src={c.img} alt="" /> : <b className="mm-marca-texto">{c.nome.charAt(0)}</b>}</span>
                 {c.nome}
               </button>
             ))}
@@ -575,7 +586,7 @@ function App() {
               <section className="mm-secao">
                 <div className="mm-secao-topo"><h2>Todos os produtos</h2><small className="mm-contador">{produtos.length}</small></div>
                 <div className="mm-chips">
-                  {categorias.filter(c => c.nome !== 'Capas' && produtos.some(p => p.categoria === c.nome)).map(c => (
+                  {categorias.filter(c => !c.capas && produtos.some(p => p.categoria === c.nome)).map(c => (
                     <button key={c.nome} onClick={() => aplicarFiltro({ categoria: c.nome })}>{c.nome}</button>
                   ))}
                 </div>
@@ -593,7 +604,7 @@ function App() {
             <div className="mm-marcas">
               {marcas.map(m => (
                 <button key={m.nome} onClick={() => aplicarFiltro({ marca: m.nome })}>
-                  <img src={m.img} alt={m.nome} />
+                  {m.img ? <img src={m.img} alt={m.nome} className={m.padrao ? 'padrao' : ''} /> : <b className="mm-marca-texto">{m.nome}</b>}
                 </button>
               ))}
             </div>
@@ -745,6 +756,8 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 .mm .mm-marcas-linha button { flex: 0 0 auto; width: 124px; height: 84px; border-radius: 20px; background: var(--cinza); border: 2px solid transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 10px; transition: all .2s; }
 .mm .mm-marcas-linha button.on { background: #fff; border-color: var(--laranja); box-shadow: 0 6px 16px rgba(255,102,0,0.18); }
 .mm .mm-marcas-linha img, .mm .mm-marcas img { width: 100%; height: 56px; object-fit: contain; filter: grayscale(1) brightness(0.25) contrast(1.4); transform: scale(1.3); }
+.mm .mm-marcas-linha img.padrao, .mm .mm-marcas img.padrao { filter: none; transform: none; height: 48px; }
+.mm .mm-marca-texto { font-size: 17px; font-weight: 800; color: var(--tinta); }
 .mm .mm-com-icone { display: inline-flex; align-items: center; gap: 8px; }
 .mm .mm-todas { font-size: 15px; font-weight: 800; color: var(--tinta); }
 

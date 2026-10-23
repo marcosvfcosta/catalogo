@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { ajustarFoto } from '../lib/ajustarFoto'
 import AssistenteIA from './AssistenteIA'
+import VitrineAdmin from './VitrineAdmin'
 
 type Produto = {
   id: string
@@ -116,6 +117,8 @@ type CapaFoto = {
   url: string
 }
 
+const CATEGORIAS_PADRAO = ['Celulares', 'Tablet', 'Carregadores', 'Fones', 'Smartwatch', 'Caixa de som']
+
 const CAPAS_MARCAS = ['Apple', 'Samsung', 'Xiaomi', 'Motorola', 'Outra']
 const CAPAS_TIPOS = ['Feminino', 'Masculino', 'Transparente', 'Decorado', 'Case']
 
@@ -136,7 +139,7 @@ const CORES_HEX: Record<string, string> = {
 export default function Admin() {
   const navigate = useNavigate()
   const [produtos, setProdutos] = useState<Produto[]>([])
-  const [aba, setAba] = useState<'cadastrar' | 'lista' | 'capas' | 'aparelhos' | 'hero' | 'ia'>('cadastrar')
+  const [aba, setAba] = useState<'cadastrar' | 'lista' | 'capas' | 'aparelhos' | 'hero' | 'vitrine' | 'ia'>('cadastrar')
   const [uploadandoHero, setUploadandoHero] = useState(false)
   const [editando, setEditando] = useState<Produto | null>(null)
   const [heroImagens, setHeroImagens] = useState<HeroImagem[]>([])
@@ -182,6 +185,7 @@ export default function Admin() {
   const [capaTipo, setCapaTipo] = useState(CAPAS_TIPOS[0])
   const [capaEnviando, setCapaEnviando] = useState<{ feitas: number; total: number } | null>(null)
   const [capaBusca, setCapaBusca] = useState('')
+  const [categoriasNomes, setCategoriasNomes] = useState<string[]>(CATEGORIAS_PADRAO)
 
   const [novoProduto, setNovoProduto] = useState({
     categoria: 'Celulares',
@@ -192,7 +196,7 @@ export default function Admin() {
   })
 
   useEffect(() => {
-    carregarProdutos(); carregarHeroImagens(); carregarAparelhos(); carregarCapas()
+    carregarProdutos(); carregarHeroImagens(); carregarAparelhos(); carregarCapas(); carregarCategorias()
   }, [])
 
   async function carregarProdutos() {
@@ -216,6 +220,12 @@ export default function Admin() {
   }
 
   // ─── Capas: funções ───
+  async function carregarCategorias() {
+    const { data } = await supabase.from('catalogo_categorias').select('nome, tipo').order('ordem')
+    const nomes = ((data || []) as { nome: string; tipo: string }[]).filter(c => c.tipo !== 'capas').map(c => c.nome)
+    if (nomes.length) setCategoriasNomes(nomes)
+  }
+
   async function carregarCapas() {
     const [m, f] = await Promise.all([
       supabase.from('capas_modelos').select('*').order('ordem').order('modelo'),
@@ -784,8 +794,7 @@ export default function Admin() {
           <h2 style={formTitle}>✏️ Editar produto</h2>
           <label style={labelStyle}>Categoria</label>
           <select style={inputStyle} value={editando.categoria} onChange={e => setEditando({ ...editando, categoria: e.target.value })}>
-            <option>Celulares</option><option>Tablet</option><option>Carregadores</option>
-            <option>Fones</option><option>Smartwatch</option><option>Caixa de som</option>
+            {Array.from(new Set([...categoriasNomes, editando.categoria].filter(Boolean))).map(c => <option key={c}>{c}</option>)}
           </select>
           <label style={labelStyle}>Marca</label>
           <input style={inputStyle} value={editando.marca || ''} onChange={e => setEditando({ ...editando, marca: e.target.value })} />
@@ -864,8 +873,13 @@ export default function Admin() {
         <button style={aba === 'capas' ? abaAtiva : abaInativa} onClick={() => { setAba('capas'); setCapaAberta(null) }}>📱 Capas</button>
         <button style={aba === 'aparelhos' ? abaAtiva : abaInativa} onClick={() => setAba('aparelhos')}>🤝</button>
         <button style={aba === 'hero' ? abaAtiva : abaInativa} onClick={() => setAba('hero')}>🖼 Hero</button>
+        <button style={aba === 'vitrine' ? abaAtiva : abaInativa} onClick={() => setAba('vitrine')}>🏷 Vitrine</button>
         <button style={aba === 'ia' ? abaAtiva : abaInativa} onClick={() => setAba('ia')}>🤖 IA</button>
       </div>
+
+      {aba === 'vitrine' && (
+        <VitrineAdmin produtos={produtos} aoMudar={() => { carregarCategorias(); carregarProdutos() }} />
+      )}
 
       {aba === 'ia' && (
         <AssistenteIA produtos={produtos} banners={heroImagens} ajusteAuto={ajusteAuto}
@@ -985,8 +999,7 @@ export default function Admin() {
           <h2 style={formTitle}>Novo produto</h2>
           <label style={labelStyle}>Categoria</label>
           <select style={inputStyle} value={novoProduto.categoria} onChange={e => setNovoProduto({ ...novoProduto, categoria: e.target.value })}>
-            <option>Celulares</option><option>Tablet</option><option>Carregadores</option>
-            <option>Fones</option><option>Smartwatch</option><option>Caixa de som</option>
+            {Array.from(new Set([...categoriasNomes, novoProduto.categoria].filter(Boolean))).map(c => <option key={c}>{c}</option>)}
           </select>
           <label style={labelStyle}>Marca</label>
           <input style={inputStyle} placeholder="Ex: Apple" value={novoProduto.marca} onChange={e => setNovoProduto({ ...novoProduto, marca: e.target.value })} />
