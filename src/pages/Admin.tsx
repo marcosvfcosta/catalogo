@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { ajustarFoto } from '../lib/ajustarFoto'
+import AssistenteIA from './AssistenteIA'
 
 type Produto = {
   id: string
@@ -27,6 +28,8 @@ type HeroImagem = {
   url: string
   ordem: number
   ativo: boolean
+  titulo?: string | null
+  etiqueta?: string | null
 }
 
 type ProdutoFoto = {
@@ -133,7 +136,7 @@ const CORES_HEX: Record<string, string> = {
 export default function Admin() {
   const navigate = useNavigate()
   const [produtos, setProdutos] = useState<Produto[]>([])
-  const [aba, setAba] = useState<'cadastrar' | 'lista' | 'capas' | 'aparelhos' | 'hero'>('cadastrar')
+  const [aba, setAba] = useState<'cadastrar' | 'lista' | 'capas' | 'aparelhos' | 'hero' | 'ia'>('cadastrar')
   const [uploadandoHero, setUploadandoHero] = useState(false)
   const [editando, setEditando] = useState<Produto | null>(null)
   const [heroImagens, setHeroImagens] = useState<HeroImagem[]>([])
@@ -861,7 +864,13 @@ export default function Admin() {
         <button style={aba === 'capas' ? abaAtiva : abaInativa} onClick={() => { setAba('capas'); setCapaAberta(null) }}>📱 Capas</button>
         <button style={aba === 'aparelhos' ? abaAtiva : abaInativa} onClick={() => setAba('aparelhos')}>🤝</button>
         <button style={aba === 'hero' ? abaAtiva : abaInativa} onClick={() => setAba('hero')}>🖼 Hero</button>
+        <button style={aba === 'ia' ? abaAtiva : abaInativa} onClick={() => setAba('ia')}>🤖 IA</button>
       </div>
+
+      {aba === 'ia' && (
+        <AssistenteIA produtos={produtos} banners={heroImagens} ajusteAuto={ajusteAuto}
+          aoMudar={() => { carregarProdutos(); carregarHeroImagens() }} />
+      )}
 
       {aba === 'cadastrar' && (
         <div style={{ ...formContainer, paddingBottom: 0 }}>
@@ -1347,7 +1356,8 @@ export default function Admin() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               {heroImagens.map((img) => (
                 <div key={img.id} style={{ background: '#0a0a0a', border: `2px solid ${img.ativo ? '#ff6600' : '#222'}`, borderRadius: 14, overflow: 'hidden' }}>
-                  <img src={img.url} alt="hero" style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block' }} />
+                  <img src={img.url} alt="hero" style={{ width: '100%', height: 120, objectFit: img.titulo ? 'contain' : 'cover', background: img.titulo ? '#fff' : undefined, display: 'block' }} />
+                  {img.titulo && <p style={{ margin: 0, padding: '6px 8px 0', fontSize: 12, color: '#ddd', fontWeight: 700 }}>{img.etiqueta ? <span style={{ color: '#ff6600' }}>{img.etiqueta} · </span> : null}{img.titulo}</p>}
                   <div style={{ padding: '8px 8px', display: 'flex', gap: 6 }}>
                     <button onClick={() => toggleHeroImagem(img.id, img.ativo)}
                       style={{ flex: 1, padding: '6px 4px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: img.ativo ? '#1a4a1a' : '#2a2a2a', color: img.ativo ? '#25D366' : '#888' }}>
