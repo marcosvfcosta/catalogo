@@ -112,6 +112,14 @@ export default function AssistenteIA({ produtos, banners, ajusteAuto, aoMudar }:
   const [proximas, setProximas] = useState<string[]>([])
   const [origemAcoes, setOrigemAcoes] = useState<'consultor' | 'comando'>('comando')
 
+  // ─── Banner com Gemini ───
+  const [bIdeia, setBIdeia] = useState('')
+  const [bProduto, setBProduto] = useState('')
+  const [gerandoBanner, setGerandoBanner] = useState(false)
+  const [previa, setPrevia] = useState<{ url: string; blob: Blob } | null>(null)
+  const [erroBanner, setErroBanner] = useState('')
+  const [salvandoBanner, setSalvandoBanner] = useState(false)
+
   // ─── Fotos ───
   const [fotos, setFotos] = useState<FotoIA[]>([])
   const [salvandoFotos, setSalvandoFotos] = useState<{ feitas: number; total: number } | null>(null)
@@ -316,6 +324,50 @@ export default function AssistenteIA({ produtos, banners, ajusteAuto, aoMudar }:
     }
   }
 
+  async function gerarBanner() {
+    if (bIdeia.trim().length < 3 || gerandoBanner) return
+    setGerandoBanner(true); setErroBanner(''); setPrevia(null)
+    const p = porId(bProduto)
+    const { data, error } = await supabase.functions.invoke('gerar-banner', {
+      body: { ideia: bIdeia.trim(), proporcao: '4:5', produto: p ? { nome: nomeProduto(p), foto_url: p.foto_url || null } : null },
+    })
+    setGerandoBanner(false)
+    if (error) { setErroBanner(await mensagemDeErro(error)); return }
+    if (data?.error || !data?.imagem) { setErroBanner(data?.error || 'O Gemini não devolveu a imagem.'); return }
+    const blob = await (await fetch(`data:${data.mime || 'image/jpeg'};base64,${data.imagem}`)).blob()
+    setPrevia({ url: URL.createObjectURL(blob), blob })
+  }
+
+  async function publicarBanner() {
+    if (!previa) return
+    setSalvandoBanner(true)
+    try {
+      const ext = previa.blob.type.includes('png') ? 'png' : 'jpg'
+      const nome = `banner_ia_${Date.now()}.${ext}`
+      const up = await supabase.storage.from('hero').upload(nome, previa.blob, { contentType: previa.blob.type || 'image/jpeg', upsert: true })
+      if (up.error) throw up.error
+      const url = supabase.storage.from('hero').getPublicUrl(nome).data.publicUrl
+      const ordem = Math.max(0, ...banners.map(b => b.ordem || 0)) + 1
+      const { error } = await supabase.from('hero_imagens').insert([{
+        url, ordem, ativo: true, arte: true, titulo: bIdeia.trim().slice(0, 60), produto_id: bProduto || null,
+      }])
+      if (error) throw error
+      setPrevia(null); setBIdeia(''); setBProduto('')
+      aoMudar()
+      alert('✅ Banner publicado no catálogo!')
+    } catch (e) {
+      console.error(e)
+      alert('Erro ao publicar o banner. Tente de novo.')
+    }
+    setSalvandoBanner(false)
+  }
+
+  function baixarBanner() {
+    if (!previa) return
+    const a = document.createElement('a')
+    a.href = previa.url; a.download = `banner-marcos-magazine.${previa.blob.type.includes('png') ? 'png' : 'jpg'}`; a.click()
+  }
+
   const ordenados = [...produtos].sort((a, b) => (a.foto_url ? 1 : 0) - (b.foto_url ? 1 : 0) || nomeProduto(a).localeCompare(nomeProduto(b)))
   const fotosParaSalvar = fotos.filter(f => f.status !== 'lendo' && f.status !== 'salva' && f.produto_id).length
   const lendo = fotos.some(f => f.status === 'lendo')
@@ -415,6 +467,35 @@ export default function AssistenteIA({ produtos, banners, ajusteAuto, aoMudar }:
       </div>
       {conversa.length > 0 && !consultando && (
         <button style={{ ...btnVerMais, padding: '10px 0 0' }} onClick={() => { setConversa([]); setProximas([]); if (origemAcoes === 'consultor') setAcoes([]) }}>↺ Nova conversa</button>
+      )}
+
+      {/* ─── Banner com Gemini ─── */}
+      <h2 style={{ ...titulo, marginTop: 36 }}>🎨 Criar banner com Gemini</h2>
+      <p style={ajuda}>Descreva o banner e o Gemini cria a arte. Se escolher um produto, ele usa a foto real do aparelho. Cada banner custa cerca de R$ 0,28.</p>
+      <textarea style={caixaTexto} rows={3} placeholder="Ex: banner de Black Friday com o iPhone 17 Pro, escrito 'Black Friday Marcos Magazine', fundo branco com laranja"
+        value={bIdeia} onChange={e => setBIdeia(e.target.value)} />
+      <select style={{ ...seletor, marginBottom: 12, padding: '12px 10px', fontSize: 15 }} value={bProduto} onChange={e => setBProduto(e.target.value)}>
+        <option value="">Sem produto (só a ideia)</option>
+        {[...produtos].filter(p => p.foto_url && p.disponivel !== false).sort((a, b) => nomeProduto(a).localeCompare(nomeProduto(b))).map(p => (
+          <option key={p.id} value={p.id}>{nomeProduto(p)}</option>
+        ))}
+      </select>
+      <button style={{ ...btnLaranja, opacity: gerandoBanner || bIdeia.trim().length < 3 ? 0.5 : 1 }}
+        disabled={gerandoBanner || bIdeia.trim().length < 3} onClick={gerarBanner}>
+        {gerandoBanner ? '🎨 O Gemini está criando... (até 1 min)' : previa ? '🔄 Gerar outra versão' : '🎨 Criar banner'}
+      </button>
+      {erroBanner && <div style={{ ...caixaResposta, color: '#ff8a8a', borderColor: '#5a1a1a', background: '#1a0a0a' }}>❌ {erroBanner}</div>}
+      {previa && (
+        <div style={{ marginTop: 14 }}>
+          <img src={previa.url} alt="Prévia do banner" style={{ width: '100%', maxWidth: 420, display: 'block', margin: '0 auto', borderRadius: 16, border: '1px solid #222' }} />
+          <p style={{ ...ajuda, textAlign: 'center', margin: '8px 0 10px', fontSize: 12 }}>Confira se os textos estão sem erro antes de publicar.</p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button style={{ ...btnVerde, flex: 1, opacity: salvandoBanner ? 0.5 : 1 }} disabled={salvandoBanner} onClick={publicarBanner}>
+              {salvandoBanner ? 'Publicando...' : '✅ Colocar no catálogo'}
+            </button>
+            <button style={btnCinza} onClick={baixarBanner}>⬇️</button>
+          </div>
+        </div>
       )}
 
       {/* ─── Pedido ─── */}

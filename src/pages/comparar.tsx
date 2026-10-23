@@ -24,7 +24,7 @@ type Resultado = {
 }
 
 const COR1 = '#ff6600'
-const COR2 = '#4fc3f7'
+const COR2 = '#1a73e8'
 
 const ETAPAS = [
   '🔎 Pesquisando o primeiro celular...',
@@ -100,11 +100,11 @@ export default function Comparar() {
   const nome1 = res?.modelo1?.nome || modelo1
   const nome2 = res?.modelo2?.nome || modelo2
   const nomeDo = (l: Lado) => (l === 1 ? nome1 : l === 2 ? nome2 : 'Empate')
-  const corDo = (l: Lado) => (l === 1 ? COR1 : l === 2 ? COR2 : '#aaa')
+  const corDo = (l: Lado) => (l === 1 ? COR1 : l === 2 ? COR2 : '#86868b')
 
   return (
     <div style={s.page}>
-      <style>{`@keyframes mmSpin { to { transform: rotate(360deg) } }`}</style>
+      <style>{`@keyframes mmSpin { to { transform: rotate(360deg) } } html, body { background: #fff !important; } body { display: block !important; place-items: normal !important; } #root { width: 100% !important; max-width: none !important; padding: 0 !important; margin: 0 !important; }`}</style>
       <button style={s.back} onClick={() => navigate('/')}>← Voltar</button>
 
       <div style={s.header}>
@@ -115,13 +115,13 @@ export default function Comparar() {
       <div style={s.inputRow}>
         <div style={s.inputBox}>
           <p style={{ ...s.inputLabel, color: COR1 }}>📱 Celular 1</p>
-          <input style={{ ...s.input, borderColor: '#5a2a00' }} placeholder="Ex: iPhone 16" value={modelo1}
+          <input style={{ ...s.input, borderColor: '#ffc9a3' }} placeholder="Ex: iPhone 16" value={modelo1}
             onChange={e => setModelo1(e.target.value)} onKeyDown={e => e.key === 'Enter' && comparar()} />
         </div>
         <div style={s.vs}>VS</div>
         <div style={s.inputBox}>
           <p style={{ ...s.inputLabel, color: COR2 }}>📱 Celular 2</p>
-          <input style={{ ...s.input, borderColor: '#0d3a4d' }} placeholder="Ex: Galaxy S25" value={modelo2}
+          <input style={{ ...s.input, borderColor: '#b9d4f7' }} placeholder="Ex: Galaxy S25" value={modelo2}
             onChange={e => setModelo2(e.target.value)} onKeyDown={e => e.key === 'Enter' && comparar()} />
         </div>
       </div>
@@ -137,8 +137,8 @@ export default function Comparar() {
       {carregando && (
         <div style={s.loading}>
           <div style={s.spinner} />
-          <p style={{ color: '#ddd', marginTop: 16, fontWeight: 600 }}>{ETAPAS[etapa]}</p>
-          <p style={{ color: '#666', fontSize: 12, marginTop: 6 }}>Estamos pesquisando os dados atualizados. Pode levar até 1 minuto.</p>
+          <p style={{ color: '#1d1d1f', marginTop: 16, fontWeight: 600 }}>{ETAPAS[etapa]}</p>
+          <p style={{ color: '#86868b', fontSize: 12, marginTop: 6 }}>Estamos pesquisando os dados atualizados. Pode levar até 1 minuto.</p>
         </div>
       )}
 
@@ -177,13 +177,13 @@ export default function Comparar() {
                     {([1, 2] as const).map(lado => {
                       const ganhou = spec.melhor === lado
                       const cor = lado === 1 ? COR1 : COR2
-                      const rgb = lado === 1 ? '255,102,0' : '79,195,247'
+                      const rgb = lado === 1 ? '255,102,0' : '26,115,232'
                       return (
                         <div key={lado} style={{
                           ...s.colVal,
-                          background: ganhou ? `rgba(${rgb},0.15)` : 'transparent',
+                          background: ganhou ? `rgba(${rgb},0.1)` : 'transparent',
                           border: ganhou ? `1px solid rgba(${rgb},0.5)` : '1px solid transparent',
-                          color: ganhou ? cor : '#ccc',
+                          color: ganhou ? cor : '#333',
                           fontWeight: ganhou ? 700 : 400,
                           borderRadius: 6,
                         }}>
@@ -203,7 +203,7 @@ export default function Comparar() {
               <h2 style={s.secao}>🏆 Quem ganha em cada uso</h2>
               <div style={s.usosGrid}>
                 {res.usos.map(u => (
-                  <div key={u.uso} style={{ ...s.usoCard, borderColor: u.vencedor ? corDo(u.vencedor) + '66' : '#1e1e1e' }}>
+                  <div key={u.uso} style={{ ...s.usoCard, borderColor: u.vencedor ? corDo(u.vencedor) + '66' : '#ececf0' }}>
                     <p style={s.usoTitulo}>{ICONE_USO[u.uso] || '⭐'} {u.uso}</p>
                     <p style={{ ...s.usoVencedor, color: corDo(u.vencedor) }}>{nomeDo(u.vencedor)}</p>
                     {u.motivo && <p style={s.usoMotivo}>{u.motivo}</p>}
@@ -240,7 +240,7 @@ export default function Comparar() {
             {res.veredito_detalhado?.modelo2 && (
               <p style={s.vereditoTexto}><b style={{ color: COR2 }}>{nome2}</b>: {res.veredito_detalhado.modelo2}</p>
             )}
-            {res.veredito && <p style={{ ...s.vereditoTexto, color: '#fff', marginBottom: 0 }}>{res.veredito}</p>}
+            {res.veredito && <p style={{ ...s.vereditoTexto, color: '#1d1d1f', fontWeight: 600, marginBottom: 0 }}>{res.veredito}</p>}
           </div>
 
           {/* Ações */}
@@ -261,43 +261,43 @@ export default function Comparar() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: '100vh', background: '#050505', color: 'white', fontFamily: 'Poppins, sans-serif', padding: '20px 12px 60px', width: '100%', maxWidth: 720, margin: '0 auto', boxSizing: 'border-box', overflowX: 'hidden', textAlign: 'left' },
-  back: { background: '#ff6600', border: 'none', color: 'white', padding: '10px 20px', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 14, marginBottom: 24, display: 'block' },
-  header: { textAlign: 'center', marginBottom: 24 },
-  titulo: { fontSize: 22, fontWeight: 900, color: '#ff6600', fontFamily: 'Nunito, sans-serif', margin: 0 },
-  subtitulo: { fontSize: 13, color: '#aaa', marginTop: 6 },
+  page: { minHeight: '100vh', background: '#fff', color: '#1d1d1f', fontFamily: 'Poppins, -apple-system, sans-serif', padding: '20px 16px 60px', width: '100%', maxWidth: 720, margin: '0 auto', boxSizing: 'border-box', overflowX: 'hidden', textAlign: 'left' },
+  back: { background: '#f5f5f7', border: 'none', color: '#ff6600', padding: '11px 20px', borderRadius: 22, cursor: 'pointer', fontWeight: 700, fontSize: 15, marginBottom: 24, display: 'block', fontFamily: 'inherit' },
+  header: { textAlign: 'center', marginBottom: 26 },
+  titulo: { fontSize: 28, fontWeight: 800, color: '#1d1d1f', fontFamily: 'Poppins, sans-serif', margin: 0, letterSpacing: -0.6 },
+  subtitulo: { fontSize: 15, color: '#6e6e73', marginTop: 8 },
   inputRow: { display: 'flex', gap: 8, alignItems: 'flex-end', marginBottom: 16 },
   inputBox: { flex: 1, minWidth: 0 },
-  inputLabel: { fontSize: 10, fontWeight: 700, margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: 0.5 },
-  input: { width: '100%', padding: '11px 10px', borderRadius: 10, border: '1px solid #333', background: '#111', color: 'white', fontSize: 16, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' },
-  vs: { fontSize: 16, fontWeight: 900, color: '#ff6600', paddingBottom: 12, flexShrink: 0 },
-  btnComparar: { width: '100%', padding: 15, borderRadius: 12, border: 'none', background: '#ff6600', color: 'white', fontWeight: 800, fontSize: 16, cursor: 'pointer', marginBottom: 20, fontFamily: 'inherit' },
-  erro: { color: '#ff4444', fontSize: 13, marginBottom: 12, textAlign: 'center' },
+  inputLabel: { fontSize: 11, fontWeight: 800, margin: '0 0 6px', textTransform: 'uppercase', letterSpacing: 0.6 },
+  input: { width: '100%', padding: '13px 12px', borderRadius: 14, border: '1.5px solid #e5e5ea', background: '#f5f5f7', color: '#1d1d1f', fontSize: 16, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' },
+  vs: { fontSize: 16, fontWeight: 900, color: '#ff6600', paddingBottom: 14, flexShrink: 0 },
+  btnComparar: { width: '100%', padding: 16, borderRadius: 16, border: 'none', background: '#ff6600', color: 'white', fontWeight: 800, fontSize: 17, cursor: 'pointer', marginBottom: 20, fontFamily: 'inherit' },
+  erro: { color: '#d93025', fontSize: 14, marginBottom: 12, textAlign: 'center' },
   loading: { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '30px 10px', textAlign: 'center' },
-  spinner: { width: 40, height: 40, border: '3px solid #222', borderTop: '3px solid #ff6600', borderRadius: '50%', animation: 'mmSpin 0.8s linear infinite' },
-  vsCard: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', alignItems: 'center', gap: 8, background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 16, padding: '16px 10px', marginTop: 8 },
-  vsNome: { fontWeight: 800, fontSize: 15, margin: 0, lineHeight: 1.25, wordBreak: 'break-word' },
-  vsData: { color: '#777', fontSize: 11, margin: '4px 0 0' },
-  vsMeio: { fontWeight: 900, fontSize: 18, color: '#fff', background: '#1a1a1a', borderRadius: 20, padding: '6px 10px' },
-  pesquisado: { color: '#777', fontSize: 11, textAlign: 'center', margin: '8px 0 0' },
-  aviso: { background: 'rgba(255,200,0,0.1)', border: '1px solid #ffc800', color: '#ffd84d', borderRadius: 12, padding: 12, fontSize: 13, marginTop: 14, lineHeight: 1.5 },
-  secao: { color: '#ff6600', fontSize: 15, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, margin: '26px 0 10px' },
-  tabela: { width: '100%', borderRadius: 12, overflow: 'hidden', border: '1px solid #1a1a1a' },
-  headerRow: { display: 'grid', gridTemplateColumns: '32% minmax(0,1fr) minmax(0,1fr)', background: '#111', padding: '10px 8px', borderBottom: '1px solid #222', gap: 4 },
-  colSpec: { fontSize: 11, color: '#777', display: 'flex', alignItems: 'center', paddingRight: 4, wordBreak: 'break-word' },
-  colVal: { fontSize: 11.5, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px 4px', wordBreak: 'break-word', lineHeight: 1.3 },
-  grupoTitulo: { background: '#111', padding: '8px 8px', fontSize: 11, fontWeight: 700, color: '#ff6600', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '1px solid #1a1a1a' },
-  linha: { display: 'grid', gridTemplateColumns: '32% minmax(0,1fr) minmax(0,1fr)', padding: '7px 8px', background: '#0a0a0a', borderBottom: '1px solid #141414', alignItems: 'center', gap: 4 },
+  spinner: { width: 40, height: 40, border: '3px solid #eee', borderTop: '3px solid #ff6600', borderRadius: '50%', animation: 'mmSpin 0.8s linear infinite' },
+  vsCard: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', alignItems: 'center', gap: 8, background: '#f5f5f7', borderRadius: 20, padding: '18px 12px', marginTop: 8 },
+  vsNome: { fontWeight: 800, fontSize: 16, margin: 0, lineHeight: 1.25, wordBreak: 'break-word' },
+  vsData: { color: '#86868b', fontSize: 12, margin: '4px 0 0' },
+  vsMeio: { fontWeight: 900, fontSize: 16, color: '#fff', background: '#1d1d1f', borderRadius: 20, padding: '6px 11px' },
+  pesquisado: { color: '#86868b', fontSize: 12, textAlign: 'center', margin: '8px 0 0' },
+  aviso: { background: '#fff8e1', border: '1px solid #ffd54f', color: '#8a6100', borderRadius: 14, padding: 12, fontSize: 14, marginTop: 14, lineHeight: 1.5 },
+  secao: { color: '#1d1d1f', fontSize: 20, fontWeight: 800, letterSpacing: -0.3, margin: '30px 0 12px' },
+  tabela: { width: '100%', borderRadius: 16, overflow: 'hidden', border: '1px solid #ececf0' },
+  headerRow: { display: 'grid', gridTemplateColumns: '32% minmax(0,1fr) minmax(0,1fr)', background: '#f5f5f7', padding: '12px 8px', borderBottom: '1px solid #ececf0', gap: 4 },
+  colSpec: { fontSize: 12.5, color: '#6e6e73', display: 'flex', alignItems: 'center', paddingRight: 4, wordBreak: 'break-word' },
+  colVal: { fontSize: 13, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '5px 4px', wordBreak: 'break-word', lineHeight: 1.3 },
+  grupoTitulo: { background: '#fff3ea', padding: '9px 10px', fontSize: 12, fontWeight: 800, color: '#d4560a', textTransform: 'uppercase', letterSpacing: 0.6, borderBottom: '1px solid #ececf0' },
+  linha: { display: 'grid', gridTemplateColumns: '32% minmax(0,1fr) minmax(0,1fr)', padding: '8px 8px', background: '#fff', borderBottom: '1px solid #f0f0f3', alignItems: 'center', gap: 4 },
   usosGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 10 },
-  usoCard: { background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 14, padding: 12 },
-  usoTitulo: { color: '#999', fontSize: 12, margin: 0 },
-  usoVencedor: { fontWeight: 800, fontSize: 14, margin: '4px 0 0', lineHeight: 1.25 },
-  usoMotivo: { color: '#888', fontSize: 11.5, margin: '6px 0 0', lineHeight: 1.45 },
-  pontosCard: { background: '#0f0f0f', border: '1px solid #1e1e1e', borderLeft: '4px solid', borderRadius: 12, padding: 14, marginBottom: 10 },
-  ponto: { fontSize: 13, color: '#ddd', margin: '0 0 6px', lineHeight: 1.5 },
-  veredito: { background: 'rgba(255,102,0,0.08)', border: '1px solid #ff6600', borderRadius: 14, padding: 16 },
-  vereditoTexto: { color: '#ccc', fontSize: 14, lineHeight: 1.65, margin: '0 0 12px' },
-  btnZap: { width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#25D366', color: 'white', fontWeight: 800, fontSize: 14, cursor: 'pointer', marginTop: 12, fontFamily: 'inherit' },
-  btnNova: { width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#ff6600', color: 'white', fontWeight: 800, fontSize: 14, cursor: 'pointer', marginTop: 12, fontFamily: 'inherit' },
-  fontes: { color: '#666', fontSize: 11, lineHeight: 1.6, marginTop: 18, textAlign: 'center' },
+  usoCard: { background: '#fff', border: '1.5px solid #ececf0', borderRadius: 16, padding: 14 },
+  usoTitulo: { color: '#6e6e73', fontSize: 13, margin: 0 },
+  usoVencedor: { fontWeight: 800, fontSize: 15, margin: '4px 0 0', lineHeight: 1.25 },
+  usoMotivo: { color: '#6e6e73', fontSize: 12.5, margin: '6px 0 0', lineHeight: 1.45 },
+  pontosCard: { background: '#f5f5f7', borderLeft: '4px solid', borderRadius: 14, padding: 14, marginBottom: 10 },
+  ponto: { fontSize: 14, color: '#333', margin: '0 0 6px', lineHeight: 1.5 },
+  veredito: { background: '#fff3ea', borderRadius: 18, padding: 18 },
+  vereditoTexto: { color: '#444', fontSize: 15, lineHeight: 1.65, margin: '0 0 12px' },
+  btnZap: { width: '100%', padding: 15, borderRadius: 16, border: 'none', background: '#25D366', color: 'white', fontWeight: 800, fontSize: 15, cursor: 'pointer', marginTop: 12, fontFamily: 'inherit' },
+  btnNova: { width: '100%', padding: 15, borderRadius: 16, border: '1.5px solid #ececf0', background: '#fff', color: '#1d1d1f', fontWeight: 800, fontSize: 15, cursor: 'pointer', marginTop: 12, fontFamily: 'inherit' },
+  fontes: { color: '#86868b', fontSize: 12, lineHeight: 1.6, marginTop: 18, textAlign: 'center' },
 }

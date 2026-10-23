@@ -30,6 +30,7 @@ type Banner = {
   titulo?: string | null
   subtitulo?: string | null
   produto_id?: string | null
+  arte?: boolean | null
 }
 
 type FiltroEspecial = 'destaques' | 'lancamentos' | 'promocoes' | 'mais_procurados' | null
@@ -38,6 +39,7 @@ type FiltroEspecial = 'destaques' | 'lancamentos' | 'promocoes' | 'mais_procurad
 const WHATSAPP = '5564993374281'
 const PARCELAS = 21
 const STORAGE = 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public'
+const CHAVE_SACOLA = 'mm-sacola'
 
 const categorias = [
   { nome: 'Celulares',    img: `${STORAGE}/categorias/celulares.png` },
@@ -71,7 +73,8 @@ const ehIpad = typeof navigator !== 'undefined' && (
   (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
 )
 
-const semAcento = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+const semAcento = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+const mesmaMarca = (a?: string | null, b?: string | null) => !!a && !!b && semAcento(a) === semAcento(b)
 
 function coresDoProduto(cor?: string) {
   if (!cor) return []
@@ -83,9 +86,31 @@ function abrirWhatsApp(texto: string) {
   window.open(`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(texto)}`, '_blank')
 }
 
+const nomeCompleto = (p: Produto) => [p.marca === 'Apple' ? '' : p.marca, p.modelo, p.memoria].filter(Boolean).join(' ')
+
 function textoInteresse(p: Produto) {
-  return `Olá! Tenho interesse no ${[p.marca === 'Apple' ? '' : p.marca, p.modelo, p.memoria].filter(Boolean).join(' ')} que vi no catálogo da Marcos Magazine.`
+  return `Olá! Tenho interesse no ${nomeCompleto(p)} que vi no catálogo da Marcos Magazine.`
 }
+
+function lerSacola(): string[] {
+  try { const v = JSON.parse(localStorage.getItem(CHAVE_SACOLA) || '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
+}
+
+// ─── Ícones ────────────────────────────────────────
+const IconeMenu = () => (
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+)
+const IconeBusca = () => (
+  <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+)
+const IconeSacola = ({ tamanho = 26 }: { tamanho?: number }) => (
+  <svg width={tamanho} height={tamanho} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 8h14l-1.2 11.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8L5 8Z" /><path d="M9 10V7a3 3 0 0 1 6 0v3" />
+  </svg>
+)
+const IconeWhats = ({ tamanho = 20 }: { tamanho?: number }) => (
+  <svg width={tamanho} height={tamanho} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.2 2.2 2.2 0 0 0 .2-1.2c-.1-.1-.2-.2-.4-.3Z" /></svg>
+)
 
 function App() {
   const navigate = useNavigate()
@@ -102,6 +127,9 @@ function App() {
   const [selecionado, setSelecionado] = useState<Produto | null>(null)
   const [fotosDetalhe, setFotosDetalhe] = useState<string[]>([])
   const [fotoIndex, setFotoIndex] = useState(0)
+  const [sacola, setSacola] = useState<string[]>(lerSacola)
+  const [sacolaAberta, setSacolaAberta] = useState(false)
+  const [aviso, setAviso] = useState('')
   const toqueInicio = useRef<number | null>(null)
   const topoRef = useRef<HTMLDivElement>(null)
 
@@ -115,6 +143,10 @@ function App() {
       setCarregando(false)
     })
   }, [])
+
+  useEffect(() => {
+    try { localStorage.setItem(CHAVE_SACOLA, JSON.stringify(sacola)) } catch { /* sem armazenamento */ }
+  }, [sacola])
 
   // Botão "voltar" do celular fecha o produto aberto
   useEffect(() => {
@@ -130,8 +162,29 @@ function App() {
     return () => clearInterval(t)
   }, [banners.length, heroIndex, selecionado])
 
+  // ─── Sacola ──────────────────────────────────────
+  const itensSacola = sacola.map(id => produtos.find(p => p.id === id)).filter(Boolean) as Produto[]
+  const naSacola = (id: string) => sacola.includes(id)
+
+  function mostrarAviso(t: string) {
+    setAviso(t)
+    setTimeout(() => setAviso(''), 1800)
+  }
+
+  function alternarSacola(p: Produto) {
+    if (naSacola(p.id)) { setSacola(s => s.filter(x => x !== p.id)); mostrarAviso('Removido da sacola') }
+    else { setSacola(s => [...s, p.id]); mostrarAviso('✓ Adicionado à sacola') }
+  }
+
+  function enviarSacola() {
+    if (!itensSacola.length) return
+    const lista = itensSacola.map((p, i) => `${i + 1}. ${nomeCompleto(p)}`).join('\n')
+    abrirWhatsApp(`Olá! Vim pelo catálogo da Marcos Magazine e tenho interesse ${itensSacola.length > 1 ? 'nestes produtos' : 'neste produto'}:\n\n${lista}\n\nPode me passar valores e condições?`)
+  }
+
+  // ─── Navegação ───────────────────────────────────
   async function abrirProduto(p: Produto) {
-    setSelecionado(p); setFotoIndex(0); setFotosDetalhe(p.foto_url ? [p.foto_url] : [])
+    setSelecionado(p); setFotoIndex(0); setFotosDetalhe(p.foto_url ? [p.foto_url] : []); setSacolaAberta(false)
     window.history.pushState({ produto: p.id }, '')
     window.scrollTo(0, 0)
     const { data } = await supabase.from('produto_fotos').select('url').eq('produto_id', p.id).order('ordem')
@@ -160,11 +213,11 @@ function App() {
   const filtrando = !!(busca.trim() || categoriaAtiva || marcaAtiva || filtroEspecial)
 
   const resultados = useMemo(() => {
-    const termo = semAcento(busca.trim())
+    const termo = semAcento(busca)
     return produtos.filter(p => {
       if (termo && !semAcento(`${p.marca} ${p.modelo} ${p.memoria || ''} ${p.categoria} ${p.cor || ''}`).includes(termo)) return false
       if (categoriaAtiva && p.categoria !== categoriaAtiva) return false
-      if (marcaAtiva && p.marca !== marcaAtiva) return false
+      if (marcaAtiva && !mesmaMarca(p.marca, marcaAtiva)) return false
       if (filtroEspecial === 'destaques' && !p.destaque) return false
       if (filtroEspecial === 'lancamentos' && !p.lancamento) return false
       if (filtroEspecial === 'promocoes' && !p.promocao) return false
@@ -173,12 +226,18 @@ function App() {
     })
   }, [produtos, busca, categoriaAtiva, marcaAtiva, filtroEspecial])
 
+  // Marcas que existem na categoria escolhida (ex: Celulares → Apple, Samsung, Xiaomi...)
+  const marcasDaCategoria = categoriaAtiva
+    ? marcas.filter(m => produtos.some(p => p.categoria === categoriaAtiva && mesmaMarca(p.marca, m.nome)))
+    : []
+
   const tituloResultados =
     filtroEspecial === 'destaques' ? 'Destaques' :
     filtroEspecial === 'lancamentos' ? 'Lançamentos' :
     filtroEspecial === 'promocoes' ? 'Promoções' :
     filtroEspecial === 'mais_procurados' ? 'Mais procurados' :
-    categoriaAtiva || marcaAtiva || `Busca: "${busca.trim()}"`
+    categoriaAtiva ? `${categoriaAtiva}${marcaAtiva ? ` ${marcaAtiva}` : ''}` :
+    marcaAtiva || `Busca: "${busca.trim()}"`
 
   const destaques = produtos.filter(p => p.destaque)
   const lancamentos = produtos.filter(p => p.lancamento)
@@ -189,6 +248,7 @@ function App() {
   const cartao = (p: Produto, grade = false) => {
     const cores = coresDoProduto(p.cor)
     const selo = p.lancamento ? { t: 'LANÇAMENTO', c: '#1d1d1f' } : p.promocao ? { t: 'OFERTA', c: '#e5332a' } : p.mais_procurado ? { t: 'TOP', c: '#ff6600' } : null
+    const dentro = naSacola(p.id)
     return (
       <div key={p.id} className={grade ? 'mm-card mm-card-grade' : 'mm-card'} onClick={() => abrirProduto(p)}>
         <div className="mm-card-foto">
@@ -200,7 +260,9 @@ function App() {
         <div className="mm-cores">
           {cores.map(c => <i key={c.nome} title={c.nome} style={{ background: c.hex }} />)}
         </div>
-        <button className="mm-btn-zap" onClick={e => { e.stopPropagation(); abrirWhatsApp(textoInteresse(p)) }}>💬 Tenho interesse</button>
+        <button className={dentro ? 'mm-btn-sacola dentro' : 'mm-btn-sacola'} onClick={e => { e.stopPropagation(); alternarSacola(p) }}>
+          {dentro ? '✓ Na sacola' : <><IconeSacola tamanho={18} /> Adicionar</>}
+        </button>
       </div>
     )
   }
@@ -215,10 +277,59 @@ function App() {
     </section>
   )
 
+  const botaoSacolaTopo = (
+    <button className="mm-icone mm-icone-sacola" onClick={() => setSacolaAberta(true)} aria-label="Sacola">
+      <IconeSacola />
+      {sacola.length > 0 && <span className="mm-contagem">{sacola.length}</span>}
+    </button>
+  )
+
+  const gavetaSacola = sacolaAberta && (
+    <>
+      <div className="mm-fundo-menu" onClick={() => setSacolaAberta(false)} />
+      <div className="mm-gaveta">
+        <div className="mm-gaveta-topo">
+          <b><IconeSacola tamanho={24} /> Minha sacola</b>
+          <button className="mm-icone" onClick={() => setSacolaAberta(false)}>✕</button>
+        </div>
+        {itensSacola.length === 0 ? (
+          <div className="mm-vazio">
+            <p>Sua sacola está vazia.</p>
+            <p style={{ fontSize: 14 }}>Toque em <b>Adicionar</b> nos produtos que você gostou e depois envie tudo de uma vez pelo WhatsApp.</p>
+          </div>
+        ) : (
+          <>
+            <div className="mm-gaveta-lista">
+              {itensSacola.map(p => (
+                <div key={p.id} className="mm-gaveta-item">
+                  <div className="mm-gaveta-foto" onClick={() => abrirProduto(p)}>
+                    {p.foto_url ? <img src={p.foto_url} alt="" /> : <span>{p.marca}</span>}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }} onClick={() => abrirProduto(p)}>
+                    <b>{p.modelo}</b>
+                    <small>{[p.marca, p.memoria].filter(Boolean).join(' · ')}</small>
+                  </div>
+                  <button className="mm-gaveta-remover" onClick={() => setSacola(s => s.filter(x => x !== p.id))} aria-label="Remover">✕</button>
+                </div>
+              ))}
+            </div>
+            <div className="mm-gaveta-rodape">
+              <button className="mm-btn-verde" onClick={enviarSacola}><IconeWhats /> Enviar pelo WhatsApp ({itensSacola.length})</button>
+              <button className="mm-link mm-limpar" onClick={() => setSacola([])}>Esvaziar sacola</button>
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  )
+
+  const avisoFlutuante = aviso && <div className="mm-aviso-flutuante">{aviso}</div>
+
   // ─── DETALHE DO PRODUTO ──────────────────────────
   if (selecionado) {
     const p = selecionado
     const cores = coresDoProduto(p.cor)
+    const dentro = naSacola(p.id)
     const specs = [
       p.memoria && { icone: '💾', nome: 'Memória', valor: p.memoria },
       p.cor && { icone: '🎨', nome: cores.length > 1 ? 'Cores' : 'Cor', valor: p.cor },
@@ -231,7 +342,7 @@ function App() {
         <header className="mm-topo mm-topo-detalhe">
           <button className="mm-voltar" onClick={fecharProduto}>‹ Voltar</button>
           <Logo />
-          <button className="mm-icone" onClick={() => abrirWhatsApp('Olá! Vim pelo catálogo da Marcos Magazine.')} aria-label="WhatsApp">💬</button>
+          {botaoSacolaTopo}
         </header>
         <main className="mm-detalhe">
           <div className="mm-galeria"
@@ -266,9 +377,14 @@ function App() {
             <button className="mm-btn-contorno" onClick={() => navigate('/comparar')}>⚖ Comparar com outro celular</button>
           </div>
         </main>
-        <div className="mm-barra-fixa">
-          <button className="mm-btn-verde" onClick={() => abrirWhatsApp(textoInteresse(p))}>💬 Tenho interesse</button>
+        <div className="mm-barra-fixa mm-barra-dupla">
+          <button className={dentro ? 'mm-btn-contorno mm-btn-sacola-grande dentro' : 'mm-btn-contorno mm-btn-sacola-grande'} onClick={() => alternarSacola(p)}>
+            {dentro ? '✓ Na sacola' : <><IconeSacola tamanho={20} /> Sacola</>}
+          </button>
+          <button className="mm-btn-verde" onClick={() => abrirWhatsApp(textoInteresse(p))}><IconeWhats /> Tenho interesse</button>
         </div>
+        {gavetaSacola}
+        {avisoFlutuante}
       </div>
     )
   }
@@ -276,9 +392,13 @@ function App() {
   // ─── CATÁLOGO ────────────────────────────────────
   const banner = banners.length ? banners[heroIndex % banners.length] : null
   const produtoDoBanner = banner?.produto_id ? produtos.find(x => x.id === banner.produto_id) : undefined
+  const cliqueBanner = () => {
+    if (produtoDoBanner) abrirProduto(produtoDoBanner)
+    else abrirWhatsApp(banner?.titulo ? `Olá! Vi o banner "${banner.titulo}" no catálogo e quero saber mais.` : 'Olá! Vim pelo catálogo da Marcos Magazine.')
+  }
 
   return (
-    <div className="mm">
+    <div className={sacola.length > 0 ? 'mm mm-com-barra' : 'mm'}>
       <style>{CSS}</style>
 
       {/* Menu lateral */}
@@ -287,9 +407,11 @@ function App() {
         <div className="mm-menu-topo"><Logo /><button className="mm-icone" onClick={() => setMenuAberto(false)}>✕</button></div>
         <nav>
           <button onClick={() => { limparFiltros(); setMenuAberto(false); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>⌂ Início</button>
+          <button onClick={() => aplicarFiltro({ categoria: 'Celulares' })}>📱 Celulares</button>
           <button onClick={() => navigate('/comparar')}>⚖ Comparar celulares</button>
           <button onClick={() => navigate('/entrada')}>⇄ Avaliar meu usado</button>
-          <button onClick={() => navigate('/capas')}>📱 Capinhas</button>
+          <button onClick={() => navigate('/capas')}>🛡 Capinhas</button>
+          <button onClick={() => { setMenuAberto(false); setSacolaAberta(true) }}>🛍 Minha sacola{sacola.length ? ` (${sacola.length})` : ''}</button>
           {ehIpad && <button className="mm-menu-destaque" onClick={() => navigate('/negociacao')}>💼 Negociação</button>}
           <hr />
           <button onClick={() => aplicarFiltro({ especial: 'destaques' })}>☆ Destaques</button>
@@ -308,13 +430,14 @@ function App() {
 
       {/* Topo */}
       <header className="mm-topo">
-        <button className="mm-icone" onClick={() => setMenuAberto(true)} aria-label="Menu">☰</button>
+        <button className="mm-icone" onClick={() => setMenuAberto(true)} aria-label="Menu"><IconeMenu /></button>
         <Logo />
-        <button className="mm-icone" onClick={() => setBuscaAberta(!buscaAberta)} aria-label="Buscar">🔍</button>
-        <button className="mm-icone mm-icone-zap" onClick={() => abrirWhatsApp('Olá! Vim pelo catálogo da Marcos Magazine.')} aria-label="WhatsApp">💬</button>
+        <button className="mm-icone" onClick={() => setBuscaAberta(!buscaAberta)} aria-label="Buscar"><IconeBusca /></button>
+        {botaoSacolaTopo}
       </header>
       {(buscaAberta || busca) && (
         <div className="mm-busca">
+          <IconeBusca />
           <input autoFocus placeholder="Buscar celular, fone, capinha..." value={busca} onChange={e => setBusca(e.target.value)} />
           {busca && <button onClick={() => setBusca('')}>✕</button>}
         </div>
@@ -328,9 +451,25 @@ function App() {
           <div className="mm-chips">
             <button className={!categoriaAtiva && !marcaAtiva && !filtroEspecial ? 'on' : ''} onClick={() => { setCategoriaAtiva(null); setMarcaAtiva(null); setFiltroEspecial(null) }}>Tudo</button>
             {categorias.filter(c => c.nome !== 'Capas').map(c => (
-              <button key={c.nome} className={categoriaAtiva === c.nome ? 'on' : ''} onClick={() => setCategoriaAtiva(categoriaAtiva === c.nome ? null : c.nome)}>{c.nome}</button>
+              <button key={c.nome} className={categoriaAtiva === c.nome ? 'on' : ''}
+                onClick={() => { setCategoriaAtiva(categoriaAtiva === c.nome ? null : c.nome); setMarcaAtiva(null); setFiltroEspecial(null) }}>{c.nome}</button>
             ))}
           </div>
+
+          {marcasDaCategoria.length > 1 && (
+            <div className="mm-escolha-marca">
+              <p>Qual marca você procura?</p>
+              <div className="mm-marcas-linha">
+                <button className={!marcaAtiva ? 'on' : ''} onClick={() => setMarcaAtiva(null)}><span className="mm-todas">Todas</span></button>
+                {marcasDaCategoria.map(m => (
+                  <button key={m.nome} className={mesmaMarca(marcaAtiva, m.nome) ? 'on' : ''} onClick={() => setMarcaAtiva(mesmaMarca(marcaAtiva, m.nome) ? null : m.nome)}>
+                    <img src={m.img} alt={m.nome} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="mm-secao-topo">
             <h2>{tituloResultados}</h2>
             <button className="mm-link" onClick={limparFiltros}>✕ Limpar</button>
@@ -338,7 +477,7 @@ function App() {
           {resultados.length === 0 ? (
             <div className="mm-vazio">
               <p>Não encontramos esse produto no catálogo agora.</p>
-              <button className="mm-btn-verde" onClick={() => abrirWhatsApp(`Olá! Vocês têm ${busca.trim() || tituloResultados}?`)}>💬 Perguntar no WhatsApp</button>
+              <button className="mm-btn-verde" onClick={() => abrirWhatsApp(`Olá! Vocês têm ${busca.trim() || tituloResultados}?`)}><IconeWhats /> Perguntar no WhatsApp</button>
             </div>
           ) : (
             <div className="mm-grade">{resultados.map(p => cartao(p, true))}</div>
@@ -347,7 +486,7 @@ function App() {
       ) : (
         <main>
           {/* ─── Banner carrossel ─── */}
-          <section className="mm-hero"
+          <section className={banner?.arte ? 'mm-hero mm-hero-arte' : 'mm-hero'}
             onTouchStart={e => { toqueInicio.current = e.touches[0].clientX }}
             onTouchEnd={e => {
               if (toqueInicio.current === null || banners.length < 2) return
@@ -355,21 +494,22 @@ function App() {
               if (Math.abs(dx) > 40) setHeroIndex(i => (i + (dx < 0 ? 1 : banners.length - 1)) % banners.length)
               toqueInicio.current = null
             }}>
-            <div className="mm-hero-slide" key={banner?.id || 'padrao'}>
-              <span className="mm-hero-etiqueta">{banner?.titulo ? (banner.etiqueta || 'DESTAQUE') : 'MARCOS MAGAZINE'}</span>
-              <h1>{banner?.titulo || 'Os melhores celulares'}</h1>
-              <p>{banner?.titulo ? (banner.subtitulo || '') : 'e acessórios. Você só encontra aqui!'}</p>
-              <div className="mm-hero-botoes">
-                <button className="mm-btn-laranja" onClick={() => abrirWhatsApp(produtoDoBanner ? textoInteresse(produtoDoBanner) : banner?.titulo ? `Olá! Tenho interesse no ${banner.titulo} que vi no catálogo.` : 'Olá! Vim pelo catálogo da Marcos Magazine.')}>
-                  {banner?.titulo ? 'Tenho interesse' : 'Fale com a gente'}
-                </button>
-                <button className="mm-btn-contorno-laranja" onClick={() => navigate('/comparar')}>Comparar</button>
+            {banner?.arte ? (
+              <img key={banner.id} className="mm-hero-arte-img" src={banner.url} alt={banner.titulo || 'Banner Marcos Magazine'} onClick={cliqueBanner} />
+            ) : (
+              <div className="mm-hero-slide" key={banner?.id || 'padrao'}>
+                <span className="mm-hero-etiqueta">{banner?.titulo ? (banner.etiqueta || 'DESTAQUE') : 'MARCOS MAGAZINE'}</span>
+                <h1>{banner?.titulo || 'Os melhores celulares'}</h1>
+                <p>{banner?.titulo ? (banner.subtitulo || '') : 'e acessórios. Você só encontra aqui!'}</p>
+                <div className="mm-hero-botoes">
+                  <button className="mm-btn-laranja" onClick={() => abrirWhatsApp(produtoDoBanner ? textoInteresse(produtoDoBanner) : banner?.titulo ? `Olá! Tenho interesse no ${banner.titulo} que vi no catálogo.` : 'Olá! Vim pelo catálogo da Marcos Magazine.')}>
+                    {banner?.titulo ? 'Tenho interesse' : 'Fale com a gente'}
+                  </button>
+                  <button className="mm-btn-contorno-laranja" onClick={() => navigate('/comparar')}>Comparar</button>
+                </div>
+                {banner && <img className="mm-hero-img" src={banner.url} alt={banner.titulo || 'Destaque'} onClick={() => produtoDoBanner && abrirProduto(produtoDoBanner)} />}
               </div>
-              {banner && (
-                <img className="mm-hero-img" src={banner.url} alt={banner.titulo || 'Destaque'}
-                  onClick={() => produtoDoBanner && abrirProduto(produtoDoBanner)} />
-              )}
-            </div>
+            )}
           </section>
           {banners.length > 1 && (
             <div className="mm-pontos">
@@ -405,15 +545,15 @@ function App() {
               {/* ─── Cartões: usado e comparar ─── */}
               <div className="mm-duo">
                 <button className="mm-duo-escuro" onClick={() => navigate('/entrada')}>
+                  <span className="mm-duo-bola">⇄</span>
                   <span className="mm-novo">NOVO</span>
                   <b>Avalie seu usado</b>
-                  <small>Use como entrada no novo ›</small>
-                  <i className="mm-duo-celular" />
+                  <small>Use como entrada no seu novo ›</small>
                 </button>
                 <button className="mm-duo-claro" onClick={() => navigate('/comparar')}>
+                  <span className="mm-duo-bola">⚖</span>
                   <b>Compare celulares</b>
                   <small>Veja qual é o melhor ›</small>
-                  <span className="mm-duo-icone">⚖️</span>
                 </button>
               </div>
 
@@ -457,11 +597,24 @@ function App() {
         <p>Avenida Goiás, 686, sala 3 · Centro · Bom Jesus</p>
         <p>Seg a sex 08:00–18:00 · Sáb 08:00–12:30</p>
         <div className="mm-rodape-links">
-          <button className="mm-zap" onClick={() => abrirWhatsApp('Olá! Vim pelo catálogo da Marcos Magazine.')}>💬 (64) 99337-4281</button>
+          <button className="mm-zap" onClick={() => abrirWhatsApp('Olá! Vim pelo catálogo da Marcos Magazine.')}><IconeWhats tamanho={17} /> (64) 99337-4281</button>
           <button onClick={() => window.open('https://www.instagram.com/marcosmagazinee', '_blank')}>📷 @marcosmagazinee</button>
           <button onClick={() => window.open('https://www.google.com/maps/search/Avenida+Goiás+686+Centro+Bom+Jesus+de+Goiás+GO', '_blank')}>📍 Como chegar</button>
         </div>
       </footer>
+
+      {/* Barra da sacola */}
+      {sacola.length > 0 && !sacolaAberta && (
+        <div className="mm-barra-sacola">
+          <button className="mm-barra-sacola-ver" onClick={() => setSacolaAberta(true)}>
+            <span className="mm-barra-sacola-icone"><IconeSacola tamanho={22} /><i>{sacola.length}</i></span>
+            Ver sacola
+          </button>
+          <button className="mm-barra-sacola-enviar" onClick={enviarSacola}><IconeWhats tamanho={19} /> Enviar</button>
+        </div>
+      )}
+      {gavetaSacola}
+      {avisoFlutuante}
     </div>
   )
 }
@@ -476,182 +629,228 @@ const CSS = `
 html, body { background: #fff !important; }
 body { display: block !important; place-items: normal !important; margin: 0 !important; min-width: 0 !important; color: #1d1d1f !important; }
 #root { width: 100% !important; max-width: none !important; justify-self: stretch !important; padding: 0 !important; margin: 0 !important; text-align: left !important; }
-.mm { --laranja: #ff6600; --tinta: #1d1d1f; --cinza: #f5f5f7; --borda: #ececf0;
+.mm { --laranja: #ff6600; --tinta: #1d1d1f; --cinza: #f5f5f7; --borda: #ececf0; --verde: #25D366;
   min-height: 100vh; background: #fff; color: var(--tinta); font-family: Poppins, -apple-system, 'Segoe UI', sans-serif;
-  -webkit-font-smoothing: antialiased; overflow-x: hidden; padding-bottom: 0; }
+  -webkit-font-smoothing: antialiased; overflow-x: hidden; overflow-x: clip; }
 .mm * { box-sizing: border-box; }
 .mm button { all: unset; box-sizing: border-box; cursor: pointer; font-family: inherit; -webkit-tap-highlight-color: transparent; }
 .mm h1, .mm h2, .mm h3, .mm p { margin: 0; }
 .mm h1, .mm h2, .mm h3, .mm b, .mm strong, .mm small { color: inherit; font-family: inherit; }
 .mm img { display: block; max-width: 100%; }
-.mm main, .mm-rodape, .mm-busca { max-width: 1100px; margin-left: auto; margin-right: auto; }
+.mm main, .mm-busca { max-width: 1100px; margin-left: auto; margin-right: auto; }
+.mm.mm-com-barra { padding-bottom: 92px; }
 
-.mm .mm-aviso { background: var(--tinta); color: #fff; font-size: 12px; text-align: center; padding: 8px 12px; }
+.mm .mm-aviso { background: var(--tinta); color: #fff; font-size: 14px; text-align: center; padding: 9px 12px; }
 .mm .mm-aviso b { color: #ff8a3d; }
 
-.mm .mm-topo { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 4px; padding: 10px 12px;
-  background: rgba(255,255,255,0.92); backdrop-filter: saturate(180%) blur(14px); -webkit-backdrop-filter: saturate(180%) blur(14px); border-bottom: 1px solid var(--borda); }
-.mm .mm-logo { line-height: 1; margin-right: auto; margin-left: 4px; }
-.mm .mm-logo b { display: block; color: var(--laranja); font-weight: 800; font-size: 22px; letter-spacing: -0.5px; font-family: Nunito, Poppins, sans-serif; }
-.mm .mm-logo i { display: block; color: var(--laranja); font-style: normal; font-weight: 700; font-size: 10px; text-align: right; margin-top: -2px; }
-.mm .mm-icone { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 19px; color: var(--tinta); }
+/* Topo */
+.mm .mm-topo { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 2px; padding: 10px 10px;
+  background: rgba(255,255,255,0.94); backdrop-filter: saturate(180%) blur(14px); -webkit-backdrop-filter: saturate(180%) blur(14px); border-bottom: 1px solid var(--borda); }
+.mm .mm-logo { line-height: 1; margin-right: auto; margin-left: 6px; }
+.mm .mm-logo b { display: block; color: var(--laranja); font-weight: 800; font-size: 26px; letter-spacing: -0.5px; font-family: Nunito, Poppins, sans-serif; }
+.mm .mm-logo i { display: block; color: var(--laranja); font-style: normal; font-weight: 700; font-size: 12px; text-align: right; margin-top: -2px; }
+.mm .mm-icone { position: relative; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 22px; color: var(--tinta); }
 .mm .mm-icone:active { background: var(--cinza); }
-.mm .mm-icone-zap { color: #25D366; }
+.mm .mm-contagem { position: absolute; top: 4px; right: 3px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--laranja); color: #fff; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; animation: mmPop .3s ease; }
+@keyframes mmPop { 0% { transform: scale(0.4) } 70% { transform: scale(1.2) } 100% { transform: scale(1) } }
 
-.mm .mm-busca { display: flex; align-items: center; gap: 8px; margin: 10px 16px 0; background: var(--cinza); border-radius: 14px; padding: 4px 6px 4px 14px; }
-.mm .mm-busca input { flex: 1; border: none; outline: none; background: none; font-size: 16px; padding: 9px 0; font-family: inherit; color: var(--tinta); min-width: 0; }
-.mm .mm-busca button { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: #888; }
+.mm .mm-busca { display: flex; align-items: center; gap: 8px; margin: 12px 16px 0; background: var(--cinza); border-radius: 16px; padding: 4px 6px 4px 14px; color: #86868b; }
+.mm .mm-busca input { flex: 1; border: none; outline: none; background: none; font-size: 17px; padding: 11px 0; font-family: inherit; color: var(--tinta); min-width: 0; }
+.mm .mm-busca button { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; color: #888; font-size: 16px; }
 
 /* Banner */
 .mm .mm-hero { position: relative; overflow: hidden; background: linear-gradient(180deg, #f5f5f7 0%, #fbe9dc 100%); text-align: center; touch-action: pan-y; }
-.mm .mm-hero-slide { display: flex; flex-direction: column; align-items: center; padding: 26px 20px 0; min-height: 360px; animation: mmEntra .6s ease; }
+.mm .mm-hero-slide { display: flex; flex-direction: column; align-items: center; padding: 30px 20px 0; min-height: 400px; animation: mmEntra .6s ease; }
 @keyframes mmEntra { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
-.mm .mm-hero-etiqueta { font-size: 11px; font-weight: 700; color: var(--laranja); letter-spacing: 1.8px; }
-.mm .mm-hero h1 { color: var(--tinta); font-size: 34px; font-weight: 800; letter-spacing: -0.8px; line-height: 1.1; margin-top: 6px; }
-.mm .mm-hero p { font-size: 14px; color: #555; margin-top: 6px; max-width: 320px; }
-.mm .mm-hero-botoes { display: flex; gap: 8px; margin-top: 14px; }
-.mm .mm-btn-laranja { background: var(--laranja); color: #fff; border-radius: 22px; padding: 9px 20px; font-size: 13px; font-weight: 700; }
-.mm .mm-btn-contorno-laranja { border: 1.5px solid var(--laranja); color: var(--laranja); border-radius: 22px; padding: 8px 18px; font-size: 13px; font-weight: 700; }
-.mm .mm-hero-img { width: auto; max-width: 92%; height: 210px; object-fit: contain; margin-top: 14px; mix-blend-mode: multiply; }
+.mm .mm-hero-etiqueta { font-size: 13px; font-weight: 700; color: var(--laranja); letter-spacing: 2px; }
+.mm .mm-hero h1 { color: var(--tinta); font-size: 36px; font-weight: 800; letter-spacing: -0.8px; line-height: 1.1; margin-top: 8px; }
+.mm .mm-hero p { font-size: 17px; color: #555; margin-top: 8px; max-width: 340px; }
+.mm .mm-hero-botoes { display: flex; gap: 10px; margin-top: 18px; }
+.mm .mm-btn-laranja { background: var(--laranja); color: #fff; border-radius: 26px; padding: 12px 24px; font-size: 16px; font-weight: 700; }
+.mm .mm-btn-contorno-laranja { border: 2px solid var(--laranja); color: var(--laranja); border-radius: 26px; padding: 10px 22px; font-size: 16px; font-weight: 700; }
+.mm .mm-hero-img { width: auto; max-width: 92%; height: 230px; object-fit: contain; margin-top: 18px; mix-blend-mode: multiply; }
+.mm .mm-hero-arte { background: #fff; padding: 12px 12px 0; }
+.mm .mm-hero-arte-img { width: 100%; max-width: 620px; margin: 0 auto; border-radius: 22px; cursor: pointer; animation: mmEntra .6s ease; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
 
-.mm .mm-pontos { display: flex; justify-content: center; gap: 6px; padding: 12px 0 4px; }
-.mm .mm-pontos i { width: 7px; height: 7px; border-radius: 4px; background: #d2d2d7; transition: all .3s; cursor: pointer; }
-.mm .mm-pontos i.on { width: 20px; background: var(--laranja); }
+.mm .mm-pontos { display: flex; justify-content: center; gap: 7px; padding: 14px 0 4px; }
+.mm .mm-pontos i { width: 8px; height: 8px; border-radius: 4px; background: #d2d2d7; transition: all .3s; cursor: pointer; }
+.mm .mm-pontos i.on { width: 24px; background: var(--laranja); }
 
 /* Categorias */
-.mm .mm-categorias { display: flex; gap: 10px; overflow-x: auto; padding: 12px 16px 14px; scrollbar-width: none; }
+.mm .mm-categorias { display: flex; gap: 12px; overflow-x: auto; padding: 14px 16px 18px; scrollbar-width: none; }
 .mm .mm-categorias::-webkit-scrollbar { display: none; }
-.mm .mm-categoria { flex: 0 0 auto; width: 72px; text-align: center; font-size: 11px; font-weight: 600; color: var(--tinta); }
-.mm .mm-categoria span { width: 64px; height: 64px; border-radius: 50%; background: var(--cinza); margin: 0 auto 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.mm .mm-categoria img { width: 44px; height: 44px; object-fit: contain; }
+.mm .mm-categoria { flex: 0 0 auto; width: 84px; text-align: center; font-size: 13.5px; font-weight: 600; color: var(--tinta); line-height: 1.25; }
+.mm .mm-categoria span { width: 78px; height: 78px; border-radius: 50%; background: var(--cinza); margin: 0 auto 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.mm .mm-categoria img { width: 56px; height: 56px; object-fit: contain; }
 .mm .mm-categoria:active span { background: #ffe9da; }
 
 /* Vantagens */
-.mm .mm-beneficios { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 16px 6px; }
-.mm .mm-beneficios div { background: var(--cinza); border-radius: 14px; padding: 11px 12px; display: flex; gap: 10px; align-items: center; cursor: default; }
-.mm .mm-beneficios span { font-size: 20px; }
-.mm .mm-beneficios p { font-size: 11px; color: #666; line-height: 1.35; }
-.mm .mm-beneficios b { display: block; color: var(--tinta); font-size: 12.5px; }
+.mm .mm-beneficios { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 16px 6px; }
+.mm .mm-beneficios div { background: var(--cinza); border-radius: 18px; padding: 14px 14px; display: flex; gap: 12px; align-items: center; cursor: default; }
+.mm .mm-beneficios span { font-size: 28px; line-height: 1; }
+.mm .mm-beneficios p { font-size: 13.5px; color: #6e6e73; line-height: 1.35; }
+.mm .mm-beneficios b { display: block; color: var(--tinta); font-size: 16px; }
 
 /* Seções */
-.mm .mm-secao { padding-top: 22px; }
-.mm .mm-secao-topo { display: flex; justify-content: space-between; align-items: baseline; padding: 0 16px 12px; gap: 10px; }
-.mm .mm-secao-topo h2 { color: var(--tinta); font-size: 23px; display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -0.4px; }
-.mm .mm-secao-topo h2::before { content: ''; width: 5px; height: 22px; border-radius: 3px; background: var(--laranja); flex-shrink: 0; }
-.mm .mm-link { color: var(--laranja); font-size: 13px; font-weight: 700; white-space: nowrap; }
-.mm .mm-contador { color: #999; font-size: 13px; }
-.mm .mm-trilho { display: flex; gap: 10px; overflow-x: auto; padding: 0 16px 6px; scroll-padding: 0 16px; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.mm .mm-secao { padding-top: 28px; }
+.mm .mm-secao-topo { display: flex; justify-content: space-between; align-items: center; padding: 0 16px 14px; gap: 10px; }
+.mm .mm-secao-topo h2 { color: var(--tinta); font-size: 25px; display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -0.4px; line-height: 1.15; }
+.mm .mm-secao-topo h2::before { content: ''; width: 5px; height: 24px; border-radius: 3px; background: var(--laranja); flex-shrink: 0; }
+.mm .mm-link { color: var(--laranja); font-size: 15px; font-weight: 700; white-space: nowrap; }
+.mm .mm-contador { color: #86868b; font-size: 15px; }
+.mm .mm-trilho { display: flex; gap: 12px; overflow-x: auto; padding: 0 16px 6px; scroll-padding: 0 16px; scroll-snap-type: x mandatory; scrollbar-width: none; }
 .mm .mm-trilho::-webkit-scrollbar { display: none; }
 
 /* Cartão de produto */
-.mm .mm-card { flex: 0 0 auto; width: 182px; border: 1px solid var(--borda); border-radius: 20px; padding: 10px; background: #fff; scroll-snap-align: start; cursor: pointer; display: flex; flex-direction: column; transition: transform .15s; }
+.mm .mm-card { flex: 0 0 auto; width: 196px; border: 1px solid var(--borda); border-radius: 22px; padding: 10px; background: #fff; scroll-snap-align: start; cursor: pointer; display: flex; flex-direction: column; transition: transform .15s; }
 .mm .mm-card:active { transform: scale(0.98); }
 .mm .mm-card-grade { width: auto; }
-.mm .mm-card-foto { position: relative; height: 140px; background: var(--cinza); border-radius: 14px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.mm .mm-card-foto img { width: 88%; height: 88%; object-fit: contain; mix-blend-mode: multiply; }
-.mm .mm-selo { position: absolute; top: 8px; left: 8px; z-index: 1; color: #fff; font-size: 9px; font-weight: 800; border-radius: 6px; padding: 3px 7px; letter-spacing: .5px; }
-.mm .mm-sem-foto { color: #aaa; font-weight: 700; font-size: 14px; }
-.mm .mm-card-nome { color: var(--tinta); font-size: 15px; font-weight: 700; margin-top: 9px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.mm .mm-card-info { color: #86868b; font-size: 12.5px; margin-top: 2px; }
-.mm .mm-cores { display: flex; gap: 4px; margin: 7px 0 10px; min-height: 11px; flex-wrap: wrap; }
-.mm .mm-cores i { width: 11px; height: 11px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.12); }
-.mm .mm-btn-zap { display: block; width: 100%; text-align: center; background: var(--tinta); color: #fff; border-radius: 18px; padding: 9px 6px; font-size: 12px; font-weight: 700; margin-top: auto; }
-.mm .mm-card-fantasma { height: 270px; background: linear-gradient(90deg, #f3f3f5, #fafafa, #f3f3f5); background-size: 200% 100%; animation: mmBrilhoCarregando 1.2s infinite; border: none; }
+.mm .mm-card-foto { position: relative; height: 158px; background: var(--cinza); border-radius: 16px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.mm .mm-card-foto img { width: 90%; height: 90%; object-fit: contain; mix-blend-mode: multiply; }
+.mm .mm-selo { position: absolute; top: 8px; left: 8px; z-index: 1; color: #fff; font-size: 10.5px; font-weight: 800; border-radius: 7px; padding: 3px 8px; letter-spacing: .5px; }
+.mm .mm-sem-foto { color: #aaa; font-weight: 700; font-size: 15px; }
+.mm .mm-card-nome { color: var(--tinta); font-size: 16.5px; font-weight: 700; margin-top: 10px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.mm .mm-card-info { color: #6e6e73; font-size: 14px; margin-top: 3px; }
+.mm .mm-cores { display: flex; gap: 5px; margin: 8px 0 12px; min-height: 13px; flex-wrap: wrap; }
+.mm .mm-cores i { width: 13px; height: 13px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.12); }
+.mm .mm-btn-sacola { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; background: var(--tinta); color: #fff; border-radius: 20px; padding: 11px 6px; font-size: 15px; font-weight: 700; margin-top: auto; transition: background .2s; }
+.mm .mm-btn-sacola.dentro { background: #fff1e6; color: var(--laranja); }
+.mm .mm-card-fantasma { height: 300px; background: linear-gradient(90deg, #f3f3f5, #fafafa, #f3f3f5); background-size: 200% 100%; animation: mmBrilhoCarregando 1.2s infinite; border: none; }
 @keyframes mmBrilhoCarregando { to { background-position: -200% 0 } }
 .mm .mm-carregando { padding-top: 22px; }
 
-.mm .mm-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; padding: 0 16px; }
-.mm .mm-chips { display: flex; gap: 6px; overflow-x: auto; padding: 14px 16px 12px; scrollbar-width: none; }
+.mm .mm-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 10px; padding: 0 16px; }
+.mm .mm-chips { display: flex; gap: 8px; overflow-x: auto; padding: 14px 16px 12px; scrollbar-width: none; }
 .mm .mm-chips::-webkit-scrollbar { display: none; }
-.mm .mm-chips button { flex: 0 0 auto; padding: 7px 14px; border-radius: 18px; background: var(--cinza); font-size: 12.5px; font-weight: 600; color: #444; }
+.mm .mm-chips button { flex: 0 0 auto; padding: 9px 16px; border-radius: 20px; background: var(--cinza); font-size: 15px; font-weight: 600; color: #444; }
 .mm .mm-chips button.on { background: var(--tinta); color: #fff; }
 .mm .mm-conteudo { padding-bottom: 20px; }
-.mm .mm-vazio { text-align: center; padding: 40px 24px; color: #777; font-size: 14px; display: flex; flex-direction: column; gap: 16px; align-items: center; }
+.mm .mm-vazio { text-align: center; padding: 40px 24px; color: #6e6e73; font-size: 16px; display: flex; flex-direction: column; gap: 16px; align-items: center; }
+
+/* Escolha de marca (embaixo de Celulares) */
+.mm .mm-escolha-marca { padding: 2px 16px 18px; }
+.mm .mm-escolha-marca p { font-size: 15px; font-weight: 700; color: #6e6e73; margin-bottom: 10px; }
+.mm .mm-marcas-linha { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.mm .mm-marcas-linha::-webkit-scrollbar { display: none; }
+.mm .mm-marcas-linha button { flex: 0 0 auto; width: 104px; height: 64px; border-radius: 18px; background: var(--cinza); border: 2px solid transparent; display: flex; align-items: center; justify-content: center; padding: 12px; transition: all .2s; }
+.mm .mm-marcas-linha button.on { background: #fff; border-color: var(--laranja); box-shadow: 0 6px 16px rgba(255,102,0,0.18); }
+.mm .mm-marcas-linha img { max-height: 32px; max-width: 100%; object-fit: contain; filter: grayscale(1) brightness(0.3); }
+.mm .mm-marcas-linha button.on img { filter: none; }
+.mm .mm-todas { font-size: 15px; font-weight: 800; color: var(--tinta); }
 
 /* Cartões duplos */
-.mm .mm-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 24px 16px 0; }
-.mm .mm-duo button { position: relative; overflow: hidden; border-radius: 20px; padding: 16px 14px; min-height: 150px; display: flex; flex-direction: column; gap: 4px; }
-.mm .mm-duo b { font-size: 16px; font-weight: 800; line-height: 1.2; }
-.mm .mm-duo small { font-size: 11.5px; position: relative; z-index: 1; }
+.mm .mm-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 28px 16px 0; }
+.mm .mm-duo button { position: relative; overflow: hidden; border-radius: 22px; padding: 18px 16px; min-height: 180px; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; }
+.mm .mm-duo b { font-size: 19px; font-weight: 800; line-height: 1.2; position: relative; z-index: 1; }
+.mm .mm-duo small { font-size: 14px; line-height: 1.35; position: relative; z-index: 1; }
+.mm .mm-duo-bola { position: absolute; top: 16px; left: 16px; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 25px; font-weight: 900; }
 .mm .mm-duo-escuro { background: var(--tinta); color: #fff; }
-.mm .mm-duo-escuro small { color: #ff9a55; max-width: 72%; }
+.mm .mm-duo-escuro .mm-duo-bola { background: var(--laranja); color: #fff; animation: mmGira 3.5s ease-in-out infinite; }
+@keyframes mmGira { 0%, 70% { transform: rotate(0) } 85%, 100% { transform: rotate(180deg) } }
+.mm .mm-duo-escuro small { color: #ffa366; }
 .mm .mm-duo-escuro::after { content: ''; position: absolute; top: 0; left: 0; width: 40%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent); animation: mmBrilho 3.5s ease-in-out infinite; }
 @keyframes mmBrilho { 0% { transform: translateX(-120%) skewX(-20deg) } 60%, 100% { transform: translateX(320%) skewX(-20deg) } }
-.mm .mm-duo-celular { position: absolute; right: -6px; bottom: -16px; width: 58px; height: 108px; border-radius: 14px; background: linear-gradient(160deg, #8a8a8e, #3a3a3c); border: 2px solid #555; }
-.mm .mm-novo { align-self: flex-start; background: var(--laranja); color: #fff; font-size: 9px; font-weight: 800; padding: 2px 7px; border-radius: 8px; margin-bottom: 4px; animation: mmPulso 1.6s ease-in-out infinite; }
+.mm .mm-novo { position: absolute; top: 18px; right: 14px; background: var(--laranja); color: #fff; font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 10px; animation: mmPulso 1.6s ease-in-out infinite; }
 @keyframes mmPulso { 0%, 100% { transform: scale(1) } 50% { transform: scale(1.1) } }
 .mm .mm-duo-claro { background: #fff3ea; color: var(--tinta); }
+.mm .mm-duo-claro .mm-duo-bola { background: #fff; color: var(--laranja); }
 .mm .mm-duo-claro small { color: #d4560a; }
-.mm .mm-duo-icone { position: absolute; right: 10px; bottom: 8px; font-size: 40px; }
 
 /* Marcas */
-.mm .mm-marcas { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 16px 24px; }
-.mm .mm-marcas button { background: var(--cinza); border-radius: 14px; height: 54px; display: flex; align-items: center; justify-content: center; padding: 10px; }
-.mm .mm-marcas img { max-height: 30px; max-width: 80%; object-fit: contain; filter: grayscale(1) brightness(0.3); }
+.mm .mm-marcas { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0 16px 28px; }
+.mm .mm-marcas button { background: var(--cinza); border-radius: 18px; height: 66px; display: flex; align-items: center; justify-content: center; padding: 12px; }
+.mm .mm-marcas img { max-height: 34px; max-width: 85%; object-fit: contain; filter: grayscale(1) brightness(0.3); }
 .mm .mm-ver-mais { display: block; width: calc(100% - 32px); margin: 16px 16px 0; text-align: center; }
 
 /* Rodapé */
-.mm .mm-rodape { background: var(--cinza); padding: 22px 16px 30px; font-size: 12.5px; color: #666; line-height: 1.7; max-width: none; margin-top: 10px; }
+.mm .mm-rodape { background: var(--cinza); padding: 24px 16px 32px; font-size: 15px; color: #6e6e73; line-height: 1.7; margin-top: 10px; }
 .mm .mm-rodape > * { max-width: 1100px; margin-left: auto; margin-right: auto; }
-.mm .mm-rodape b { color: var(--tinta); font-size: 14px; display: block; }
-.mm .mm-rodape-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.mm .mm-rodape-links button { background: #fff; border-radius: 18px; padding: 7px 14px; font-size: 12.5px; font-weight: 600; color: #444; }
+.mm .mm-rodape b { color: var(--tinta); font-size: 17px; display: block; }
+.mm .mm-rodape-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.mm .mm-rodape-links button { display: inline-flex; align-items: center; gap: 6px; background: #fff; border-radius: 20px; padding: 9px 16px; font-size: 14.5px; font-weight: 600; color: #444; }
 .mm .mm-rodape-links .mm-zap { color: #1a9e4a; }
 
 /* Menu lateral */
 .mm .mm-fundo-menu { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 90; animation: mmFade .2s; }
 @keyframes mmFade { from { opacity: 0 } }
-.mm .mm-menu { position: fixed; top: 0; left: 0; bottom: 0; width: 280px; max-width: 85vw; background: #fff; z-index: 100; transform: translateX(-100%); transition: transform .25s ease; overflow-y: auto; }
+.mm .mm-menu { position: fixed; top: 0; left: 0; bottom: 0; width: 300px; max-width: 85vw; background: #fff; z-index: 100; transform: translateX(-100%); transition: transform .25s ease; overflow-y: auto; }
 .mm .mm-menu.aberto { transform: none; box-shadow: 0 0 40px rgba(0,0,0,0.15); }
 .mm .mm-menu-topo { display: flex; align-items: center; padding: 14px 12px 10px 16px; border-bottom: 1px solid var(--borda); }
 .mm .mm-menu nav { display: flex; flex-direction: column; padding: 8px; }
-.mm .mm-menu nav button { width: 100%; padding: 13px 12px; border-radius: 12px; font-size: 15px; font-weight: 500; color: var(--tinta); }
+.mm .mm-menu nav button { width: 100%; padding: 14px 12px; border-radius: 12px; font-size: 17px; font-weight: 500; color: var(--tinta); }
 .mm .mm-menu nav button:active { background: var(--cinza); }
 .mm .mm-menu nav .mm-menu-destaque { color: var(--laranja); font-weight: 700; }
 .mm .mm-menu hr { border: none; border-top: 1px solid var(--borda); margin: 6px 12px; }
 
+/* Sacola */
+.mm .mm-barra-sacola { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 70; max-width: 560px; margin: 0 auto; display: flex; gap: 8px; padding: 8px; border-radius: 22px; background: var(--tinta); box-shadow: 0 12px 30px rgba(0,0,0,0.25); animation: mmSobe .3s ease; }
+@keyframes mmSobe { from { transform: translateY(120%) } }
+.mm .mm-barra-sacola-ver { flex: 1; display: flex; align-items: center; gap: 10px; color: #fff; font-size: 16px; font-weight: 700; padding: 6px 10px; }
+.mm .mm-barra-sacola-icone { position: relative; display: flex; }
+.mm .mm-barra-sacola-icone i { position: absolute; top: -6px; right: -9px; min-width: 18px; height: 18px; border-radius: 9px; background: var(--laranja); font-style: normal; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; padding: 0 4px; }
+.mm .mm-barra-sacola-enviar { display: flex; align-items: center; gap: 6px; background: var(--verde); color: #fff; border-radius: 16px; padding: 12px 18px; font-size: 16px; font-weight: 800; }
+.mm .mm-gaveta { position: fixed; left: 0; right: 0; bottom: 0; z-index: 100; max-height: 82vh; display: flex; flex-direction: column; background: #fff; border-radius: 26px 26px 0 0; max-width: 620px; margin: 0 auto; animation: mmSobe .3s ease; box-shadow: 0 -10px 40px rgba(0,0,0,0.15); }
+.mm .mm-gaveta-topo { display: flex; align-items: center; justify-content: space-between; padding: 16px 12px 10px 20px; border-bottom: 1px solid var(--borda); }
+.mm .mm-gaveta-topo b { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 800; }
+.mm .mm-gaveta-lista { overflow-y: auto; padding: 8px 16px; }
+.mm .mm-gaveta-item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--borda); cursor: pointer; }
+.mm .mm-gaveta-foto { width: 64px; height: 64px; border-radius: 14px; background: var(--cinza); display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; color: #aaa; font-size: 11px; font-weight: 700; }
+.mm .mm-gaveta-foto img { width: 88%; height: 88%; object-fit: contain; mix-blend-mode: multiply; }
+.mm .mm-gaveta-item b { display: block; font-size: 16px; font-weight: 700; line-height: 1.25; }
+.mm .mm-gaveta-item small { display: block; color: #6e6e73; font-size: 13.5px; margin-top: 2px; }
+.mm .mm-gaveta-remover { width: 36px; height: 36px; border-radius: 50%; background: var(--cinza); color: #6e6e73; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+.mm .mm-gaveta-rodape { padding: 14px 16px calc(16px + env(safe-area-inset-bottom)); border-top: 1px solid var(--borda); display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.mm .mm-limpar { color: #86868b; font-size: 14px; font-weight: 600; }
+.mm .mm-aviso-flutuante { position: fixed; left: 50%; top: 84px; transform: translateX(-50%); z-index: 120; background: var(--tinta); color: #fff; padding: 11px 20px; border-radius: 22px; font-size: 15px; font-weight: 700; box-shadow: 0 8px 24px rgba(0,0,0,0.2); animation: mmEntra .25s ease; white-space: nowrap; }
+
 /* Detalhe do produto */
 .mm .mm-topo-detalhe { gap: 8px; }
-.mm .mm-voltar { font-size: 15px; font-weight: 600; color: var(--laranja); padding: 8px 6px; }
+.mm .mm-voltar { font-size: 17px; font-weight: 600; color: var(--laranja); padding: 8px 6px; }
 .mm .mm-topo-detalhe .mm-logo { margin: 0 auto; }
-.mm .mm-detalhe { max-width: 640px; padding-bottom: 100px; }
+.mm .mm-detalhe { max-width: 640px; padding-bottom: 110px; }
 .mm .mm-galeria { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; background: var(--cinza); }
 .mm .mm-galeria::-webkit-scrollbar { display: none; }
-.mm .mm-galeria-item { flex: 0 0 100%; scroll-snap-align: center; height: 360px; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.mm .mm-galeria-item { flex: 0 0 100%; scroll-snap-align: center; height: 380px; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .mm .mm-galeria-item img { max-width: 100%; max-height: 100%; object-fit: contain; mix-blend-mode: multiply; }
-.mm .mm-sem-foto-grande { font-size: 24px; }
-.mm .mm-detalhe-info { padding: 14px 20px 10px; }
-.mm .mm-detalhe-marca { color: var(--laranja); font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 2.5px; }
-.mm .mm-detalhe-nome { color: var(--tinta); font-size: 30px; font-weight: 800; letter-spacing: -0.6px; line-height: 1.15; margin-top: 4px; }
-.mm .mm-cores-grandes { gap: 12px; margin-top: 12px; }
-.mm .mm-cores-grandes span { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #555; }
-.mm .mm-cores-grandes i { width: 16px; height: 16px; }
-.mm .mm-specs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; }
-.mm .mm-spec { background: var(--cinza); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 2px; }
-.mm .mm-spec span { font-size: 18px; }
-.mm .mm-spec small { font-size: 10.5px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
-.mm .mm-spec b { font-size: 14px; }
-.mm .mm-descricao { font-size: 14.5px; color: #555; line-height: 1.65; margin-top: 18px; }
-.mm .mm-beneficios-detalhe { padding: 0; margin-top: 18px; }
+.mm .mm-sem-foto-grande { font-size: 26px; }
+.mm .mm-detalhe-info { padding: 16px 20px 10px; }
+.mm .mm-detalhe-marca { color: var(--laranja); font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 2.5px; }
+.mm .mm-detalhe-nome { color: var(--tinta); font-size: 31px; font-weight: 800; letter-spacing: -0.6px; line-height: 1.15; margin-top: 4px; }
+.mm .mm-cores-grandes { gap: 14px; margin-top: 14px; }
+.mm .mm-cores-grandes span { display: flex; align-items: center; gap: 7px; font-size: 15px; color: #555; }
+.mm .mm-cores-grandes i { width: 18px; height: 18px; }
+.mm .mm-specs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+.mm .mm-spec { background: var(--cinza); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 3px; }
+.mm .mm-spec span { font-size: 22px; }
+.mm .mm-spec small { font-size: 12px; color: #86868b; text-transform: uppercase; letter-spacing: 1px; }
+.mm .mm-spec b { font-size: 16px; }
+.mm .mm-descricao { font-size: 16px; color: #555; line-height: 1.65; margin-top: 20px; }
+.mm .mm-beneficios-detalhe { padding: 0; margin-top: 20px; }
 .mm .mm-beneficios-detalhe div:nth-child(2) { cursor: pointer; }
-.mm .mm-btn-contorno { display: block; width: 100%; text-align: center; border: 1.5px solid var(--borda); border-radius: 16px; padding: 13px; font-size: 14px; font-weight: 700; color: var(--tinta); margin-top: 12px; }
-.mm .mm-barra-fixa { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: rgba(255,255,255,0.94); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-top: 1px solid var(--borda); }
-.mm .mm-btn-verde { display: block; width: 100%; text-align: center; background: #25D366; color: #fff; border-radius: 16px; padding: 15px 22px; font-size: 16px; font-weight: 800; max-width: 600px; margin: 0 auto; }
+.mm .mm-btn-contorno { display: block; width: 100%; text-align: center; border: 1.5px solid var(--borda); border-radius: 18px; padding: 14px; font-size: 16px; font-weight: 700; color: var(--tinta); margin-top: 12px; }
+.mm .mm-barra-fixa { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: rgba(255,255,255,0.95); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-top: 1px solid var(--borda); }
+.mm .mm-barra-dupla { display: flex; gap: 10px; justify-content: center; }
+.mm .mm-barra-dupla > * { max-width: 300px; }
+.mm .mm-btn-sacola-grande { flex: 0 0 38%; margin: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 15px 8px; }
+.mm .mm-btn-sacola-grande.dentro { border-color: var(--laranja); color: var(--laranja); background: #fff1e6; }
+.mm .mm-btn-verde { display: flex; align-items: center; justify-content: center; gap: 8px; flex: 1; width: 100%; text-align: center; background: var(--verde); color: #fff; border-radius: 18px; padding: 15px 18px; font-size: 17px; font-weight: 800; max-width: 600px; }
 
 /* Telas maiores (iPad / computador) */
 @media (min-width: 760px) {
   .mm .mm-hero { border-radius: 28px; margin: 16px 16px 0; }
-  .mm .mm-hero-slide { min-height: 440px; padding-top: 40px; }
-  .mm .mm-hero h1 { font-size: 44px; }
-  .mm .mm-hero-img { height: 270px; }
+  .mm .mm-hero-arte { background: none; padding: 0; }
+  .mm .mm-hero-slide { min-height: 470px; padding-top: 44px; }
+  .mm .mm-hero h1 { font-size: 50px; }
+  .mm .mm-hero-img { height: 280px; }
   .mm .mm-categorias { justify-content: center; }
   .mm .mm-beneficios { grid-template-columns: repeat(4, 1fr); }
-  .mm .mm-card { width: 210px; }
+  .mm .mm-card { width: 230px; }
   .mm .mm-card-grade { width: auto; }
-  .mm .mm-card-foto { height: 170px; }
-  .mm .mm-grade { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  .mm .mm-card-foto { height: 190px; }
+  .mm .mm-grade { grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 14px; }
   .mm .mm-marcas { grid-template-columns: repeat(5, 1fr); }
-  .mm .mm-duo button { min-height: 180px; }
+  .mm .mm-duo button { min-height: 210px; }
+  .mm .mm-secao-topo h2 { font-size: 30px; }
 }
 @media (prefers-reduced-motion: reduce) { .mm *, .mm *::after { animation: none !important; transition: none !important; } }
 `
