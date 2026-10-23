@@ -472,6 +472,7 @@ function Logo() {
 
 // ─── Visual (branco, inspirado em lojas premium) ───
 const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Nunito:wght@800;900&display=swap');
 html, body { background: #fff !important; }
 body { display: block !important; place-items: normal !important; margin: 0 !important; min-width: 0 !important; color: #1d1d1f !important; }
 #root { width: 100% !important; max-width: none !important; justify-self: stretch !important; padding: 0 !important; margin: 0 !important; text-align: left !important; }
@@ -480,7 +481,8 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
   -webkit-font-smoothing: antialiased; overflow-x: hidden; padding-bottom: 0; }
 .mm * { box-sizing: border-box; }
 .mm button { all: unset; box-sizing: border-box; cursor: pointer; font-family: inherit; -webkit-tap-highlight-color: transparent; }
-.mm h1, .mm h2, .mm p { margin: 0; }
+.mm h1, .mm h2, .mm h3, .mm p { margin: 0; }
+.mm h1, .mm h2, .mm h3, .mm b, .mm strong, .mm small { color: inherit; font-family: inherit; }
 .mm img { display: block; max-width: 100%; }
 .mm main, .mm-rodape, .mm-busca { max-width: 1100px; margin-left: auto; margin-right: auto; }
 
@@ -505,7 +507,7 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 .mm .mm-hero-slide { display: flex; flex-direction: column; align-items: center; padding: 26px 20px 0; min-height: 360px; animation: mmEntra .6s ease; }
 @keyframes mmEntra { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
 .mm .mm-hero-etiqueta { font-size: 11px; font-weight: 700; color: var(--laranja); letter-spacing: 1.8px; }
-.mm .mm-hero h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.8px; line-height: 1.1; margin-top: 6px; }
+.mm .mm-hero h1 { color: var(--tinta); font-size: 34px; font-weight: 800; letter-spacing: -0.8px; line-height: 1.1; margin-top: 6px; }
 .mm .mm-hero p { font-size: 14px; color: #555; margin-top: 6px; max-width: 320px; }
 .mm .mm-hero-botoes { display: flex; gap: 8px; margin-top: 14px; }
 .mm .mm-btn-laranja { background: var(--laranja); color: #fff; border-radius: 22px; padding: 9px 20px; font-size: 13px; font-weight: 700; }
@@ -534,22 +536,23 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 /* Seções */
 .mm .mm-secao { padding-top: 22px; }
 .mm .mm-secao-topo { display: flex; justify-content: space-between; align-items: baseline; padding: 0 16px 12px; gap: 10px; }
-.mm .mm-secao-topo h2 { font-size: 21px; font-weight: 800; letter-spacing: -0.4px; }
+.mm .mm-secao-topo h2 { color: var(--tinta); font-size: 23px; display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -0.4px; }
+.mm .mm-secao-topo h2::before { content: ''; width: 5px; height: 22px; border-radius: 3px; background: var(--laranja); flex-shrink: 0; }
 .mm .mm-link { color: var(--laranja); font-size: 13px; font-weight: 700; white-space: nowrap; }
 .mm .mm-contador { color: #999; font-size: 13px; }
-.mm .mm-trilho { display: flex; gap: 10px; overflow-x: auto; padding: 0 16px 6px; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.mm .mm-trilho { display: flex; gap: 10px; overflow-x: auto; padding: 0 16px 6px; scroll-padding: 0 16px; scroll-snap-type: x mandatory; scrollbar-width: none; }
 .mm .mm-trilho::-webkit-scrollbar { display: none; }
 
 /* Cartão de produto */
-.mm .mm-card { flex: 0 0 auto; width: 172px; border: 1px solid var(--borda); border-radius: 20px; padding: 10px; background: #fff; scroll-snap-align: start; cursor: pointer; display: flex; flex-direction: column; transition: transform .15s; }
+.mm .mm-card { flex: 0 0 auto; width: 182px; border: 1px solid var(--borda); border-radius: 20px; padding: 10px; background: #fff; scroll-snap-align: start; cursor: pointer; display: flex; flex-direction: column; transition: transform .15s; }
 .mm .mm-card:active { transform: scale(0.98); }
 .mm .mm-card-grade { width: auto; }
 .mm .mm-card-foto { position: relative; height: 140px; background: var(--cinza); border-radius: 14px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .mm .mm-card-foto img { width: 88%; height: 88%; object-fit: contain; mix-blend-mode: multiply; }
 .mm .mm-selo { position: absolute; top: 8px; left: 8px; z-index: 1; color: #fff; font-size: 9px; font-weight: 800; border-radius: 6px; padding: 3px 7px; letter-spacing: .5px; }
 .mm .mm-sem-foto { color: #aaa; font-weight: 700; font-size: 14px; }
-.mm .mm-card-nome { display: block; font-size: 13.5px; font-weight: 700; margin-top: 9px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.mm .mm-card-info { color: #888; font-size: 11.5px; margin-top: 2px; }
+.mm .mm-card-nome { color: var(--tinta); font-size: 15px; font-weight: 700; margin-top: 9px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.mm .mm-card-info { color: #86868b; font-size: 12.5px; margin-top: 2px; }
 .mm .mm-cores { display: flex; gap: 4px; margin: 7px 0 10px; min-height: 11px; flex-wrap: wrap; }
 .mm .mm-cores i { width: 11px; height: 11px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.12); }
 .mm .mm-btn-zap { display: block; width: 100%; text-align: center; background: var(--tinta); color: #fff; border-radius: 18px; padding: 9px 6px; font-size: 12px; font-weight: 700; margin-top: auto; }
@@ -571,7 +574,7 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 .mm .mm-duo b { font-size: 16px; font-weight: 800; line-height: 1.2; }
 .mm .mm-duo small { font-size: 11.5px; position: relative; z-index: 1; }
 .mm .mm-duo-escuro { background: var(--tinta); color: #fff; }
-.mm .mm-duo-escuro small { color: #ff9a55; }
+.mm .mm-duo-escuro small { color: #ff9a55; max-width: 72%; }
 .mm .mm-duo-escuro::after { content: ''; position: absolute; top: 0; left: 0; width: 40%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent); animation: mmBrilho 3.5s ease-in-out infinite; }
 @keyframes mmBrilho { 0% { transform: translateX(-120%) skewX(-20deg) } 60%, 100% { transform: translateX(320%) skewX(-20deg) } }
 .mm .mm-duo-celular { position: absolute; right: -6px; bottom: -16px; width: 58px; height: 108px; border-radius: 14px; background: linear-gradient(160deg, #8a8a8e, #3a3a3c); border: 2px solid #555; }
@@ -598,8 +601,8 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 /* Menu lateral */
 .mm .mm-fundo-menu { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 90; animation: mmFade .2s; }
 @keyframes mmFade { from { opacity: 0 } }
-.mm .mm-menu { position: fixed; top: 0; left: 0; bottom: 0; width: 280px; max-width: 85vw; background: #fff; z-index: 100; transform: translateX(-100%); transition: transform .25s ease; overflow-y: auto; box-shadow: 0 0 40px rgba(0,0,0,0.15); }
-.mm .mm-menu.aberto { transform: none; }
+.mm .mm-menu { position: fixed; top: 0; left: 0; bottom: 0; width: 280px; max-width: 85vw; background: #fff; z-index: 100; transform: translateX(-100%); transition: transform .25s ease; overflow-y: auto; }
+.mm .mm-menu.aberto { transform: none; box-shadow: 0 0 40px rgba(0,0,0,0.15); }
 .mm .mm-menu-topo { display: flex; align-items: center; padding: 14px 12px 10px 16px; border-bottom: 1px solid var(--borda); }
 .mm .mm-menu nav { display: flex; flex-direction: column; padding: 8px; }
 .mm .mm-menu nav button { width: 100%; padding: 13px 12px; border-radius: 12px; font-size: 15px; font-weight: 500; color: var(--tinta); }
@@ -619,7 +622,7 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 .mm .mm-sem-foto-grande { font-size: 24px; }
 .mm .mm-detalhe-info { padding: 14px 20px 10px; }
 .mm .mm-detalhe-marca { color: var(--laranja); font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 2.5px; }
-.mm .mm-detalhe-nome { font-size: 28px; font-weight: 800; letter-spacing: -0.6px; line-height: 1.15; margin-top: 4px; }
+.mm .mm-detalhe-nome { color: var(--tinta); font-size: 30px; font-weight: 800; letter-spacing: -0.6px; line-height: 1.15; margin-top: 4px; }
 .mm .mm-cores-grandes { gap: 12px; margin-top: 12px; }
 .mm .mm-cores-grandes span { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #555; }
 .mm .mm-cores-grandes i { width: 16px; height: 16px; }
