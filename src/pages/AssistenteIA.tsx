@@ -23,6 +23,8 @@ type FotoIA = {
   produto_id: string; cor?: string; confianca?: string; motivo?: string
 }
 
+type Mensagem = { quem: 'eu' | 'ia'; texto: string; fontes?: string[] }
+
 type Props = {
   produtos: ProdutoIA[]
   banners: BannerIA[]
@@ -42,6 +44,25 @@ const EXEMPLOS = [
   'Escreve a descrição dos celulares que estão sem descrição',
   'Tira a promoção de todos os produtos',
 ]
+
+const PERGUNTAS_INICIAIS = [
+  'O que posso melhorar no meu catálogo?',
+  'Quais celulares estão em alta no Brasil agora?',
+  'Quais dos meus produtos eu deveria destacar?',
+  'O que está faltando no meu catálogo?',
+]
+
+const dominio = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, '') } catch { return 'link' } }
+
+// Mostra **negrito** e quebras de linha da resposta da IA
+function formatar(texto: string) {
+  return texto.split('\n').map((linha, i) => (
+    <span key={i} style={{ display: 'block', minHeight: linha.trim() ? undefined : 8 }}>
+      {linha.split(/(\*\*[^*]+\*\*)/g).map((parte, j) =>
+        parte.startsWith('**') && parte.endsWith('**') ? <b key={j} style={{ color: '#fff' }}>{parte.slice(2, -2)}</b> : parte)}
+    </span>
+  ))
+}
 
 const nomeProduto = (p?: ProdutoIA) => p ? [p.marca, p.modelo, p.memoria].filter(Boolean).join(' ') : '(produto não encontrado)'
 
@@ -84,6 +105,13 @@ export default function AssistenteIA({ produtos, banners, ajusteAuto, aoMudar }:
   const [aplicando, setAplicando] = useState(false)
   const [abertas, setAbertas] = useState<number | null>(null)
 
+  // ─── Consultor ───
+  const [conversa, setConversa] = useState<Mensagem[]>([])
+  const [pergunta, setPergunta] = useState('')
+  const [consultando, setConsultando] = useState(false)
+  const [proximas, setProximas] = useState<string[]>([])
+  const [origemAcoes, setOrigemAcoes] = useState<'consultor' | 'comando'>('comando')
+
   // ─── Fotos ───
   const [fotos, setFotos] = useState<FotoIA[]>([])
   const [salvandoFotos, setSalvandoFotos] = useState<{ feitas: number; total: number } | null>(null)
@@ -95,25 +123,15 @@ export default function AssistenteIA({ produtos, banners, ajusteAuto, aoMudar }:
     if (pedido.length < 3) return
     if (texto) setComando(texto)
     setPensando(true); setResposta(''); setAcoes([]); setMarcadas([])
-    const lista = produtos.map(p => ({
-      id: p.id, marca: p.marca, modelo: p.modelo, memoria: p.memoria || null, categoria: p.categoria,
-      cor: p.cor || null, condicao: p.condicao || null,
-      marcacoes: (['destaque', 'lancamento', 'promocao', 'mais_procurado'] as const).filter(c => p[c]),
-      disponivel: p.disponivel !== false, tem_foto: !!p.foto_url, tem_descricao: !!p.descricao,
-    }))
+    const lista = resumoCatalogo()
     const { data, error } = await supabase.functions.invoke('assistente', {
       body: { modo: 'comando', comando: pedido, produtos: lista, banners: banners.map(b => ({ id: b.id, titulo: b.titulo || '(foto sem texto)', ativo: b.ativo })) },
     })
     setPensando(false)
     if (error) { setResposta('❌ ' + await mensagemDeErro(error)); return }
     if (data?.error) { setResposta('❌ ' + data.error); return }
-    const validas = ((data?.acoes || []) as Acao[]).filter(a => {
-      if (a.tipo === 'marcar') return Array.isArray(a.ids) && a.ids.some(id => porId(id)) && a.campo in NOME_CAMPO
-      if (a.tipo === 'editar') return !!porId(a.id) && a.campos && typeof a.campos === 'object'
-      if (a.tipo === 'banner') return !!porId(a.produto_id)
-      if (a.tipo === 'desativar_banner') return banners.some(b => b.id === a.id)
-      return false
-    })
+    const validas = filtrarAcoes((data?.acoes || []) as Acao[])
+    setOrigemAcoes('comando')
     setResposta(data?.resposta || (validas.length ? 'Pronto, confere abaixo:' : 'Não entendi o que fazer.'))
     setAcoes(validas)
     setMarcadas(validas.map(() => true))
@@ -175,8 +193,10 @@ export default function AssistenteIA({ produtos, banners, ajusteAuto, aoMudar }:
     setAplicando(false)
     aoMudar()
     if (erros) alert(`${erros} ação(ões) não foram aplicadas.`)
-    setResposta(erros ? 'Algumas ações deram erro.' : '✅ Feito! O catálogo já está atualizado.')
-    setAcoes([]); setMarcadas([]); setComando('')
+    const fim = erros ? 'Algumas ações deram erro.' : '✅ Feito! O catálogo já está atualizado.'
+    if (origemAcoes === 'consultor') setConversa(prev => [...prev, { quem: 'ia', texto: fim }])
+    else { setResposta(fim); setComando('') }
+    setAcoes([]); setMarcadas([])
   }
 
   // ─── Fotos com IA ───
@@ -249,31 +269,59 @@ export default function AssistenteIA({ produtos, banners, ajusteAuto, aoMudar }:
     if (erros) alert(`${erros} foto(s) não foram salvas. Tente de novo.`)
   }
 
+  function resumoCatalogo() {
+    return produtos.map(p => ({
+      id: p.id, marca: p.marca, modelo: p.modelo, memoria: p.memoria || null, categoria: p.categoria,
+      cor: p.cor || null, condicao: p.condicao || null,
+      marcacoes: (['destaque', 'lancamento', 'promocao', 'mais_procurado'] as const).filter(c => p[c]),
+      disponivel: p.disponivel !== false, tem_foto: !!p.foto_url, tem_descricao: !!p.descricao,
+    }))
+  }
+
+  function filtrarAcoes(lista: Acao[]) {
+    return lista.filter(a => {
+      if (a.tipo === 'marcar') return Array.isArray(a.ids) && a.ids.some(id => porId(id)) && a.campo in NOME_CAMPO
+      if (a.tipo === 'editar') return !!porId(a.id) && a.campos && typeof a.campos === 'object'
+      if (a.tipo === 'banner') return !!porId(a.produto_id)
+      if (a.tipo === 'desativar_banner') return banners.some(b => b.id === a.id)
+      return false
+    })
+  }
+
+  async function perguntar(texto?: string) {
+    const q = (texto ?? pergunta).trim()
+    if (q.length < 3 || consultando) return
+    const historico = conversa
+    setConversa(prev => [...prev, { quem: 'eu', texto: q }])
+    setPergunta(''); setProximas([]); setConsultando(true)
+    const { data, error } = await supabase.functions.invoke('assistente', {
+      body: {
+        modo: 'consultor', pergunta: q,
+        historico: historico.map(m => ({ quem: m.quem, texto: m.texto })),
+        produtos: resumoCatalogo(),
+        banners: banners.map(b => ({ id: b.id, titulo: b.titulo || '(foto sem texto)', ativo: b.ativo })),
+      },
+    })
+    setConsultando(false)
+    if (error || data?.error) {
+      const msg = error ? await mensagemDeErro(error) : data.error
+      setConversa(prev => [...prev, { quem: 'ia', texto: '❌ ' + msg }])
+      return
+    }
+    setConversa(prev => [...prev, { quem: 'ia', texto: data?.resposta || 'Não consegui responder, tente de novo.', fontes: data?.fontes || [] }])
+    setProximas(((data?.proximas_perguntas || []) as string[]).slice(0, 3))
+    const validas = filtrarAcoes((data?.acoes || []) as Acao[])
+    if (validas.length) {
+      setOrigemAcoes('consultor'); setAcoes(validas); setMarcadas(validas.map(() => true)); setResposta('')
+    }
+  }
+
   const ordenados = [...produtos].sort((a, b) => (a.foto_url ? 1 : 0) - (b.foto_url ? 1 : 0) || nomeProduto(a).localeCompare(nomeProduto(b)))
   const fotosParaSalvar = fotos.filter(f => f.status !== 'lendo' && f.status !== 'salva' && f.produto_id).length
   const lendo = fotos.some(f => f.status === 'lendo')
 
-  return (
-    <div style={{ padding: '20px 16px', boxSizing: 'border-box', width: '100%' }}>
-      {/* ─── Pedido ─── */}
-      <h2 style={titulo}>🤖 Assistente IA</h2>
-      <p style={ajuda}>Escreva o que você quer mudar no catálogo. A IA prepara, você confere e aplica.</p>
-      <textarea style={caixaTexto} rows={3} placeholder="Ex: coloca em destaque todos da Xiaomi e Realme"
-        value={comando} onChange={e => setComando(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarComando() } }} />
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-        {EXEMPLOS.map(ex => (
-          <button key={ex} style={chip} onClick={() => enviarComando(ex)} disabled={pensando}>{ex}</button>
-        ))}
-      </div>
-      <button style={{ ...btnLaranja, opacity: pensando || comando.trim().length < 3 ? 0.5 : 1 }}
-        disabled={pensando || comando.trim().length < 3} onClick={() => enviarComando()}>
-        {pensando ? '🤖 Pensando...' : 'Enviar para a IA'}
-      </button>
+  const blocoAcoes = acoes.length > 0 && (
 
-      {resposta && <div style={caixaResposta}>{resposta}</div>}
-
-      {acoes.length > 0 && (
         <div style={{ marginTop: 12 }}>
           {acoes.map((a, i) => {
             const det = detalhesAcao(a)
@@ -313,7 +361,81 @@ export default function AssistenteIA({ produtos, banners, ajusteAuto, aoMudar }:
             <button style={btnCinza} onClick={() => { setAcoes([]); setResposta('') }}>Cancelar</button>
           </div>
         </div>
+  )
+
+  return (
+    <div style={{ padding: '20px 16px', boxSizing: 'border-box', width: '100%' }}>
+      {/* ─── Consultor ─── */}
+      <h2 style={titulo}>💡 Consultor do catálogo</h2>
+      <p style={ajuda}>Pergunte o que quiser: o que melhorar, o que está em alta no mercado, o que destacar ou comprar. Ela pesquisa na internet e analisa o seu catálogo.</p>
+
+      {conversa.length === 0 && !consultando && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+          {PERGUNTAS_INICIAIS.map(q => <button key={q} style={chip} onClick={() => perguntar(q)}>{q}</button>)}
+        </div>
       )}
+
+      {conversa.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+          {conversa.map((m, i) => (
+            <div key={i} style={m.quem === 'eu' ? balaoEu : balaoIa}>
+              {m.quem === 'eu' ? m.texto : formatar(m.texto)}
+              {!!m.fontes?.length && (
+                <p style={{ margin: '10px 0 0', fontSize: 11, color: '#777' }}>
+                  Fontes: {m.fontes.slice(0, 4).map((f, j) => (
+                    <a key={j} href={f} target="_blank" rel="noreferrer" style={{ color: '#4a9aff', marginRight: 8 }}>{dominio(f)}</a>
+                  ))}
+                </p>
+              )}
+            </div>
+          ))}
+          {consultando && <div style={{ ...balaoIa, color: '#aaa' }}>🔎 Pesquisando o mercado e analisando seu catálogo...</div>}
+        </div>
+      )}
+
+      {origemAcoes === 'consultor' && blocoAcoes && (
+        <div style={{ marginBottom: 12 }}>
+          <p style={{ ...ajuda, margin: '0 0 -4px', color: '#ffb27a' }}>👇 Sugestões que posso aplicar agora:</p>
+          {blocoAcoes}
+        </div>
+      )}
+
+      {proximas.length > 0 && !consultando && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+          {proximas.map(q => <button key={q} style={chip} onClick={() => perguntar(q)}>{q}</button>)}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+        <textarea style={{ ...caixaTexto, marginBottom: 0, flex: 1 }} rows={2} placeholder="Ex: o que ficaria melhor no meu catálogo?"
+          value={pergunta} onChange={e => setPergunta(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); perguntar() } }} />
+        <button style={{ ...btnLaranja, width: 56, padding: '14px 0', opacity: consultando || pergunta.trim().length < 3 ? 0.5 : 1 }}
+          disabled={consultando || pergunta.trim().length < 3} onClick={() => perguntar()}>➤</button>
+      </div>
+      {conversa.length > 0 && !consultando && (
+        <button style={{ ...btnVerMais, padding: '10px 0 0' }} onClick={() => { setConversa([]); setProximas([]); if (origemAcoes === 'consultor') setAcoes([]) }}>↺ Nova conversa</button>
+      )}
+
+      {/* ─── Pedido ─── */}
+      <h2 style={{ ...titulo, marginTop: 36 }}>⚡ Mudanças rápidas</h2>
+      <p style={ajuda}>Escreva o que você quer mudar no catálogo. A IA prepara, você confere e aplica.</p>
+      <textarea style={caixaTexto} rows={3} placeholder="Ex: coloca em destaque todos da Xiaomi e Realme"
+        value={comando} onChange={e => setComando(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarComando() } }} />
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+        {EXEMPLOS.map(ex => (
+          <button key={ex} style={chip} onClick={() => enviarComando(ex)} disabled={pensando}>{ex}</button>
+        ))}
+      </div>
+      <button style={{ ...btnLaranja, opacity: pensando || comando.trim().length < 3 ? 0.5 : 1 }}
+        disabled={pensando || comando.trim().length < 3} onClick={() => enviarComando()}>
+        {pensando ? '🤖 Pensando...' : 'Enviar para a IA'}
+      </button>
+
+      {resposta && <div style={caixaResposta}>{resposta}</div>}
+
+      {origemAcoes === 'comando' && blocoAcoes}
 
       {/* ─── Fotos ─── */}
       <h2 style={{ ...titulo, marginTop: 36 }}>📷 Fotos com IA</h2>
@@ -321,7 +443,7 @@ export default function AssistenteIA({ produtos, banners, ajusteAuto, aoMudar }:
       <label style={caixaUpload}>
         📸 Escolher fotos da galeria
         <input type="file" accept="image/*" multiple style={{ display: 'none' }}
-          onChange={e => { const l = Array.from(e.target.files || []); e.target.value = ''; escolherFotos(l) }} />
+          onChange={e => { const l = Array.from(e.target.files || []) as File[]; e.target.value = ''; escolherFotos(l) }} />
       </label>
 
       {fotos.length > 0 && (
@@ -376,4 +498,6 @@ const previewBanner: React.CSSProperties = { display: 'flex', alignItems: 'cente
 const caixaUpload: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, border: '2px dashed #333', borderRadius: 12, marginBottom: 14, cursor: 'pointer', background: '#0f0f0f', color: '#ccc', fontSize: 15, fontWeight: 600 }
 const cartaoFoto: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, background: '#0f0f0f', border: '1px solid #222', borderRadius: 12, padding: 10 }
 const seletor: React.CSSProperties = { width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid #2a2a2a', background: '#151515', color: 'white', fontSize: 14, boxSizing: 'border-box' }
+const balaoEu: React.CSSProperties = { alignSelf: 'flex-end', maxWidth: '85%', background: '#ff6600', color: '#fff', borderRadius: '16px 16px 4px 16px', padding: '10px 14px', fontSize: 14, lineHeight: 1.45 }
+const balaoIa: React.CSSProperties = { alignSelf: 'flex-start', maxWidth: '100%', background: '#151515', border: '1px solid #262626', color: '#ddd', borderRadius: '16px 16px 16px 4px', padding: '12px 14px', fontSize: 14, lineHeight: 1.55, boxSizing: 'border-box' }
 const btnRemover: React.CSSProperties = { background: '#2a0d0d', border: '1px solid #5a1a1a', color: '#ff6b6b', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', flexShrink: 0 }
