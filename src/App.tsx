@@ -108,6 +108,12 @@ const IconeSacola = ({ tamanho = 26 }: { tamanho?: number }) => (
     <path d="M5 8h14l-1.2 11.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8L5 8Z" /><path d="M9 10V7a3 3 0 0 1 6 0v3" />
   </svg>
 )
+const IconeVs = ({ tamanho = 22 }: { tamanho?: number }) => (
+  <svg width={tamanho * 1.45} height={tamanho} viewBox="0 0 32 22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <rect x="1" y="2" width="9" height="18" rx="2.2" /><rect x="22" y="2" width="9" height="18" rx="2.2" />
+    <text x="16" y="14.5" textAnchor="middle" fontSize="7.5" fontWeight="800" fill="currentColor" stroke="none" fontFamily="Poppins, Arial, sans-serif">VS</text>
+  </svg>
+)
 const IconeWhats = ({ tamanho = 20 }: { tamanho?: number }) => (
   <svg width={tamanho} height={tamanho} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.2 2.2 2.2 0 0 0 .2-1.2c-.1-.1-.2-.2-.4-.3Z" /></svg>
 )
@@ -374,7 +380,7 @@ function App() {
               <div><span>💳</span><p><b>Até {PARCELAS}x</b>no cartão</p></div>
               <div onClick={() => navigate('/entrada')}><span>⇄</span><p><b>Seu usado</b>vale como entrada</p></div>
             </div>
-            <button className="mm-btn-contorno" onClick={() => navigate('/comparar')}>⚖ Comparar com outro celular</button>
+            <button className="mm-btn-contorno" onClick={() => navigate('/comparar')}><span className="mm-com-icone"><IconeVs /> Comparar com outro celular</span></button>
           </div>
         </main>
         <div className="mm-barra-fixa mm-barra-dupla">
@@ -408,7 +414,7 @@ function App() {
         <nav>
           <button onClick={() => { limparFiltros(); setMenuAberto(false); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>⌂ Início</button>
           <button onClick={() => aplicarFiltro({ categoria: 'Celulares' })}>📱 Celulares</button>
-          <button onClick={() => navigate('/comparar')}>⚖ Comparar celulares</button>
+          <button onClick={() => navigate('/comparar')}><span className="mm-com-icone"><IconeVs tamanho={18} /> Comparar celulares</span></button>
           <button onClick={() => navigate('/entrada')}>⇄ Avaliar meu usado</button>
           <button onClick={() => navigate('/capas')}>🛡 Capinhas</button>
           <button onClick={() => { setMenuAberto(false); setSacolaAberta(true) }}>🛍 Minha sacola{sacola.length ? ` (${sacola.length})` : ''}</button>
@@ -463,7 +469,8 @@ function App() {
                 <button className={!marcaAtiva ? 'on' : ''} onClick={() => setMarcaAtiva(null)}><span className="mm-todas">Todas</span></button>
                 {marcasDaCategoria.map(m => (
                   <button key={m.nome} className={mesmaMarca(marcaAtiva, m.nome) ? 'on' : ''} onClick={() => setMarcaAtiva(mesmaMarca(marcaAtiva, m.nome) ? null : m.nome)}>
-                    <img src={m.img} alt={m.nome} />
+                    <img src={m.img} alt="" />
+                    <small>{m.nome}</small>
                   </button>
                 ))}
               </div>
@@ -551,7 +558,11 @@ function App() {
                   <small>Use como entrada no seu novo ›</small>
                 </button>
                 <button className="mm-duo-claro" onClick={() => navigate('/comparar')}>
-                  <span className="mm-duo-bola">⚖</span>
+                  <span className="mm-duo-vs">
+                    <img src="/comparar-iphone.png" alt="iPhone" />
+                    <i>VS</i>
+                    <img src="/comparar-samsung.png" alt="Samsung" />
+                  </span>
                   <b>Compare celulares</b>
                   <small>Veja qual é o melhor ›</small>
                 </button>
@@ -583,7 +594,8 @@ function App() {
             <div className="mm-marcas">
               {marcas.map(m => (
                 <button key={m.nome} onClick={() => aplicarFiltro({ marca: m.nome })}>
-                  <img src={m.img} alt={m.nome} />
+                  <img src={m.img} alt="" />
+                  <small>{m.nome}</small>
                 </button>
               ))}
             </div>
@@ -732,15 +744,17 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 .mm .mm-escolha-marca p { font-size: 15px; font-weight: 700; color: #6e6e73; margin-bottom: 10px; }
 .mm .mm-marcas-linha { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
 .mm .mm-marcas-linha::-webkit-scrollbar { display: none; }
-.mm .mm-marcas-linha button { flex: 0 0 auto; width: 104px; height: 64px; border-radius: 18px; background: var(--cinza); border: 2px solid transparent; display: flex; align-items: center; justify-content: center; padding: 12px; transition: all .2s; }
+.mm .mm-marcas-linha button { flex: 0 0 auto; width: 118px; height: 96px; border-radius: 20px; background: var(--cinza); border: 2px solid transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 10px; transition: all .2s; }
 .mm .mm-marcas-linha button.on { background: #fff; border-color: var(--laranja); box-shadow: 0 6px 16px rgba(255,102,0,0.18); }
-.mm .mm-marcas-linha img { max-height: 32px; max-width: 100%; object-fit: contain; filter: grayscale(1) brightness(0.3); }
-.mm .mm-marcas-linha button.on img { filter: none; }
+.mm .mm-marcas-linha img, .mm .mm-marcas img { width: 100%; height: 44px; object-fit: contain; filter: grayscale(1) brightness(0.25) contrast(1.4); transform: scale(1.35); }
+.mm .mm-marcas-linha small, .mm .mm-marcas small { font-size: 14px; font-weight: 700; color: var(--tinta); }
+.mm .mm-marcas-linha button.on small { color: var(--laranja); }
+.mm .mm-com-icone { display: inline-flex; align-items: center; gap: 8px; }
 .mm .mm-todas { font-size: 15px; font-weight: 800; color: var(--tinta); }
 
 /* Cartões duplos */
 .mm .mm-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 28px 16px 0; }
-.mm .mm-duo button { position: relative; overflow: hidden; border-radius: 22px; padding: 18px 16px; min-height: 180px; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; }
+.mm .mm-duo button { position: relative; overflow: hidden; border-radius: 22px; padding: 18px 16px; min-height: 210px; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; }
 .mm .mm-duo b { font-size: 19px; font-weight: 800; line-height: 1.2; position: relative; z-index: 1; }
 .mm .mm-duo small { font-size: 14px; line-height: 1.35; position: relative; z-index: 1; }
 .mm .mm-duo-bola { position: absolute; top: 16px; left: 16px; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 25px; font-weight: 900; }
@@ -754,12 +768,16 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 @keyframes mmPulso { 0%, 100% { transform: scale(1) } 50% { transform: scale(1.1) } }
 .mm .mm-duo-claro { background: #fff3ea; color: var(--tinta); }
 .mm .mm-duo-claro .mm-duo-bola { background: #fff; color: var(--laranja); }
+.mm .mm-duo-vs { position: absolute; top: 12px; left: 8px; right: 8px; height: 88px; display: flex; align-items: center; justify-content: center; }
+.mm .mm-duo-vs img { height: 100%; width: auto; max-width: 46%; object-fit: contain; filter: drop-shadow(0 6px 8px rgba(0,0,0,0.15)); }
+.mm .mm-duo-vs img:first-child { transform: rotate(-6deg); }
+.mm .mm-duo-vs img:last-child { transform: rotate(6deg); }
+.mm .mm-duo-vs i { position: relative; z-index: 1; margin: 0 -10px; width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%; background: var(--laranja); color: #fff; font-style: normal; font-size: 13px; font-weight: 900; display: flex; align-items: center; justify-content: center; border: 3px solid #fff3ea; animation: mmPulso 1.6s ease-in-out infinite; }
 .mm .mm-duo-claro small { color: #d4560a; }
 
 /* Marcas */
 .mm .mm-marcas { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0 16px 28px; }
-.mm .mm-marcas button { background: var(--cinza); border-radius: 18px; height: 66px; display: flex; align-items: center; justify-content: center; padding: 12px; }
-.mm .mm-marcas img { max-height: 34px; max-width: 85%; object-fit: contain; filter: grayscale(1) brightness(0.3); }
+.mm .mm-marcas button { background: var(--cinza); border-radius: 20px; height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 10px; }
 .mm .mm-ver-mais { display: block; width: calc(100% - 32px); margin: 16px 16px 0; text-align: center; }
 
 /* Rodapé */

@@ -30,7 +30,7 @@ const ETAPAS = [
   '🔎 Pesquisando o primeiro celular...',
   '🔎 Pesquisando o segundo celular...',
   '📋 Conferindo a ficha técnica...',
-  '⚖ Comparando ponto a ponto...',
+  '📊 Comparando ponto a ponto...',
   '✍️ Montando o resultado...',
 ]
 
@@ -108,7 +108,12 @@ export default function Comparar() {
       <button style={s.back} onClick={() => navigate('/')}>← Voltar</button>
 
       <div style={s.header}>
-        <h1 style={s.titulo}>⚖ Comparar Celulares</h1>
+        <div style={s.vsTopo}>
+          <img src="/comparar-iphone.png" alt="" style={{ ...s.vsImg, transform: 'rotate(-6deg)' }} />
+          <span style={s.vsBola}>VS</span>
+          <img src="/comparar-samsung.png" alt="" style={{ ...s.vsImg, transform: 'rotate(6deg)' }} />
+        </div>
+        <h1 style={s.titulo}>Comparar Celulares</h1>
         <p style={s.subtitulo}>Digite dois modelos e veja qual é o melhor pra você</p>
       </div>
 
@@ -130,7 +135,7 @@ export default function Comparar() {
 
       {!res && (
         <button style={{ ...s.btnComparar, opacity: carregando ? 0.7 : 1 }} onClick={comparar} disabled={carregando}>
-          {carregando ? '⏳ Comparando...' : '⚖ Comparar agora'}
+          {carregando ? '⏳ Comparando...' : 'Comparar agora'}
         </button>
       )}
 
@@ -246,7 +251,7 @@ export default function Comparar() {
           {/* Ações */}
           <button style={s.btnZap} onClick={() => tenhoInteresse(nome1)}>💬 Tenho interesse no {nome1}</button>
           <button style={s.btnZap} onClick={() => tenhoInteresse(nome2)}>💬 Tenho interesse no {nome2}</button>
-          <button style={s.btnNova} onClick={novaComparacao}>⚖ Comparar outros celulares</button>
+          <button style={s.btnNova} onClick={novaComparacao}>Comparar outros celulares</button>
 
           {res.fontes && res.fontes.length > 0 && (
             <p style={s.fontes}>
@@ -261,6 +266,9 @@ export default function Comparar() {
 }
 
 const s: Record<string, React.CSSProperties> = {
+  vsTopo: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: 120, marginBottom: 14 },
+  vsImg: { height: '100%', width: 'auto', maxWidth: '40%', objectFit: 'contain', filter: 'drop-shadow(0 8px 12px rgba(0,0,0,0.15))' },
+  vsBola: { position: 'relative', zIndex: 1, margin: '0 -12px', width: 44, height: 44, flexShrink: 0, borderRadius: '50%', background: '#ff6600', color: '#fff', fontSize: 15, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '4px solid #fff' },
   page: { minHeight: '100vh', background: '#fff', color: '#1d1d1f', fontFamily: 'Poppins, -apple-system, sans-serif', padding: '20px 16px 60px', width: '100%', maxWidth: 720, margin: '0 auto', boxSizing: 'border-box', overflowX: 'hidden', textAlign: 'left' },
   back: { background: '#f5f5f7', border: 'none', color: '#ff6600', padding: '11px 20px', borderRadius: 22, cursor: 'pointer', fontWeight: 700, fontSize: 15, marginBottom: 24, display: 'block', fontFamily: 'inherit' },
   header: { textAlign: 'center', marginBottom: 26 },
