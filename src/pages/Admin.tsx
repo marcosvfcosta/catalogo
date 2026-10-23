@@ -132,10 +132,6 @@ const CORES_HEX: Record<string, string> = {
 
 export default function Admin() {
   const navigate = useNavigate()
-  const [logado, setLogado] = useState(false)
-  const [login, setLogin] = useState('')
-  const [senha, setSenha] = useState('')
-  const [erroLogin, setErroLogin] = useState('')
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [aba, setAba] = useState<'cadastrar' | 'lista' | 'capas' | 'aparelhos' | 'hero'>('cadastrar')
   const [uploadandoHero, setUploadandoHero] = useState(false)
@@ -193,8 +189,8 @@ export default function Admin() {
   })
 
   useEffect(() => {
-    if (logado) { carregarProdutos(); carregarHeroImagens(); carregarAparelhos(); carregarCapas() }
-  }, [logado])
+    carregarProdutos(); carregarHeroImagens(); carregarAparelhos(); carregarCapas()
+  }, [])
 
   async function carregarProdutos() {
     const { data } = await supabase.from('produtos_catalogo').select('*').order('created_at', { ascending: false })
@@ -463,14 +459,6 @@ export default function Admin() {
     await supabase.storage.from('hero').remove([nomeArquivo!])
     await supabase.from('hero_imagens').delete().eq('id', id)
     carregarHeroImagens()
-  }
-
-  function fazerLogin() {
-    if (login === 'Admin' && senha === '1020') {
-      setLogado(true); setErroLogin('')
-    } else {
-      setErroLogin('Login ou senha incorretos!')
-    }
   }
 
   async function salvarProduto() {
@@ -782,26 +770,6 @@ export default function Admin() {
     </label>
   )
 
-  if (!logado) {
-    return (
-      <div style={loginPage}>
-        <div style={loginBox}>
-          <div style={{ textAlign: 'center', marginBottom: 4 }}>
-            <span style={logoMarcas}>Marcos</span>
-            <span style={logoMag}>Magazine</span>
-          </div>
-          <p style={loginSub}>Painel Administrativo</p>
-          <input style={inputStyle} placeholder="Login" value={login} onChange={e => setLogin(e.target.value)} />
-          <input style={inputStyle} placeholder="Senha" type="password" value={senha}
-            onChange={e => setSenha(e.target.value)} onKeyDown={e => e.key === 'Enter' && fazerLogin()} />
-          {erroLogin && <p style={{ color: '#ff4444', fontSize: 13, textAlign: 'center' }}>{erroLogin}</p>}
-          <button style={btnLogin} onClick={fazerLogin}>Entrar</button>
-          <button style={btnVoltar} onClick={() => navigate('/')}>← Voltar ao catálogo</button>
-        </div>
-      </div>
-    )
-  }
-
   if (editando) {
     return (
       <div style={adminPage}>
@@ -883,7 +851,7 @@ export default function Admin() {
         <div><span style={logoMarcas}>Marcos</span><span style={{ ...logoMag, display: 'inline', marginLeft: 4 }}> Magazine</span></div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button style={btnSecundario} onClick={() => navigate('/')}>Ver catálogo</button>
-          <button style={btnSecundario} onClick={() => setLogado(false)}>Sair</button>
+          <button style={btnSecundario} onClick={() => supabase.auth.signOut()}>Sair</button>
         </div>
       </div>
 
@@ -1398,13 +1366,8 @@ export default function Admin() {
   )
 }
 
-const loginPage: React.CSSProperties = { minHeight: '100vh', background: '#050505', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 20, overflowX: 'hidden' }
-const loginBox: React.CSSProperties = { background: '#0f0f0f', border: '1px solid #222', borderRadius: 20, padding: 32, width: '100%', maxWidth: 380, display: 'flex', flexDirection: 'column', gap: 12 }
 const logoMarcas: React.CSSProperties = { color: '#ff6600', fontSize: 32, fontWeight: 900, fontFamily: 'Nunito, sans-serif', display: 'block', textAlign: 'center' }
 const logoMag: React.CSSProperties = { color: '#ff6600', fontSize: 16, fontWeight: 700, fontFamily: 'Nunito, sans-serif', display: 'block', textAlign: 'center', marginTop: -6, opacity: 0.85 }
-const loginSub: React.CSSProperties = { color: '#666', fontSize: 13, textAlign: 'center', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 2 }
-const btnLogin: React.CSSProperties = { background: '#ff6600', color: 'white', border: 'none', borderRadius: 10, padding: '14px', fontSize: 16, fontWeight: 700, cursor: 'pointer', marginTop: 4 }
-const btnVoltar: React.CSSProperties = { background: 'none', color: '#666', border: '1px solid #222', borderRadius: 10, padding: '12px', fontSize: 14, cursor: 'pointer' }
 const adminPage: React.CSSProperties = { minHeight: '100vh', background: '#050505', color: 'white', paddingBottom: 40, overflowX: 'hidden', maxWidth: '100vw' }
 const adminHeader: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: '#080808', borderBottom: '1px solid #1a1a1a', position: 'sticky', top: 0, zIndex: 100 }
 const abasContainer: React.CSSProperties = { display: 'flex', gap: 0, borderBottom: '1px solid #1a1a1a', overflowX: 'auto' }

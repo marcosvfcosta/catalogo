@@ -8,6 +8,7 @@ import Loja from './pages/Loja.tsx'
 import Negociacao from './pages/Negociacao'
 import AvaliacaoEntrada from './pages/AvaliacaoEntrada'
 import Capas from './pages/Capas'
+import Protegido from './components/Protegido'
 import './index.css'
 
 createRoot(document.getElementById('root')!).render(
@@ -15,10 +16,10 @@ createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<App />} />
-        <Route path="/admin" element={<Admin />} />
+        <Route path="/admin" element={<Protegido papel="admin"><Admin /></Protegido>} />
         <Route path="/comparar" element={<Comparar />} />
         <Route path="/loja" element={<Loja />} />
-        <Route path="/negociacao" element={<Negociacao />} />
+        <Route path="/negociacao" element={<Protegido papel="negociacao"><Negociacao /></Protegido>} />
         <Route path="/entrada" element={<AvaliacaoEntrada />} />
         <Route path="/capas" element={<Capas />} />
       </Routes>
