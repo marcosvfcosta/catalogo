@@ -469,8 +469,7 @@ function App() {
                 <button className={!marcaAtiva ? 'on' : ''} onClick={() => setMarcaAtiva(null)}><span className="mm-todas">Todas</span></button>
                 {marcasDaCategoria.map(m => (
                   <button key={m.nome} className={mesmaMarca(marcaAtiva, m.nome) ? 'on' : ''} onClick={() => setMarcaAtiva(mesmaMarca(marcaAtiva, m.nome) ? null : m.nome)}>
-                    <img src={m.img} alt="" />
-                    <small>{m.nome}</small>
+                    <img src={m.img} alt={m.nome} />
                   </button>
                 ))}
               </div>
@@ -594,8 +593,7 @@ function App() {
             <div className="mm-marcas">
               {marcas.map(m => (
                 <button key={m.nome} onClick={() => aplicarFiltro({ marca: m.nome })}>
-                  <img src={m.img} alt="" />
-                  <small>{m.nome}</small>
+                  <img src={m.img} alt={m.nome} />
                 </button>
               ))}
             </div>
@@ -744,11 +742,9 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 .mm .mm-escolha-marca p { font-size: 15px; font-weight: 700; color: #6e6e73; margin-bottom: 10px; }
 .mm .mm-marcas-linha { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
 .mm .mm-marcas-linha::-webkit-scrollbar { display: none; }
-.mm .mm-marcas-linha button { flex: 0 0 auto; width: 118px; height: 96px; border-radius: 20px; background: var(--cinza); border: 2px solid transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 10px; transition: all .2s; }
+.mm .mm-marcas-linha button { flex: 0 0 auto; width: 124px; height: 84px; border-radius: 20px; background: var(--cinza); border: 2px solid transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 10px; transition: all .2s; }
 .mm .mm-marcas-linha button.on { background: #fff; border-color: var(--laranja); box-shadow: 0 6px 16px rgba(255,102,0,0.18); }
-.mm .mm-marcas-linha img, .mm .mm-marcas img { width: 100%; height: 44px; object-fit: contain; filter: grayscale(1) brightness(0.25) contrast(1.4); transform: scale(1.35); }
-.mm .mm-marcas-linha small, .mm .mm-marcas small { font-size: 14px; font-weight: 700; color: var(--tinta); }
-.mm .mm-marcas-linha button.on small { color: var(--laranja); }
+.mm .mm-marcas-linha img, .mm .mm-marcas img { width: 100%; height: 56px; object-fit: contain; filter: grayscale(1) brightness(0.25) contrast(1.4); transform: scale(1.3); }
 .mm .mm-com-icone { display: inline-flex; align-items: center; gap: 8px; }
 .mm .mm-todas { font-size: 15px; font-weight: 800; color: var(--tinta); }
 
@@ -777,7 +773,7 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 
 /* Marcas */
 .mm .mm-marcas { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0 16px 28px; }
-.mm .mm-marcas button { background: var(--cinza); border-radius: 20px; height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 10px; }
+.mm .mm-marcas button { background: var(--cinza); border-radius: 20px; height: 84px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 10px; }
 .mm .mm-ver-mais { display: block; width: calc(100% - 32px); margin: 16px 16px 0; text-align: center; }
 
 /* Rodapé */
