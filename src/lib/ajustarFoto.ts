@@ -57,10 +57,18 @@ export async function ajustarFoto(original: File): Promise<FotoAjustada> {
       gr.r += px[i]; gr.g += px[i + 1]; gr.b += px[i + 2]; gr.n++
       grupos.set(k, gr)
     }
-    const coresFundo = Array.from(grupos.values())
-      .filter(gr => gr.n / amostras.length >= 0.08)
-      .sort((x, y) => y.n - x.n).slice(0, 3)
-      .map(gr => [gr.r / gr.n, gr.g / gr.n, gr.b / gr.n])
+    // Só aceita como fundo: a cor principal da borda (se for clara, ou se cobrir quase toda a borda)
+    // e, além dela, apenas cores claras e neutras (ex: barra cinza de um print).
+    // Isso evita apagar o próprio aparelho quando ele encosta na borda da foto.
+    const ordenados = Array.from(grupos.values()).sort((x, y) => y.n - x.n)
+      .map(gr => ({ r: gr.r / gr.n, g: gr.g / gr.n, b: gr.b / gr.n, parte: gr.n / amostras.length }))
+    const claroNeutro = (c: { r: number; g: number; b: number }) =>
+      Math.min(c.r, c.g, c.b) > 170 && Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b) < 40
+    const principal = ordenados[0]
+    const principalOk = !!principal && (claroNeutro(principal) ? principal.parte >= 0.35 : principal.parte >= 0.85)
+    const coresFundo = principalOk
+      ? [principal, ...ordenados.slice(1, 3).filter(c => c.parte >= 0.08 && claroNeutro(c))].map(c => [c.r, c.g, c.b])
+      : []
     const dist = (i: number) => Math.min(...coresFundo.map(([r, g, b]) =>
       Math.abs(px[i] - r) + Math.abs(px[i + 1] - g) + Math.abs(px[i + 2] - b)))
     const bordasLisas = coresFundo.length > 0 && amostras.filter(i => dist(i) < TOLERANCIA).length / amostras.length > 0.75
