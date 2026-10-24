@@ -6,11 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Marcos Magazine" />
     <meta name="theme-color" content="#050505" />
     <link rel="icon" type="image/png" href="/favicon.png?v=3" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=3" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <script>
+      // Ícone na Tela de Início: na Negociação abre a Negociação; no resto abre o catálogo
+      (function () {
+        var neg = location.pathname.indexOf('/negociacao') === 0
+        document.write(
+          '<link rel="manifest" href="' + (neg ? '/manifest-negociacao.webmanifest' : '/manifest.webmanifest') + '" />' +
+          '<meta name="apple-mobile-web-app-title" content="' + (neg ? 'Negociação' : 'Marcos Magazine') + '" />'
+        )
+      })()
+    </script>
     <title>Marcos Magazine</title>
   </head>
   <body>
