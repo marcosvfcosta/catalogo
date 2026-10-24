@@ -64,6 +64,14 @@ function formatar(texto: string) {
   ))
 }
 
+// Ajusta a cor que a IA viu para o nome usado no produto (ex: "preto fosco" → "Preto")
+function casarCor(p: ProdutoIA | undefined, cor?: string | null) {
+  if (!cor) return null
+  const n = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+  const opcoes = (p?.cor || '').split(/[,/;]| e /).map(c => c.trim()).filter(Boolean)
+  return opcoes.find(o => n(o) === n(cor)) || opcoes.find(o => n(cor).includes(n(o)) || n(o).includes(n(cor))) || cor
+}
+
 const nomeProduto = (p?: ProdutoIA) => p ? [p.marca, p.modelo, p.memoria].filter(Boolean).join(' ') : '(produto não encontrado)'
 
 // Reduz a foto para mandar à IA (mais rápido e barato)
@@ -256,6 +264,7 @@ export default function AssistenteIA({ produtos, banners, ajusteAuto, aoMudar }:
         const temCapa = !!p?.foto_url || capaLocal[f.produto_id]
         if (!temCapa) {
           const { error } = await supabase.from('produtos_catalogo').update({ foto_url: url }).eq('id', f.produto_id)
+          if (f.cor) await supabase.from('produtos_catalogo').update({ foto_cor: casarCor(p, f.cor) }).eq('id', f.produto_id)
           if (error) throw error
           capaLocal[f.produto_id] = true
         } else {
@@ -264,7 +273,8 @@ export default function AssistenteIA({ produtos, banners, ajusteAuto, aoMudar }:
             ordemLocal[f.produto_id] = count || 0
           }
           ordemLocal[f.produto_id]++
-          const { error } = await supabase.from('produto_fotos').insert([{ produto_id: f.produto_id, url, ordem: ordemLocal[f.produto_id] }])
+          let { error } = await supabase.from('produto_fotos').insert([{ produto_id: f.produto_id, url, ordem: ordemLocal[f.produto_id], cor: casarCor(p, f.cor) }])
+          if (error) ({ error } = await supabase.from('produto_fotos').insert([{ produto_id: f.produto_id, url, ordem: ordemLocal[f.produto_id] }]))
           if (error) throw error
         }
         setFotos(prev => prev.map(x => x.chave === f.chave ? { ...x, status: 'salva' } : x))

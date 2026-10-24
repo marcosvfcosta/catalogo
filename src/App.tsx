@@ -14,6 +14,7 @@ type Produto = {
   bateria_saude?: string
   descricao?: string
   foto_url?: string
+  foto_cor?: string | null
   disponivel?: boolean
   destaque?: boolean
   lancamento?: boolean
@@ -37,7 +38,7 @@ type FiltroEspecial = 'destaques' | 'lancamentos' | 'promocoes' | 'mais_procurad
 
 // ─── Dados fixos da loja ───────────────────────────
 const WHATSAPP = '5564993374281'
-const PARCELAS = 21
+const PARCELAS = 18
 const STORAGE = 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public'
 const CHAVE_SACOLA = 'mm-sacola'
 
@@ -136,7 +137,9 @@ function App() {
   const [filtroEspecial, setFiltroEspecial] = useState<FiltroEspecial>(null)
   const [heroIndex, setHeroIndex] = useState(0)
   const [selecionado, setSelecionado] = useState<Produto | null>(null)
-  const [fotosDetalhe, setFotosDetalhe] = useState<string[]>([])
+  const [fotosDetalhe, setFotosDetalhe] = useState<{ url: string; cor: string | null }[]>([])
+  const [corEscolhida, setCorEscolhida] = useState<string | null>(null)
+  const galeriaRef = useRef<HTMLDivElement>(null)
   const [fotoIndex, setFotoIndex] = useState(0)
   const [sacola, setSacola] = useState<string[]>(lerSacola)
   const [sacolaAberta, setSacolaAberta] = useState(false)
@@ -201,12 +204,30 @@ function App() {
 
   // ─── Navegação ───────────────────────────────────
   async function abrirProduto(p: Produto) {
-    setSelecionado(p); setFotoIndex(0); setFotosDetalhe(p.foto_url ? [p.foto_url] : []); setSacolaAberta(false)
+    const capa = p.foto_url ? [{ url: p.foto_url, cor: p.foto_cor || null }] : []
+    setSelecionado(p); setFotoIndex(0); setFotosDetalhe(capa); setSacolaAberta(false); setCorEscolhida(p.foto_cor || null)
     window.history.pushState({ produto: p.id }, '')
     window.scrollTo(0, 0)
-    const { data } = await supabase.from('produto_fotos').select('url').eq('produto_id', p.id).order('ordem')
-    const extras = ((data || []) as { url: string }[]).map(f => f.url)
-    setFotosDetalhe([...(p.foto_url ? [p.foto_url] : []), ...extras])
+    const r1 = await supabase.from('produto_fotos').select('url, cor').eq('produto_id', p.id).order('ordem')
+    const data = r1.error ? (await supabase.from('produto_fotos').select('url').eq('produto_id', p.id).order('ordem')).data : r1.data
+    const extras = ((data || []) as { url: string; cor?: string | null }[]).map(f => ({ url: f.url, cor: f.cor || null }))
+    setFotosDetalhe([...capa, ...extras])
+  }
+
+  // Toca na bolinha → mostra a foto daquela cor
+  function escolherCor(nome: string) {
+    setCorEscolhida(nome)
+    const i = fotosDetalhe.findIndex(f => f.cor && semAcento(f.cor) === semAcento(nome))
+    if (i >= 0 && galeriaRef.current) {
+      galeriaRef.current.scrollTo({ left: i * galeriaRef.current.clientWidth, behavior: 'smooth' })
+      setFotoIndex(i)
+    }
+  }
+
+  function irParaInicio() {
+    limparFiltros(); setMenuAberto(false); setSacolaAberta(false)
+    if (selecionado) fecharProduto()
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function fecharProduto() {
@@ -349,7 +370,6 @@ function App() {
     const dentro = naSacola(p.id)
     const specs = [
       p.memoria && { icone: '💾', nome: 'Memória', valor: p.memoria },
-      p.cor && { icone: '🎨', nome: cores.length > 1 ? 'Cores' : 'Cor', valor: p.cor },
       p.condicao && { icone: '✅', nome: 'Condição', valor: p.condicao },
       p.bateria_saude && { icone: '🔋', nome: 'Bateria', valor: p.bateria_saude },
     ].filter(Boolean) as { icone: string; nome: string; valor: string }[]
@@ -358,14 +378,17 @@ function App() {
         <style>{CSS}</style>
         <header className="mm-topo mm-topo-detalhe">
           <button className="mm-voltar" onClick={fecharProduto}>‹ Voltar</button>
-          <Logo />
+          <Logo onClick={irParaInicio} />
           {botaoSacolaTopo}
         </header>
         <main className="mm-detalhe">
-          <div className="mm-galeria"
-            onScroll={e => { const el = e.currentTarget; setFotoIndex(Math.round(el.scrollLeft / el.clientWidth)) }}>
+          <div className="mm-galeria" ref={galeriaRef}
+            onScroll={e => {
+              const el = e.currentTarget; const i = Math.round(el.scrollLeft / el.clientWidth); setFotoIndex(i)
+              const cor = fotosDetalhe[i]?.cor; if (cor) setCorEscolhida(cor)
+            }}>
             {fotosDetalhe.length > 0
-              ? fotosDetalhe.map((f, i) => <div key={i} className="mm-galeria-item"><img src={f} alt={`${p.modelo} ${i + 1}`} /></div>)
+              ? fotosDetalhe.map((f, i) => <div key={i} className="mm-galeria-item"><img src={f.url} alt={`${p.modelo} ${f.cor || i + 1}`} /></div>)
               : <div className="mm-galeria-item"><span className="mm-sem-foto mm-sem-foto-grande">{p.marca}</span></div>}
           </div>
           {fotosDetalhe.length > 1 && (
@@ -376,7 +399,15 @@ function App() {
             <h1 className="mm-detalhe-nome">{p.modelo}</h1>
             {cores.length > 0 && (
               <div className="mm-cores mm-cores-grandes">
-                {cores.map(c => <span key={c.nome}><i style={{ background: c.hex }} />{c.nome}</span>)}
+                {cores.map(c => {
+                  const ativa = !!corEscolhida && semAcento(corEscolhida) === semAcento(c.nome)
+                  const temFoto = fotosDetalhe.some(f => f.cor && semAcento(f.cor) === semAcento(c.nome))
+                  return (
+                    <button key={c.nome} className={ativa ? 'mm-cor on' : 'mm-cor'} onClick={() => escolherCor(c.nome)} title={temFoto ? 'Ver esta cor' : c.nome}>
+                      <i style={{ background: c.hex }} />{c.nome}
+                    </button>
+                  )
+                })}
               </div>
             )}
             {specs.length > 0 && (
@@ -398,7 +429,7 @@ function App() {
           <button className={dentro ? 'mm-btn-contorno mm-btn-sacola-grande dentro' : 'mm-btn-contorno mm-btn-sacola-grande'} onClick={() => alternarSacola(p)}>
             {dentro ? '✓ Na sacola' : <><IconeSacola tamanho={20} /> Sacola</>}
           </button>
-          <button className="mm-btn-verde" onClick={() => abrirWhatsApp(textoInteresse(p))}><IconeWhats /> Tenho interesse</button>
+          <button className="mm-btn-verde" onClick={() => abrirWhatsApp(corEscolhida ? textoInteresse(p).replace(' que vi no catálogo', ` na cor ${corEscolhida} que vi no catálogo`) : textoInteresse(p))}><IconeWhats /> Tenho interesse</button>
         </div>
         {gavetaSacola}
         {avisoFlutuante}
@@ -448,7 +479,7 @@ function App() {
       {/* Topo */}
       <header className="mm-topo">
         <button className="mm-icone" onClick={() => setMenuAberto(true)} aria-label="Menu"><IconeMenu /></button>
-        <Logo />
+        <Logo onClick={irParaInicio} />
         <button className="mm-icone" onClick={() => setBuscaAberta(!buscaAberta)} aria-label="Buscar"><IconeBusca /></button>
         {botaoSacolaTopo}
       </header>
@@ -518,13 +549,7 @@ function App() {
                 <span className="mm-hero-etiqueta">{banner?.titulo ? (banner.etiqueta || 'DESTAQUE') : 'MARCOS MAGAZINE'}</span>
                 <h1>{banner?.titulo || 'Os melhores celulares'}</h1>
                 <p>{banner?.titulo ? (banner.subtitulo || '') : 'e acessórios. Você só encontra aqui!'}</p>
-                <div className="mm-hero-botoes">
-                  <button className="mm-btn-laranja" onClick={() => abrirWhatsApp(produtoDoBanner ? textoInteresse(produtoDoBanner) : banner?.titulo ? `Olá! Tenho interesse no ${banner.titulo} que vi no catálogo.` : 'Olá! Vim pelo catálogo da Marcos Magazine.')}>
-                    {banner?.titulo ? 'Tenho interesse' : 'Fale com a gente'}
-                  </button>
-                  <button className="mm-btn-contorno-laranja" onClick={() => navigate('/comparar')}>Comparar</button>
-                </div>
-                {banner && <img className="mm-hero-img" src={banner.url} alt={banner.titulo || 'Destaque'} onClick={() => produtoDoBanner && abrirProduto(produtoDoBanner)} />}
+                {banner && <img className="mm-hero-img" src={banner.url} alt={banner.titulo || 'Destaque'} onClick={cliqueBanner} />}
               </div>
             )}
           </section>
@@ -615,13 +640,16 @@ function App() {
       {/* ─── Rodapé ─── */}
       <footer className="mm-rodape">
         <b>Marcos Magazine</b>
-        <p>Avenida Goiás, 686, sala 3 · Centro · Bom Jesus</p>
+        <p>Avenida Goiás, 686, sala 3 · Centro · Bom Jesus de Goiás</p>
         <p>Seg a sex 08:00–18:00 · Sáb 08:00–12:30</p>
         <div className="mm-rodape-links">
-          <button className="mm-zap" onClick={() => abrirWhatsApp('Olá! Vim pelo catálogo da Marcos Magazine.')}><IconeWhats tamanho={17} /> (64) 99337-4281</button>
-          <button onClick={() => window.open('https://www.instagram.com/marcosmagazinee', '_blank')}>📷 @marcosmagazinee</button>
-          <button onClick={() => window.open('https://www.google.com/maps/search/Avenida+Goiás+686+Centro+Bom+Jesus+de+Goiás+GO', '_blank')}>📍 Como chegar</button>
+          <button onClick={() => abrirWhatsApp('Olá! Vim pelo catálogo da Marcos Magazine.')}>WhatsApp (64) 99337-4281</button>
+          <span>·</span>
+          <button onClick={() => window.open('https://www.instagram.com/marcosmagazinee', '_blank')}>Instagram</button>
+          <span>·</span>
+          <button onClick={() => window.open('https://www.google.com/maps/search/Avenida+Goiás+686+Centro+Bom+Jesus+de+Goiás+GO', '_blank')}>Como chegar</button>
         </div>
+        <small className="mm-copy">© {new Date().getFullYear()} Marcos Magazine. Todos os direitos reservados.</small>
       </footer>
 
       {/* Barra da sacola */}
@@ -640,8 +668,8 @@ function App() {
   )
 }
 
-function Logo() {
-  return <div className="mm-logo"><b>Marcos</b><i>Magazine</i></div>
+function Logo({ onClick }: { onClick?: () => void }) {
+  return <div className="mm-logo" onClick={onClick} style={onClick ? { cursor: 'pointer' } : undefined}><b>Marcos</b><i>Magazine</i></div>
 }
 
 // ─── Visual (branco, inspirado em lojas premium) ───
@@ -790,12 +818,12 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 .mm .mm-ver-mais { display: block; width: calc(100% - 32px); margin: 16px 16px 0; text-align: center; }
 
 /* Rodapé */
-.mm .mm-rodape { background: var(--cinza); padding: 24px 16px 32px; font-size: 15px; color: #6e6e73; line-height: 1.7; margin-top: 10px; }
+.mm .mm-rodape { background: var(--cinza); border-top: 1px solid var(--borda); padding: 26px 16px 30px; font-size: 12.5px; color: #1d1d1f; line-height: 1.7; margin-top: 16px; text-align: center; }
 .mm .mm-rodape > * { max-width: 1100px; margin-left: auto; margin-right: auto; }
-.mm .mm-rodape b { color: var(--tinta); font-size: 17px; display: block; }
-.mm .mm-rodape-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-.mm .mm-rodape-links button { display: inline-flex; align-items: center; gap: 6px; background: #fff; border-radius: 20px; padding: 9px 16px; font-size: 14.5px; font-weight: 600; color: #444; }
-.mm .mm-rodape-links .mm-zap { color: #1a9e4a; }
+.mm .mm-rodape b { color: var(--laranja); font-size: 16px; font-weight: 800; display: block; margin-bottom: 4px; }
+.mm .mm-rodape-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 8px; margin-top: 10px; color: #86868b; }
+.mm .mm-rodape-links button { font-size: 12.5px; color: #1d1d1f; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: #c7c7cc; }
+.mm .mm-copy { display: block; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--borda); color: #86868b; font-size: 11px; }
 
 /* Menu lateral */
 .mm .mm-fundo-menu { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 90; animation: mmFade .2s; }
@@ -844,8 +872,10 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 .mm .mm-detalhe-marca { color: var(--laranja); font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 2.5px; }
 .mm .mm-detalhe-nome { color: var(--tinta); font-size: 31px; font-weight: 800; letter-spacing: -0.6px; line-height: 1.15; margin-top: 4px; }
 .mm .mm-cores-grandes { gap: 14px; margin-top: 14px; }
-.mm .mm-cores-grandes span { display: flex; align-items: center; gap: 7px; font-size: 15px; color: #555; }
-.mm .mm-cores-grandes i { width: 18px; height: 18px; }
+.mm .mm-cores-grandes { gap: 8px; }
+.mm .mm-cor { display: flex; align-items: center; gap: 8px; font-size: 15px; color: #444; padding: 7px 14px 7px 8px; border-radius: 22px; border: 2px solid var(--borda); background: #fff; transition: all .2s; }
+.mm .mm-cor i { width: 22px; height: 22px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.15); }
+.mm .mm-cor.on { border-color: var(--laranja); color: var(--tinta); font-weight: 700; box-shadow: 0 4px 12px rgba(255,102,0,0.15); }
 .mm .mm-specs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
 .mm .mm-spec { background: var(--cinza); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 3px; }
 .mm .mm-spec span { font-size: 22px; }

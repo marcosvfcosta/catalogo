@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabase'
 
 type Negociacao = {
@@ -21,6 +21,7 @@ type Entrada = {
   possui_defeito: boolean; defeito: string | null; bateria: number | null
   acessorios: string[] | null; status: string
   interesse?: string | null
+  fotos?: { lado: string; url: string }[] | null
 }
 
 const TAXAS = [
@@ -191,6 +192,16 @@ function estilos(celular: boolean): Record<string, React.CSSProperties> {
   }
 }
 
+// ─── Notificações push ───
+type EstadoAviso = 'verificando' | 'sem-suporte' | 'instalar' | 'desligado' | 'ligado' | 'negado'
+const ehIOS = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1))
+const instalado = () => typeof window !== 'undefined' && (window.matchMedia?.('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true)
+function chaveParaBytes(base64: string) {
+  const pad = '='.repeat((4 - (base64.length % 4)) % 4)
+  const b = atob((base64 + pad).replace(/-/g, '+').replace(/_/g, '/'))
+  return Uint8Array.from(b, c => c.charCodeAt(0))
+}
+
 export default function Negociacao() {
   const celular = useCelular()
   const s = estilos(celular)
@@ -211,6 +222,68 @@ export default function Negociacao() {
   const [relAberto, setRelAberto] = useState<string | null>(null)
   const [vendedorAberto, setVendedorAberto] = useState<string | null>(null)
   const [entradas, setEntradas] = useState<Entrada[]>([])
+  const [avisoEntrada, setAvisoEntrada] = useState<Entrada | null>(null)
+  const [zoomFotos, setZoomFotos] = useState<{ fotos: { lado: string; url: string }[]; i: number } | null>(null)
+  const idsVistos = useRef<Set<string> | null>(null)
+  const [estadoAviso, setEstadoAviso] = useState<EstadoAviso>('verificando')
+  const [msgAviso, setMsgAviso] = useState('')
+
+  // Abre direto em "Entradas" quando vem da notificação
+  useEffect(() => {
+    try { if (new URLSearchParams(window.location.search).get('aba') === 'entradas') setAba('entradas') } catch { /* ok */ }
+    verificarAvisos()
+  }, [])
+
+  async function verificarAvisos() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      setEstadoAviso(ehIOS && !instalado() ? 'instalar' : 'sem-suporte'); return
+    }
+    if (Notification.permission === 'denied') { setEstadoAviso('negado'); return }
+    const reg = await navigator.serviceWorker.getRegistration('/')
+    const sub = reg ? await reg.pushManager.getSubscription() : null
+    setEstadoAviso(sub ? 'ligado' : 'desligado')
+  }
+
+  async function ativarAvisos() {
+    setMsgAviso('')
+    try {
+      const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      await navigator.serviceWorker.ready
+      const permissao = await Notification.requestPermission()
+      if (permissao !== 'granted') { setEstadoAviso(permissao === 'denied' ? 'negado' : 'desligado'); return }
+      const { data, error } = await supabase.functions.invoke('push', { body: { acao: 'chave' } })
+      if (error || !data?.chave) throw new Error(data?.error || 'Função push não encontrada no Supabase')
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chaveParaBytes(data.chave) })
+      const j = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } }
+      const { data: u } = await supabase.auth.getUser()
+      const { error: e2 } = await supabase.from('push_inscricoes').upsert([{
+        endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth,
+        email: u?.user?.email || null, aparelho: navigator.userAgent.slice(0, 180),
+      }], { onConflict: 'endpoint' })
+      if (e2) throw e2
+      setEstadoAviso('ligado')
+      setMsgAviso('✅ Avisos ativados neste aparelho!')
+    } catch (e) {
+      console.error(e)
+      setMsgAviso('Não foi possível ativar: ' + (e instanceof Error ? e.message : 'erro'))
+    }
+  }
+
+  async function testarAvisos() {
+    setMsgAviso('Enviando teste...')
+    const { data, error } = await supabase.functions.invoke('push', { body: { acao: 'teste' } })
+    setMsgAviso(error || data?.error ? 'Erro no teste: ' + (data?.error || 'confira a função push') : `Teste enviado para ${data?.enviados ?? 0} aparelho(s). Bloqueie a tela e aguarde.`)
+  }
+
+  async function desativarAvisos() {
+    const reg = await navigator.serviceWorker.getRegistration('/')
+    const sub = reg ? await reg.pushManager.getSubscription() : null
+    if (sub) {
+      await supabase.from('push_inscricoes').delete().eq('endpoint', sub.endpoint)
+      await sub.unsubscribe()
+    }
+    setEstadoAviso('desligado'); setMsgAviso('Avisos desligados neste aparelho.')
+  }
   const [filtroEntradas, setFiltroEntradas] = useState('Nova')
   const [entradaVinculada, setEntradaVinculada] = useState<Entrada | null>(null)
   const [linkCopiado, setLinkCopiado] = useState(false)
@@ -249,8 +322,51 @@ export default function Negociacao() {
 
   async function carregarEntradas() {
     const { data } = await supabase.from('entradas').select('*').order('created_at', { ascending: false })
-    setEntradas(data || [])
+    const lista = (data || []) as Entrada[]
+    setEntradas(lista)
+    // Avisa quando chega avaliação nova (compara com as que já tinham aparecido)
+    if (idsVistos.current) {
+      const nova = lista.find(e => !idsVistos.current!.has(e.id) && e.status === 'Nova')
+      if (nova) avisarNovaEntrada(nova)
+    }
+    idsVistos.current = new Set(lista.map(e => e.id))
   }
+
+  function avisarNovaEntrada(e: Entrada) {
+    setAvisoEntrada(e)
+    try {
+      const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+      ;[0, 0.18].forEach((t, k) => {
+        const o = ctx.createOscillator(); const g = ctx.createGain()
+        o.frequency.value = k ? 1175 : 880; o.connect(g); g.connect(ctx.destination)
+        g.gain.setValueAtTime(0.0001, ctx.currentTime + t)
+        g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + t + 0.02)
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.16)
+        o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.18)
+      })
+    } catch { /* sem som */ }
+    try { navigator.vibrate?.(200) } catch { /* sem vibração */ }
+    try {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('📲 Nova avaliação de usado', { body: `${e.nome}: ${e.modelo} ${e.armazenamento}${e.interesse ? ` → quer ${e.interesse}` : ''}` })
+      }
+    } catch { /* sem notificação do sistema */ }
+  }
+
+  // Tempo real: o Supabase avisa na hora que alguém envia; e a cada 30s confere de novo (garantia)
+  useEffect(() => {
+    const canal = supabase.channel('entradas-novas')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'entradas' }, () => carregarEntradas())
+      .subscribe()
+    const t = setInterval(carregarEntradas, 30000)
+    return () => { clearInterval(t); supabase.removeChannel(canal) }
+  }, [])
+
+  // Mostra a quantidade de novas no título da aba do navegador
+  useEffect(() => {
+    const n = entradas.filter(e => e.status === 'Nova').length
+    document.title = n ? `(${n}) Negociação · Marcos Magazine` : 'Negociação · Marcos Magazine'
+  }, [entradas])
 
   function buscarModelo(texto: string) {
     setBuscaModelo(texto)
@@ -595,6 +711,31 @@ export default function Negociacao() {
   return (
     <div style={s.page}>
       {celular && <style>{AJUSTE_CELULAR}</style>}
+      <style>{`@keyframes mmDesce { from { transform: translate(-50%, -140%) } to { transform: translate(-50%, 0) } }`}</style>
+      {avisoEntrada && (
+        <div style={s.avisoEntrada}>
+          <div style={{ fontSize: 28 }}>📲</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ margin: 0, fontWeight: 800, color: '#fff', fontSize: 15 }}>Nova avaliação de usado!</p>
+            <p style={{ margin: '2px 0 0', color: '#ffd2b3', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {avisoEntrada.nome} · {avisoEntrada.modelo} {avisoEntrada.armazenamento}{avisoEntrada.interesse ? ` → ${avisoEntrada.interesse}` : ''}
+            </p>
+          </div>
+          <button style={s.avisoVer} onClick={() => { setAba('entradas'); setFiltroEntradas('Nova'); setAvisoEntrada(null) }}>Ver</button>
+          <button style={s.avisoFechar} onClick={() => setAvisoEntrada(null)}>✕</button>
+        </div>
+      )}
+      {zoomFotos && (
+        <div style={s.zoomFundo} onClick={() => setZoomFotos(null)}>
+          <img src={zoomFotos.fotos[zoomFotos.i].url} alt="" style={{ maxWidth: '94vw', maxHeight: '78vh', objectFit: 'contain', borderRadius: 12 }} onClick={ev => ev.stopPropagation()} />
+          <p style={{ color: '#fff', fontWeight: 700, margin: '12px 0 0' }}>{zoomFotos.fotos[zoomFotos.i].lado} · {zoomFotos.i + 1}/{zoomFotos.fotos.length}</p>
+          <div style={{ display: 'flex', gap: 10, marginTop: 12 }} onClick={ev => ev.stopPropagation()}>
+            <button style={s.zoomBtn} onClick={() => setZoomFotos({ ...zoomFotos, i: (zoomFotos.i + zoomFotos.fotos.length - 1) % zoomFotos.fotos.length })}>‹ Anterior</button>
+            <button style={s.zoomBtn} onClick={() => setZoomFotos({ ...zoomFotos, i: (zoomFotos.i + 1) % zoomFotos.fotos.length })}>Próxima ›</button>
+            <button style={s.zoomBtn} onClick={() => setZoomFotos(null)}>Fechar</button>
+          </div>
+        </div>
+      )}
       {menuAberto && <div style={s.overlay} onClick={() => setMenuAberto(false)} />}
       <aside style={{ ...s.sidebar, left: menuAberto ? 0 : -280 }}>
         <div style={s.sidebarLogo}><span style={s.logoM}>Marcos</span><span style={s.logoMag}>Magazine</span></div>
@@ -969,6 +1110,28 @@ export default function Negociacao() {
                 <h1 style={s.pageTitle}>Entradas</h1>
                 <p style={s.pageSubtitle}>Aparelhos que os clientes enviaram pelo catálogo</p>
               </div>
+              <div style={s.caixaAvisos}>
+                {estadoAviso === 'ligado' ? (
+                  <>
+                    <p style={{ margin: 0, color: '#25D366', fontWeight: 800, fontSize: 14 }}>🔔 Avisos ligados neste aparelho</p>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      <button style={{ ...s.btnFechar, padding: '8px 12px', fontSize: 13 }} onClick={testarAvisos}>Enviar teste</button>
+                      <button style={{ ...s.btnLimpar, padding: '8px 12px', fontSize: 13 }} onClick={desativarAvisos}>Desligar</button>
+                    </div>
+                  </>
+                ) : estadoAviso === 'instalar' ? (
+                  <p style={{ margin: 0, color: '#ffb27a', fontSize: 13, lineHeight: 1.5 }}>🔔 Para receber avisos com a tela apagada: no Safari, toque em <b>Compartilhar → Adicionar à Tela de Início</b> e abra a Negociação por esse ícone.</p>
+                ) : estadoAviso === 'negado' ? (
+                  <p style={{ margin: 0, color: '#ff8a8a', fontSize: 13, lineHeight: 1.5 }}>🔕 As notificações foram bloqueadas. Libere em Ajustes → Notificações → Marcos Magazine.</p>
+                ) : estadoAviso === 'sem-suporte' ? (
+                  <p style={{ margin: 0, color: '#888', fontSize: 13 }}>Este navegador não aceita notificações.</p>
+                ) : (
+                  <button style={{ ...s.btnAlterar, padding: '12px 16px', fontSize: 14, width: '100%' }} onClick={ativarAvisos} disabled={estadoAviso === 'verificando'}>
+                    🔔 Ativar avisos neste aparelho
+                  </button>
+                )}
+                {msgAviso && <p style={{ margin: '8px 0 0', color: '#ccc', fontSize: 12 }}>{msgAviso}</p>}
+              </div>
               <button style={{ ...s.btnAlterar, padding: '10px 18px', fontSize: 14 }} onClick={copiarLinkEntrada}>{linkCopiado ? '✓ Link copiado' : '🔗 Copiar link'}</button>
             </div>
             <div style={s.filtrosRow}>
@@ -1017,6 +1180,19 @@ export default function Negociacao() {
                       </div>
                       {e.possui_defeito && e.defeito && <p style={{ color: '#ff6666', fontSize: 14, marginTop: 8 }}>⚠ {e.defeito}</p>}
                       {e.acessorios && e.acessorios.length > 0 && <p style={{ color: '#888', fontSize: 13, marginTop: 8 }}>Acompanha: {e.acessorios.join(', ')}</p>}
+                      {e.fotos && e.fotos.length > 0 && (
+                        <>
+                          <p style={{ color: '#888', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 12, marginBottom: 6 }}>📷 Fotos do aparelho ({e.fotos.length})</p>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 6 }}>
+                            {e.fotos.map((f, i) => (
+                              <div key={i} onClick={() => setZoomFotos({ fotos: e.fotos!, i })} style={{ cursor: 'pointer', textAlign: 'center' }}>
+                                <img src={f.url} alt={f.lado} style={{ width: '100%', aspectRatio: '3 / 4', objectFit: 'cover', borderRadius: 8, border: '1px solid #2a2a2a', display: 'block' }} />
+                                <span style={{ color: '#777', fontSize: 9 }}>{f.lado}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
                       <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
                         <button style={{ ...s.btnAlterar, padding: '10px 14px', fontSize: 13, flex: 2 }} onClick={() => usarEntrada(e)}>Usar na negociação</button>
                         <button style={{ ...s.btnFechar, padding: '10px 14px', fontSize: 13, flex: 1 }} onClick={() => whatsAppEntrada(e)}>WhatsApp</button>
@@ -1154,6 +1330,12 @@ const base: Record<string, React.CSSProperties> = {
   abas: { display: 'flex', gap: 8, overflowX: 'auto' },
   abaAtiva: { padding: '10px 18px', borderRadius: 10, border: 'none', background: '#ff6600', color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 },
   abaInativa: { padding: '10px 18px', borderRadius: 10, border: '1px solid #333', background: 'none', color: '#888', cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 },
+  caixaAvisos: { background: '#0f0f0f', border: '1px solid #2a2a2a', borderRadius: 14, padding: 12, minWidth: 0, flex: '1 1 260px', maxWidth: 420 },
+  avisoEntrada: { position: 'fixed', top: 12, left: '50%', transform: 'translate(-50%, 0)', zIndex: 3000, width: 'min(560px, calc(100vw - 24px))', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 12px 12px 16px', borderRadius: 18, background: 'linear-gradient(135deg, #ff6600, #e04e00)', boxShadow: '0 14px 40px rgba(255,102,0,0.35)', animation: 'mmDesce .35s ease' },
+  avisoVer: { padding: '10px 16px', borderRadius: 12, border: 'none', background: '#fff', color: '#ff6600', fontWeight: 800, fontSize: 14, cursor: 'pointer' },
+  avisoFechar: { width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.2)', color: '#fff', cursor: 'pointer' },
+  zoomFundo: { position: 'fixed', inset: 0, zIndex: 3100, background: 'rgba(0,0,0,0.92)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 16 },
+  zoomBtn: { padding: '10px 16px', borderRadius: 12, border: '1px solid #444', background: '#1a1a1a', color: '#fff', fontSize: 14, cursor: 'pointer' },
   badgeNovas: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 20, height: 20, padding: '0 6px', borderRadius: 10, background: '#ff6600', color: 'white', fontSize: 11, fontWeight: 800, marginLeft: 6 },
   content: { padding: '28px 20px', maxWidth: 1100, width: '100%', margin: '0 auto', boxSizing: 'border-box' },
   pageTitle: { fontSize: 28, fontWeight: 900, color: '#ff6600', fontFamily: 'Nunito, sans-serif', marginBottom: 6 },

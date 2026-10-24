@@ -5,6 +5,8 @@ import { supabase } from '../supabase'
 // "Falar com a loja" depois do envio. Deixe '' para esconder.
 const LOJA_WHATSAPP = ''
 
+const FUNDO_BRANCO = `html, body { background: #fff !important; } body { display: block !important; place-items: normal !important; color: #1d1d1f !important; } #root { width: 100% !important; max-width: none !important; padding: 0 !important; margin: 0 !important; text-align: left !important; }`
+
 const MODELOS = [
   'iPhone 11', 'iPhone 11 Pro', 'iPhone 11 Pro Max', 'iPhone SE',
   'iPhone 12 mini', 'iPhone 12', 'iPhone 12 Pro', 'iPhone 12 Pro Max',
@@ -17,6 +19,34 @@ const MODELOS = [
 ]
 
 const ARMAZENAMENTOS = ['64GB', '128GB', '256GB', '512GB', '1TB']
+const LADOS_FOTO = [
+  { k: 'frente', l: 'Frente', d: 'Tela' },
+  { k: 'verso', l: 'Verso', d: 'Traseira' },
+  { k: 'esquerda', l: 'Lateral esquerda', d: 'Botões de volume' },
+  { k: 'direita', l: 'Lateral direita', d: 'Botão lateral' },
+  { k: 'cima', l: 'Em cima', d: 'Topo' },
+  { k: 'baixo', l: 'Embaixo', d: 'Entrada do carregador' },
+]
+
+// Reduz a foto antes de enviar (mais rápido no 4G)
+function comprimir(arquivo: File): Promise<Blob> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(arquivo)
+    const img = new Image()
+    img.onload = () => {
+      const escala = Math.min(1, 1600 / Math.max(img.width, img.height))
+      const c = document.createElement('canvas')
+      c.width = Math.round(img.width * escala); c.height = Math.round(img.height * escala)
+      const ctx = c.getContext('2d')
+      URL.revokeObjectURL(url)
+      if (!ctx) { resolve(arquivo); return }
+      ctx.drawImage(img, 0, 0, c.width, c.height)
+      c.toBlob(b => resolve(b || arquivo), 'image/jpeg', 0.82)
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(arquivo) }
+    img.src = url
+  })
+}
 const ESTADOS = ['Seminovo', 'Vitrine']
 const ACESSORIOS = ['Caixa', 'Cabo', 'Carregador']
 
@@ -36,7 +66,7 @@ function Chips({ opcoes, valor, onChange, erro }: { opcoes: string[]; valor: str
         const ativo = valor === o
         return (
           <button key={o} type="button" onClick={() => onChange(o)}
-            style={{ ...s.chip, ...(ativo ? s.chipAtivo : {}), borderColor: ativo ? '#ff6600' : erro ? '#ff4444' : '#2a2a2a' }}>
+            style={{ ...s.chip, ...(ativo ? s.chipAtivo : {}), borderColor: ativo ? '#ff6600' : erro ? '#ff4444' : '#e5e5ea' }}>
             {o}
           </button>
         )
@@ -62,6 +92,8 @@ export default function AvaliacaoEntrada() {
   const [enviado, setEnviado] = useState(false)
   const [interesse, setInteresse] = useState('')
   const [sugestoes, setSugestoes] = useState<string[]>([])
+  const [fotos, setFotos] = useState<Record<string, { arquivo: File; previa: string }>>({})
+  const [progresso, setProgresso] = useState('')
 
   // Sugestões de "celular de interesse" a partir dos produtos do catálogo
   useEffect(() => {
@@ -111,7 +143,25 @@ export default function AvaliacaoEntrada() {
       return
     }
     setEnviando(true)
-    const { error } = await supabase.from('entradas').insert([{
+
+    // Envia as fotos (opcionais) antes de salvar a avaliação
+    const enviadas: { lado: string; url: string }[] = []
+    const lados = LADOS_FOTO.filter(l => fotos[l.k])
+    const pasta = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    for (let i = 0; i < lados.length; i++) {
+      setProgresso(`Enviando fotos ${i + 1} de ${lados.length}...`)
+      try {
+        const blob = await comprimir(fotos[lados[i].k].arquivo)
+        const caminho = `${pasta}/${lados[i].k}.jpg`
+        const up = await supabase.storage.from('entradas').upload(caminho, blob, { contentType: 'image/jpeg' })
+        if (!up.error) enviadas.push({ lado: lados[i].l, url: supabase.storage.from('entradas').getPublicUrl(caminho).data.publicUrl })
+      } catch (e) { console.error(e) }
+    }
+    setProgresso('')
+
+    const idEntrada = (crypto as Crypto & { randomUUID?: () => string }).randomUUID?.() || undefined
+    const dados = {
+      ...(idEntrada ? { id: idEntrada } : {}),
       nome: nome.trim(),
       telefone: telefone.trim(),
       modelo: modeloFinal,
@@ -122,8 +172,12 @@ export default function AvaliacaoEntrada() {
       bateria,
       acessorios,
       interesse: interesse.trim(),
-    }])
+    }
+    let { error } = await supabase.from('entradas').insert([{ ...dados, fotos: enviadas.length ? enviadas : null }])
+    if (error && enviadas.length === 0) ({ error } = await supabase.from('entradas').insert([dados]))
     setEnviando(false)
+    // Avisa a loja (notificação no celular/iPad da equipe)
+    if (!error && idEntrada) supabase.functions.invoke('push', { body: { acao: 'avisar', id: idEntrada } }).catch(() => {})
     if (error) {
       alert('Não foi possível enviar agora. Tente de novo em instantes.')
       return
@@ -135,7 +189,7 @@ export default function AvaliacaoEntrada() {
   function novaAvaliacao() {
     setBuscaModelo(''); setModelo(''); setOutroModelo(''); setArmazenamento('')
     setEstado(''); setPossuiDefeito(''); setDefeito(''); setBateria(85)
-    setAcessorios([]); setInteresse(''); setErros({}); setEnviado(false)
+    setAcessorios([]); setInteresse(''); setErros({}); setEnviado(false); setFotos({})
   }
 
   function falarComLoja() {
@@ -145,16 +199,17 @@ export default function AvaliacaoEntrada() {
 
   if (enviado) return (
     <div style={s.page}>
+      <style>{FUNDO_BRANCO}</style>
       <header style={s.header}>
-        <a href="/" style={s.voltar}>← Catálogo</a>
-        <div style={s.logo}><span style={s.logoM}>Marcos</span><span style={s.logoMag}>Magazine</span></div>
+        <a href="/" style={s.voltar}>‹ Catálogo</a>
+        <a href="/" style={s.logo}><span style={s.logoM}>Marcos</span><span style={s.logoMag}>Magazine</span></a>
       </header>
       <div style={{ ...s.content, textAlign: 'center', paddingTop: 60 }}>
         <div style={s.checkCircle}>✓</div>
         <h1 style={{ ...s.titulo, marginTop: 20 }}>Recebemos sua avaliação!</h1>
-        <p style={{ color: '#aaa', fontSize: 15, marginTop: 8 }}>{modeloFinal} {armazenamento} · {estado}</p>
+        <p style={{ color: '#6e6e73', fontSize: 15, marginTop: 8 }}>{modeloFinal} {armazenamento} · {estado}</p>
         <p style={{ color: '#ff6600', fontSize: 15, marginTop: 4, fontWeight: 700 }}>Interesse: {interesse.trim()}</p>
-        <p style={{ color: '#777', fontSize: 14, marginTop: 16, lineHeight: 1.6 }}>
+        <p style={{ color: '#6e6e73', fontSize: 14, marginTop: 16, lineHeight: 1.6 }}>
           Nossa equipe vai analisar e te chamar no WhatsApp<br />com a proposta para usar como entrada.
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 32, maxWidth: 360, marginLeft: 'auto', marginRight: 'auto' }}>
@@ -170,9 +225,10 @@ export default function AvaliacaoEntrada() {
 
   return (
     <div style={s.page}>
+      <style>{FUNDO_BRANCO}</style>
       <header style={s.header}>
-        <a href="/" style={s.voltar}>← Catálogo</a>
-        <div style={s.logo}><span style={s.logoM}>Marcos</span><span style={s.logoMag}>Magazine</span></div>
+        <a href="/" style={s.voltar}>‹ Catálogo</a>
+        <a href="/" style={s.logo}><span style={s.logoM}>Marcos</span><span style={s.logoMag}>Magazine</span></a>
       </header>
 
       <div style={s.content}>
@@ -189,7 +245,7 @@ export default function AvaliacaoEntrada() {
               onChange={v => { setModelo(v); limparErro('modelo') }} />
           </div>
           {modelo === 'Outro' && (
-            <input style={{ ...s.input, marginTop: 12, borderColor: erros.modelo ? '#ff4444' : '#2a2a2a' }} value={outroModelo}
+            <input style={{ ...s.input, marginTop: 12, borderColor: erros.modelo ? '#ff4444' : '#e5e5ea' }} value={outroModelo}
               onChange={e => { setOutroModelo(e.target.value); limparErro('modelo') }} placeholder="Ex: Samsung Galaxy S23" />
           )}
           {erros.modelo && <p style={s.erro}>{erros.modelo}</p>}
@@ -216,7 +272,7 @@ export default function AvaliacaoEntrada() {
           {erros.possuiDefeito && <p style={s.erro}>{erros.possuiDefeito}</p>}
           {possuiDefeito === 'Sim' && (
             <>
-              <textarea style={{ ...s.input, marginTop: 12, height: 80, resize: 'none', borderColor: erros.defeito ? '#ff4444' : '#2a2a2a' }}
+              <textarea style={{ ...s.input, marginTop: 12, height: 80, resize: 'none', borderColor: erros.defeito ? '#ff4444' : '#e5e5ea' }}
                 value={defeito} onChange={e => { setDefeito(e.target.value); limparErro('defeito') }}
                 placeholder="Qual defeito? Ex: Face ID não funciona, tela trincada..." />
               {erros.defeito && <p style={s.erro}>{erros.defeito}</p>}
@@ -226,7 +282,7 @@ export default function AvaliacaoEntrada() {
 
         <div style={s.section}>
           <h3 style={s.sectionTitle}><span style={s.num}>5</span> Saúde da bateria</h3>
-          <p style={{ color: '#666', fontSize: 13, marginBottom: 12 }}>Ajustes › Bateria › Saúde da Bateria</p>
+          <p style={{ color: '#6e6e73', fontSize: 13, marginBottom: 12 }}>Ajustes › Bateria › Saúde da Bateria</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <input type="range" min={50} max={100} step={1} value={bateria} onChange={e => setBateria(Number(e.target.value))}
               style={{ flex: 1, accentColor: '#ff6600' }} />
@@ -235,13 +291,13 @@ export default function AvaliacaoEntrada() {
         </div>
 
         <div style={s.section}>
-          <h3 style={s.sectionTitle}><span style={s.num}>6</span> Acompanha <span style={{ color: '#666', fontWeight: 400, fontSize: 13 }}>(opcional)</span></h3>
+          <h3 style={s.sectionTitle}><span style={s.num}>6</span> Acompanha <span style={{ color: '#86868b', fontWeight: 400, fontSize: 13 }}>(opcional)</span></h3>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {ACESSORIOS.map(a => {
               const ativo = acessorios.includes(a)
               return (
                 <button key={a} type="button" onClick={() => toggleAcessorio(a)}
-                  style={{ ...s.chip, ...(ativo ? s.chipAtivo : {}), borderColor: ativo ? '#ff6600' : '#2a2a2a' }}>
+                  style={{ ...s.chip, ...(ativo ? s.chipAtivo : {}), borderColor: ativo ? '#ff6600' : '#e5e5ea' }}>
                   {ativo ? '✓ ' : ''}{a}
                 </button>
               )
@@ -251,8 +307,8 @@ export default function AvaliacaoEntrada() {
 
         <div style={{ ...s.section, borderColor: erros.interesse ? '#ff4444' : '#ff6600' }}>
           <h3 style={s.sectionTitle}><span style={{ ...s.num, background: '#ff6600', color: 'white' }}>7</span> Qual celular você quer comprar?</h3>
-          <p style={{ color: '#666', fontSize: 13, marginBottom: 12, marginTop: -6 }}>O aparelho que você quer levar usando o seu como entrada</p>
-          <input style={{ ...s.input, borderColor: erros.interesse ? '#ff4444' : '#2a2a2a' }} value={interesse}
+          <p style={{ color: '#6e6e73', fontSize: 13, marginBottom: 12, marginTop: -6 }}>O aparelho que você quer levar usando o seu como entrada</p>
+          <input style={{ ...s.input, borderColor: erros.interesse ? '#ff4444' : '#e5e5ea' }} value={interesse}
             onChange={e => { setInteresse(e.target.value); limparErro('interesse') }} placeholder="Ex: iPhone 16 Pro Max 256GB" />
           {sugestoesFiltradas.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
@@ -265,21 +321,54 @@ export default function AvaliacaoEntrada() {
         </div>
 
         <div style={s.section}>
-          <h3 style={s.sectionTitle}><span style={s.num}>8</span> Seus dados</h3>
+          <h3 style={s.sectionTitle}><span style={s.num}>8</span> Fotos do aparelho <span style={{ color: '#86868b', fontWeight: 400, fontSize: 13 }}>(opcional)</span></h3>
+          <p style={{ color: '#6e6e73', fontSize: 13, marginTop: -6, marginBottom: 14, lineHeight: 1.5 }}>Com fotos a proposta sai mais rápida e mais certa. Toque em cada quadrado para tirar ou escolher a foto.</p>
+          <div style={s.gradeFotos}>
+            {LADOS_FOTO.map(l => {
+              const f = fotos[l.k]
+              return (
+                <label key={l.k} style={{ ...s.fotoSlot, ...(f ? { borderStyle: 'solid', borderColor: '#25D366' } : {}) }}>
+                  {f ? (
+                    <>
+                      <img src={f.previa} alt={l.l} style={s.fotoPrevia} />
+                      <button type="button" style={s.fotoRemover}
+                        onClick={ev => { ev.preventDefault(); setFotos(prev => { const n = { ...prev }; delete n[l.k]; return n }) }}>✕</button>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: 26 }}>📷</span>
+                      <span style={{ fontSize: 10.5, color: '#86868b', marginTop: 2, lineHeight: 1.25 }}>{l.d}</span>
+                    </>
+                  )}
+                  <span style={s.fotoNome}>{l.l}</span>
+                  <input type="file" accept="image/*" style={{ display: 'none' }}
+                    onChange={ev => {
+                      const arq = ev.target.files?.[0]; ev.target.value = ''
+                      if (arq) setFotos(prev => ({ ...prev, [l.k]: { arquivo: arq, previa: URL.createObjectURL(arq) } }))
+                    }} />
+                </label>
+              )
+            })}
+          </div>
+          {Object.keys(fotos).length > 0 && <p style={{ color: '#1a9e4a', fontSize: 13, marginTop: 10, marginBottom: 0 }}>✓ {Object.keys(fotos).length} de 6 fotos</p>}
+        </div>
+
+        <div style={s.section}>
+          <h3 style={s.sectionTitle}><span style={s.num}>9</span> Seus dados</h3>
           <label style={s.label}>Nome</label>
-          <input style={{ ...s.input, borderColor: erros.nome ? '#ff4444' : '#2a2a2a' }} value={nome}
+          <input style={{ ...s.input, borderColor: erros.nome ? '#ff4444' : '#e5e5ea' }} value={nome}
             onChange={e => { setNome(e.target.value); limparErro('nome') }} placeholder="Seu nome completo" />
           {erros.nome && <p style={s.erro}>{erros.nome}</p>}
           <label style={{ ...s.label, marginTop: 14 }}>WhatsApp</label>
-          <input style={{ ...s.input, borderColor: erros.telefone ? '#ff4444' : '#2a2a2a' }} value={telefone} inputMode="tel"
+          <input style={{ ...s.input, borderColor: erros.telefone ? '#ff4444' : '#e5e5ea' }} value={telefone} inputMode="tel"
             onChange={e => { setTelefone(mascaraTelefone(e.target.value)); limparErro('telefone') }} placeholder="(64) 9 9999-9999" />
           {erros.telefone && <p style={s.erro}>{erros.telefone}</p>}
         </div>
 
         <button onClick={enviar} disabled={enviando} style={{ ...s.btnEnviar, opacity: enviando ? 0.7 : 1 }}>
-          {enviando ? 'Enviando...' : 'Enviar avaliação'}
+          {enviando ? (progresso || 'Enviando...') : 'Enviar avaliação'}
         </button>
-        <p style={{ color: '#555', fontSize: 12, textAlign: 'center', marginTop: 12, marginBottom: 40 }}>
+        <p style={{ color: '#86868b', fontSize: 12, textAlign: 'center', marginTop: 12, marginBottom: 40 }}>
           A proposta final depende da análise do aparelho na loja.
         </p>
       </div>
@@ -288,25 +377,30 @@ export default function AvaliacaoEntrada() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: '100vh', background: '#050505', color: 'white', fontFamily: 'Poppins, sans-serif' },
-  header: { display: 'flex', alignItems: 'center', gap: 16, padding: '14px 20px', background: '#080808', borderBottom: '1px solid #1a1a1a', position: 'sticky', top: 0, zIndex: 100 },
-  voltar: { color: '#ccc', textDecoration: 'none', fontSize: 14, padding: '8px 14px', border: '1px solid #333', borderRadius: 10 },
-  logo: { lineHeight: 1, marginLeft: 'auto' },
-  logoM: { color: '#ff6600', fontSize: 24, fontWeight: 900, fontFamily: 'Nunito, sans-serif', display: 'block' },
-  logoMag: { color: '#ff6600', fontSize: 12, fontWeight: 700, fontFamily: 'Nunito, sans-serif', display: 'block', textAlign: 'right', opacity: 0.85 },
-  content: { padding: '24px 16px', maxWidth: 640, margin: '0 auto' },
-  titulo: { fontSize: 26, fontWeight: 900, color: '#ff6600', fontFamily: 'Nunito, sans-serif', margin: 0 },
-  subtitulo: { color: '#888', fontSize: 14, lineHeight: 1.6, marginTop: 8, marginBottom: 24 },
-  alertaErro: { background: 'rgba(255,68,68,0.1)', border: '1px solid #ff4444', color: '#ff6666', borderRadius: 10, padding: '12px 14px', fontSize: 14, marginBottom: 16 },
-  section: { background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 16, padding: 20, marginBottom: 14 },
-  sectionTitle: { fontSize: 16, fontWeight: 700, color: '#fff', margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 10 },
-  num: { width: 26, height: 26, borderRadius: '50%', background: 'rgba(255,102,0,0.15)', color: '#ff6600', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, flexShrink: 0 },
-  label: { display: 'block', color: '#aaa', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
-  input: { width: '100%', padding: '13px 14px', borderRadius: 10, border: '1px solid #2a2a2a', background: '#0a0a0a', color: 'white', fontSize: 16, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' },
-  chip: { padding: '10px 16px', borderRadius: 22, border: '1px solid #2a2a2a', background: '#0a0a0a', color: '#bbb', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' },
-  chipAtivo: { background: 'rgba(255,102,0,0.15)', color: '#ff6600', fontWeight: 700 },
-  erro: { color: '#ff4444', fontSize: 13, marginTop: 8, marginBottom: 0 },
-  btnEnviar: { width: '100%', padding: 18, borderRadius: 14, border: 'none', background: '#ff6600', color: 'white', fontWeight: 800, fontSize: 17, cursor: 'pointer', fontFamily: 'inherit' },
-  btnSecundario: { display: 'block', padding: 14, borderRadius: 12, border: '1px solid #333', background: 'none', color: '#ccc', fontSize: 15, cursor: 'pointer', textDecoration: 'none', fontFamily: 'inherit' },
-  checkCircle: { width: 80, height: 80, borderRadius: '50%', background: 'rgba(37,211,102,0.15)', border: '2px solid #25D366', color: '#25D366', fontSize: 40, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' },
+  page: { minHeight: '100vh', background: '#fff', color: '#1d1d1f', fontFamily: 'Poppins, -apple-system, sans-serif' },
+  header: { display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px', background: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', borderBottom: '1px solid #ececf0', position: 'sticky', top: 0, zIndex: 100 },
+  voltar: { color: '#ff6600', textDecoration: 'none', fontSize: 16, fontWeight: 600, padding: '8px 4px' },
+  logo: { lineHeight: 1, marginLeft: 'auto', textDecoration: 'none' },
+  logoM: { color: '#ff6600', fontSize: 26, fontWeight: 900, fontFamily: 'Nunito, Poppins, sans-serif', display: 'block' },
+  logoMag: { color: '#ff6600', fontSize: 12, fontWeight: 700, fontFamily: 'Nunito, Poppins, sans-serif', display: 'block', textAlign: 'right', marginTop: -2 },
+  content: { padding: '24px 16px', maxWidth: 640, margin: '0 auto', boxSizing: 'border-box' },
+  titulo: { fontSize: 30, fontWeight: 800, color: '#1d1d1f', letterSpacing: -0.6, lineHeight: 1.15, margin: 0 },
+  subtitulo: { color: '#6e6e73', fontSize: 15, lineHeight: 1.6, marginTop: 10, marginBottom: 24 },
+  alertaErro: { background: '#fff0f0', border: '1px solid #ffb3b3', color: '#d93025', borderRadius: 14, padding: '12px 14px', fontSize: 14, marginBottom: 16 },
+  section: { background: '#f5f5f7', border: '2px solid transparent', borderRadius: 22, padding: 20, marginBottom: 14 },
+  sectionTitle: { fontSize: 18, fontWeight: 800, color: '#1d1d1f', margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+  num: { width: 28, height: 28, borderRadius: '50%', background: '#ff6600', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, flexShrink: 0 },
+  label: { display: 'block', color: '#6e6e73', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
+  input: { width: '100%', padding: '14px 14px', borderRadius: 14, border: '1.5px solid #e5e5ea', background: '#fff', color: '#1d1d1f', fontSize: 16, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' },
+  chip: { padding: '11px 17px', borderRadius: 22, border: '1.5px solid #e5e5ea', background: '#fff', color: '#333', fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' },
+  chipAtivo: { background: '#fff1e6', color: '#ff6600', fontWeight: 800 },
+  erro: { color: '#d93025', fontSize: 13, marginTop: 8, marginBottom: 0 },
+  btnEnviar: { width: '100%', padding: 18, borderRadius: 18, border: 'none', background: '#ff6600', color: 'white', fontWeight: 800, fontSize: 17, cursor: 'pointer', fontFamily: 'inherit' },
+  btnSecundario: { display: 'block', padding: 15, borderRadius: 16, border: '1.5px solid #e5e5ea', background: '#fff', color: '#1d1d1f', fontSize: 15, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', fontFamily: 'inherit' },
+  checkCircle: { width: 84, height: 84, borderRadius: '50%', background: '#e9f9ef', color: '#1a9e4a', fontSize: 42, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' },
+  gradeFotos: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 },
+  fotoSlot: { position: 'relative', aspectRatio: '3 / 4', borderRadius: 16, border: '2px dashed #d2d2d7', background: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden', padding: '0 4px 40px', boxSizing: 'border-box', textAlign: 'center' },
+  fotoPrevia: { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' },
+  fotoNome: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: '5px 4px', background: 'rgba(29,29,31,0.78)', color: '#fff', fontSize: 11, fontWeight: 700, textAlign: 'center' },
+  fotoRemover: { position: 'absolute', top: 6, right: 6, width: 26, height: 26, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.65)', color: '#fff', fontSize: 12, cursor: 'pointer', zIndex: 1 },
 }

@@ -16,6 +16,7 @@ type Produto = {
   bateria_saude?: string
   descricao?: string
   foto_url?: string
+  foto_cor?: string | null
   preco?: number
   disponivel?: boolean
   destaque?: boolean
@@ -37,6 +38,7 @@ type ProdutoFoto = {
   id: string
   produto_id: string
   url: string
+  cor?: string | null
   ordem: number
 }
 
@@ -332,11 +334,80 @@ export default function Admin() {
   async function tornarCapaEdicao(foto: ProdutoFoto) {
     if (!editando) return
     const capaAtual = editando.foto_url
+    const corCapa = editando.foto_cor || null
     await supabase.from('produtos_catalogo').update({ foto_url: foto.url }).eq('id', editando.id)
-    if (capaAtual) await supabase.from('produto_fotos').update({ url: capaAtual }).eq('id', foto.id)
-    else await supabase.from('produto_fotos').delete().eq('id', foto.id)
-    setEditando({ ...editando, foto_url: foto.url })
+    await supabase.from('produtos_catalogo').update({ foto_cor: foto.cor || null }).eq('id', editando.id)
+    if (capaAtual) {
+      await supabase.from('produto_fotos').update({ url: capaAtual }).eq('id', foto.id)
+      await supabase.from('produto_fotos').update({ cor: corCapa }).eq('id', foto.id)
+    } else await supabase.from('produto_fotos').delete().eq('id', foto.id)
+    setEditando({ ...editando, foto_url: foto.url, foto_cor: foto.cor || null })
     carregarFotosEdicao(editando.id)
+  }
+
+  // ─── Cor de cada foto (bolinhas do catálogo) ───
+  function coresDoProduto(p: Produto | null) {
+    const lista = (p?.cor || '').split(/[,/;]| e /).map(c => c.trim()).filter(Boolean)
+    return lista.length ? lista : CORES_LISTA
+  }
+
+  async function definirCorFoto(foto: ProdutoFoto | null, cor: string) {
+    if (!editando) return
+    const valor = cor || null
+    if (!foto) {
+      const { error } = await supabase.from('produtos_catalogo').update({ foto_cor: valor }).eq('id', editando.id)
+      if (error) { alert('Rode o SQL novo no Supabase para salvar as cores das fotos.'); return }
+      setEditando({ ...editando, foto_cor: valor })
+    } else {
+      const { error } = await supabase.from('produto_fotos').update({ cor: valor }).eq('id', foto.id)
+      if (error) { alert('Rode o SQL novo no Supabase para salvar as cores das fotos.'); return }
+      setFotosEdicao(prev => prev.map(f => f.id === foto.id ? { ...f, cor: valor } : f))
+    }
+  }
+
+  // Lê a foto pela internet e reduz para mandar à IA
+  async function fotoUrlParaBase64(url: string): Promise<string> {
+    const blob = await (await fetch(url)).blob()
+    const bmp = await createImageBitmap(blob)
+    const escala = Math.min(1, 768 / Math.max(bmp.width, bmp.height))
+    const c = document.createElement('canvas')
+    c.width = Math.round(bmp.width * escala); c.height = Math.round(bmp.height * escala)
+    const ctx = c.getContext('2d')!
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height)
+    ctx.drawImage(bmp, 0, 0, c.width, c.height)
+    return c.toDataURL('image/jpeg', 0.85).split(',')[1]
+  }
+
+  const [detectandoCores, setDetectandoCores] = useState<{ feitas: number; total: number } | null>(null)
+
+  async function detectarCoresIA() {
+    if (!editando) return
+    const prod = editando
+    const alvos: { foto: ProdutoFoto | null; url: string }[] = [
+      ...(prod.foto_url ? [{ foto: null, url: prod.foto_url }] : []),
+      ...fotosEdicao.map(f => ({ foto: f, url: f.url })),
+    ]
+    if (!alvos.length) return
+    const opcoes = coresDoProduto(prod)
+    const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+    setDetectandoCores({ feitas: 0, total: alvos.length })
+    let falhas = 0
+    for (let i = 0; i < alvos.length; i++) {
+      try {
+        const imagem = await fotoUrlParaBase64(alvos[i].url)
+        const { data, error } = await supabase.functions.invoke('assistente', {
+          body: { modo: 'foto', imagem, tipo: 'image/jpeg', nome_arquivo: '', produtos: [{ id: prod.id, nome: `${prod.marca} ${prod.modelo} — cores possíveis: ${opcoes.join(', ')}`, sem_foto: false }] },
+        })
+        if (error || !data?.cor) throw new Error('sem cor')
+        const achada = String(data.cor)
+        const casada = opcoes.find(o => norm(o) === norm(achada)) || opcoes.find(o => norm(achada).includes(norm(o)) || norm(o).includes(norm(achada))) || achada
+        await definirCorFoto(alvos[i].foto, casada)
+      } catch (e) { console.error(e); falhas++ }
+      setDetectandoCores({ feitas: i + 1, total: alvos.length })
+    }
+    setDetectandoCores(null)
+    carregarFotosEdicao(prod.id)
+    if (falhas) alert(`${falhas} foto(s) não foram identificadas. Escolha a cor manualmente.`)
   }
 
   async function usarOriginalEdicao(url: string, fotoId?: string) {
@@ -829,6 +900,10 @@ export default function Admin() {
                   <span style={seloCapa}>CAPA</span>
                   <button onClick={excluirCapaEdicao} style={btnRemoverFoto}>✕</button>
                   {originais[editando.foto_url] && <button onClick={() => usarOriginalEdicao(editando.foto_url!)} style={btnOriginal}>↺ original</button>}
+                  <select style={seletorCor} value={editando.foto_cor || ''} onChange={e => definirCorFoto(null, e.target.value)}>
+                    <option value="">Cor?</option>
+                    {Array.from(new Set([...coresDoProduto(editando), editando.foto_cor || ''].filter(Boolean))).map(c => <option key={c}>{c}</option>)}
+                  </select>
                 </div>
               )}
               {fotosEdicao.map(foto => (
@@ -837,9 +912,19 @@ export default function Admin() {
                   <button onClick={() => tornarCapaEdicao(foto)} style={btnTornarCapa} title="Usar como capa">⭐</button>
                   <button onClick={() => excluirFotoExtra(foto.id, editando.id)} style={btnRemoverFoto}>✕</button>
                   {originais[foto.url] && <button onClick={() => usarOriginalEdicao(foto.url, foto.id)} style={btnOriginal}>↺ original</button>}
+                  <select style={seletorCor} value={foto.cor || ''} onChange={e => definirCorFoto(foto, e.target.value)}>
+                    <option value="">Cor?</option>
+                    {Array.from(new Set([...coresDoProduto(editando), foto.cor || ''].filter(Boolean))).map(c => <option key={c}>{c}</option>)}
+                  </select>
                 </div>
               ))}
             </div>
+          )}
+          {(editando.foto_url || fotosEdicao.length > 0) && (
+            <button style={{ ...btnSecundario, width: '100%', padding: 12, marginBottom: 14, color: '#ffb27a', borderColor: '#5a3a20' }}
+              disabled={!!detectandoCores} onClick={detectarCoresIA}>
+              {detectandoCores ? `🤖 Identificando cores ${detectandoCores.feitas}/${detectandoCores.total}...` : '🤖 Detectar a cor de cada foto com IA'}
+            </button>
           )}
           <label style={labelStyle}>Descrição</label>
           <textarea style={{ ...inputStyle, height: 80 }} value={editando.descricao || ''} onChange={e => setEditando({ ...editando, descricao: e.target.value })} />
@@ -1415,6 +1500,7 @@ const fotoMiniatura: React.CSSProperties = { width: '100%', aspectRatio: '1 / 1'
 const seloCapa: React.CSSProperties = { position: 'absolute', top: 4, left: 4, background: '#ff6600', color: 'white', fontSize: 9, fontWeight: 800, borderRadius: 6, padding: '2px 6px' }
 const btnTornarCapa: React.CSSProperties = { position: 'absolute', top: 3, left: 3, background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: 6, padding: '2px 5px', cursor: 'pointer', fontSize: 12 }
 const btnRemoverFoto: React.CSSProperties = { position: 'absolute', top: 3, right: 3, background: '#7a1111', border: 'none', color: 'white', borderRadius: 6, width: 22, height: 22, cursor: 'pointer', fontSize: 11 }
+const seletorCor: React.CSSProperties = { width: '100%', marginTop: 4, padding: '5px 4px', borderRadius: 6, border: '1px solid #2a2a2a', background: '#111', color: '#ddd', fontSize: 11 }
 const btnOriginal: React.CSSProperties = { position: 'absolute', bottom: 4, left: 4, right: 4, background: 'rgba(0,0,0,0.7)', border: '1px solid #444', color: '#ddd', borderRadius: 6, padding: '3px 0', cursor: 'pointer', fontSize: 10 }
 const modoAtivo: React.CSSProperties = { flex: 1, padding: '11px 8px', borderRadius: 10, border: '1px solid #ff6600', background: 'rgba(255,102,0,0.15)', color: '#ff6600', fontWeight: 800, fontSize: 14, cursor: 'pointer' }
 const modoInativo: React.CSSProperties = { flex: 1, padding: '11px 8px', borderRadius: 10, border: '1px solid #2a2a2a', background: '#0f0f0f', color: '#888', fontWeight: 600, fontSize: 14, cursor: 'pointer' }
