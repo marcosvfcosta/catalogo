@@ -31,6 +31,20 @@ export default function Protegido({ papel, children }: Props) {
   const [erro, setErro] = useState('')
   const [entrando, setEntrando] = useState(false)
 
+  // Na Negociação, o "Adicionar à Tela de Início" cria um ícone próprio que abre direto aqui
+  useEffect(() => {
+    if (papel !== 'negociacao') return
+    const link = document.querySelector('link[rel="manifest"]') as HTMLLinkElement | null
+    const titulo = document.querySelector('meta[name="apple-mobile-web-app-title"]') as HTMLMetaElement | null
+    const antes = { href: link?.getAttribute('href'), titulo: titulo?.getAttribute('content') }
+    link?.setAttribute('href', '/manifest-negociacao.webmanifest')
+    titulo?.setAttribute('content', 'Negociação')
+    return () => {
+      if (link && antes.href) link.setAttribute('href', antes.href)
+      if (titulo && antes.titulo) titulo.setAttribute('content', antes.titulo)
+    }
+  }, [papel])
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => { setSessao(data.session); setCarregando(false) })
     const { data } = supabase.auth.onAuthStateChange((_evento, s) => setSessao(s))
