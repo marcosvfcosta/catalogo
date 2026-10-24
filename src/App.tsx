@@ -700,10 +700,10 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 /* Categorias */
 .mm .mm-categorias { display: flex; gap: 12px; overflow-x: auto; padding: 14px 16px 18px; scrollbar-width: none; }
 .mm .mm-categorias::-webkit-scrollbar { display: none; }
-.mm .mm-categoria { flex: 0 0 auto; width: 104px; text-align: center; font-size: 15.5px; font-weight: 700; color: var(--tinta); line-height: 1.25; }
-.mm .mm-categoria span { width: 98px; height: 98px; border-radius: 50%; background: var(--cinza); margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.mm .mm-categoria img { width: 82px; height: 82px; object-fit: contain; }
-.mm .mm-categoria:active span { background: #ffe9da; }
+.mm .mm-categoria { flex: 0 0 auto; width: 112px; text-align: center; font-size: 16px; font-weight: 700; color: var(--tinta); line-height: 1.25; }
+.mm .mm-categoria span { width: 108px; height: 100px; border-radius: 0; background: none; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.mm .mm-categoria img { width: 100%; height: 100%; object-fit: contain; mix-blend-mode: multiply; transition: transform .2s; }
+.mm .mm-categoria:active img { transform: scale(0.94); }
 
 /* Vantagens */
 .mm .mm-beneficios { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 16px 6px; }
@@ -870,9 +870,8 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
   .mm .mm-hero h1 { font-size: 50px; }
   .mm .mm-hero-img { height: 280px; }
   .mm .mm-categorias { justify-content: center; gap: 18px; }
-  .mm .mm-categoria { width: 120px; font-size: 16px; }
-  .mm .mm-categoria span { width: 112px; height: 112px; }
-  .mm .mm-categoria img { width: 94px; height: 94px; }
+  .mm .mm-categoria { width: 140px; font-size: 17px; }
+  .mm .mm-categoria span { width: 134px; height: 124px; }
   .mm .mm-beneficios { grid-template-columns: repeat(4, 1fr); }
   .mm .mm-card { width: 230px; }
   .mm .mm-card-grade { width: auto; }

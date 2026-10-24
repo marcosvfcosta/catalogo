@@ -173,14 +173,14 @@ export default function VitrineAdmin({ produtos, aoMudar }: Props) {
             </div>
             <span style={{ color: '#ff6600', fontWeight: 900, fontSize: 20 }}>→</span>
             <div style={{ ...caixaPrevia, borderColor: !usarOriginal ? '#25D366' : '#2a2a2a' }} onClick={() => setUsarOriginal(false)}>
-              <div style={ehMarca ? fundoLogo : { ...fundoFoto, borderRadius: '50%' }}>
+              <div style={ehMarca ? fundoLogo : { ...fundoFoto, background: '#fff' }}>
                 {processando ? <span style={{ color: '#888', fontSize: 12 }}>Ajustando...</span> : <img src={previaAjustada} alt="" style={imgPrevia} />}
               </div>
               <span style={{ color: !usarOriginal ? '#25D366' : '#888', fontWeight: 700 }}>{!usarOriginal ? '✓ ' : ''}Ajustada</span>
             </div>
           </div>
         ) : ed.url ? (
-          <div style={{ ...(ehMarca ? fundoLogo : { ...fundoFoto, borderRadius: '50%', width: 130, margin: '0 auto' }), marginBottom: 10 }}>
+          <div style={{ ...(ehMarca ? fundoLogo : { ...fundoFoto, background: '#fff', width: 130, margin: '0 auto' }), marginBottom: 10 }}>
             <img src={ed.url} alt="" style={imgPrevia} />
           </div>
         ) : null}
