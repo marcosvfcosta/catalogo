@@ -700,9 +700,9 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 /* Categorias */
 .mm .mm-categorias { display: flex; gap: 12px; overflow-x: auto; padding: 14px 16px 18px; scrollbar-width: none; }
 .mm .mm-categorias::-webkit-scrollbar { display: none; }
-.mm .mm-categoria { flex: 0 0 auto; width: 84px; text-align: center; font-size: 13.5px; font-weight: 600; color: var(--tinta); line-height: 1.25; }
-.mm .mm-categoria span { width: 78px; height: 78px; border-radius: 50%; background: var(--cinza); margin: 0 auto 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.mm .mm-categoria img { width: 56px; height: 56px; object-fit: contain; }
+.mm .mm-categoria { flex: 0 0 auto; width: 104px; text-align: center; font-size: 15.5px; font-weight: 700; color: var(--tinta); line-height: 1.25; }
+.mm .mm-categoria span { width: 98px; height: 98px; border-radius: 50%; background: var(--cinza); margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.mm .mm-categoria img { width: 82px; height: 82px; object-fit: contain; }
 .mm .mm-categoria:active span { background: #ffe9da; }
 
 /* Vantagens */
@@ -869,7 +869,10 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
   .mm .mm-hero-slide { min-height: 470px; padding-top: 44px; }
   .mm .mm-hero h1 { font-size: 50px; }
   .mm .mm-hero-img { height: 280px; }
-  .mm .mm-categorias { justify-content: center; }
+  .mm .mm-categorias { justify-content: center; gap: 18px; }
+  .mm .mm-categoria { width: 120px; font-size: 16px; }
+  .mm .mm-categoria span { width: 112px; height: 112px; }
+  .mm .mm-categoria img { width: 94px; height: 94px; }
   .mm .mm-beneficios { grid-template-columns: repeat(4, 1fr); }
   .mm .mm-card { width: 230px; }
   .mm .mm-card-grade { width: auto; }
