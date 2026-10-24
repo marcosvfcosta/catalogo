@@ -851,11 +851,13 @@ export default function Admin() {
           {(editando.foto_url || fotosEdicao.length > 0) && (
             <div style={gradeFotos}>
               {editando.foto_url && (
-                <div style={{ position: 'relative' }}>
-                  <img src={editando.foto_url} style={fotoMiniatura} />
-                  <span style={seloCapa}>CAPA</span>
-                  <button onClick={excluirCapaEdicao} style={btnRemoverFoto}>✕</button>
-                  {originais[editando.foto_url] && <button onClick={() => usarOriginalEdicao(editando.foto_url!)} style={btnOriginal}>↺ original</button>}
+                <div>
+                  <div style={{ position: 'relative' }}>
+                    <img src={editando.foto_url} style={fotoMiniatura} />
+                    <span style={seloCapa}>CAPA</span>
+                    <button onClick={excluirCapaEdicao} style={btnRemoverFoto}>✕</button>
+                    {originais[editando.foto_url] && <button onClick={() => usarOriginalEdicao(editando.foto_url!)} style={btnOriginal}>↺ original</button>}
+                  </div>
                   <select style={seletorCor} value={editando.foto_cor || ''} onChange={e => definirCorFoto(null, e.target.value)}>
                     <option value="">Cor?</option>
                     {Array.from(new Set([...coresDoProduto(editando), editando.foto_cor || ''].filter(Boolean))).map(c => <option key={c}>{c}</option>)}
@@ -863,11 +865,13 @@ export default function Admin() {
                 </div>
               )}
               {fotosEdicao.map(foto => (
-                <div key={foto.id} style={{ position: 'relative' }}>
-                  <img src={foto.url} style={fotoMiniatura} />
-                  <button onClick={() => tornarCapaEdicao(foto)} style={btnTornarCapa} title="Usar como capa">⭐</button>
-                  <button onClick={() => excluirFotoExtra(foto.id, editando.id)} style={btnRemoverFoto}>✕</button>
-                  {originais[foto.url] && <button onClick={() => usarOriginalEdicao(foto.url, foto.id)} style={btnOriginal}>↺ original</button>}
+                <div key={foto.id}>
+                  <div style={{ position: 'relative' }}>
+                    <img src={foto.url} style={fotoMiniatura} />
+                    <button onClick={() => tornarCapaEdicao(foto)} style={btnTornarCapa} title="Usar como capa">⭐</button>
+                    <button onClick={() => excluirFotoExtra(foto.id, editando.id)} style={btnRemoverFoto}>✕</button>
+                    {originais[foto.url] && <button onClick={() => usarOriginalEdicao(foto.url, foto.id)} style={btnOriginal}>↺ original</button>}
+                  </div>
                   <select style={seletorCor} value={foto.cor || ''} onChange={e => definirCorFoto(foto, e.target.value)}>
                     <option value="">Cor?</option>
                     {Array.from(new Set([...coresDoProduto(editando), foto.cor || ''].filter(Boolean))).map(c => <option key={c}>{c}</option>)}
