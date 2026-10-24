@@ -358,56 +358,12 @@ export default function Admin() {
       const { error } = await supabase.from('produtos_catalogo').update({ foto_cor: valor }).eq('id', editando.id)
       if (error) { alert('Rode o SQL novo no Supabase para salvar as cores das fotos.'); return }
       setEditando({ ...editando, foto_cor: valor })
+      setProdutos(prev => prev.map(p => p.id === editando.id ? { ...p, foto_cor: valor } : p))
     } else {
       const { error } = await supabase.from('produto_fotos').update({ cor: valor }).eq('id', foto.id)
       if (error) { alert('Rode o SQL novo no Supabase para salvar as cores das fotos.'); return }
       setFotosEdicao(prev => prev.map(f => f.id === foto.id ? { ...f, cor: valor } : f))
     }
-  }
-
-  // Lê a foto pela internet e reduz para mandar à IA
-  async function fotoUrlParaBase64(url: string): Promise<string> {
-    const blob = await (await fetch(url)).blob()
-    const bmp = await createImageBitmap(blob)
-    const escala = Math.min(1, 768 / Math.max(bmp.width, bmp.height))
-    const c = document.createElement('canvas')
-    c.width = Math.round(bmp.width * escala); c.height = Math.round(bmp.height * escala)
-    const ctx = c.getContext('2d')!
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height)
-    ctx.drawImage(bmp, 0, 0, c.width, c.height)
-    return c.toDataURL('image/jpeg', 0.85).split(',')[1]
-  }
-
-  const [detectandoCores, setDetectandoCores] = useState<{ feitas: number; total: number } | null>(null)
-
-  async function detectarCoresIA() {
-    if (!editando) return
-    const prod = editando
-    const alvos: { foto: ProdutoFoto | null; url: string }[] = [
-      ...(prod.foto_url ? [{ foto: null, url: prod.foto_url }] : []),
-      ...fotosEdicao.map(f => ({ foto: f, url: f.url })),
-    ]
-    if (!alvos.length) return
-    const opcoes = coresDoProduto(prod)
-    const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
-    setDetectandoCores({ feitas: 0, total: alvos.length })
-    let falhas = 0
-    for (let i = 0; i < alvos.length; i++) {
-      try {
-        const imagem = await fotoUrlParaBase64(alvos[i].url)
-        const { data, error } = await supabase.functions.invoke('assistente', {
-          body: { modo: 'foto', imagem, tipo: 'image/jpeg', nome_arquivo: '', produtos: [{ id: prod.id, nome: `${prod.marca} ${prod.modelo} — cores possíveis: ${opcoes.join(', ')}`, sem_foto: false }] },
-        })
-        if (error || !data?.cor) throw new Error('sem cor')
-        const achada = String(data.cor)
-        const casada = opcoes.find(o => norm(o) === norm(achada)) || opcoes.find(o => norm(achada).includes(norm(o)) || norm(o).includes(norm(achada))) || achada
-        await definirCorFoto(alvos[i].foto, casada)
-      } catch (e) { console.error(e); falhas++ }
-      setDetectandoCores({ feitas: i + 1, total: alvos.length })
-    }
-    setDetectandoCores(null)
-    carregarFotosEdicao(prod.id)
-    if (falhas) alert(`${falhas} foto(s) não foram identificadas. Escolha a cor manualmente.`)
   }
 
   async function usarOriginalEdicao(url: string, fotoId?: string) {
@@ -919,12 +875,6 @@ export default function Admin() {
                 </div>
               ))}
             </div>
-          )}
-          {(editando.foto_url || fotosEdicao.length > 0) && (
-            <button style={{ ...btnSecundario, width: '100%', padding: 12, marginBottom: 14, color: '#ffb27a', borderColor: '#5a3a20' }}
-              disabled={!!detectandoCores} onClick={detectarCoresIA}>
-              {detectandoCores ? `🤖 Identificando cores ${detectandoCores.feitas}/${detectandoCores.total}...` : '🤖 Detectar a cor de cada foto com IA'}
-            </button>
           )}
           <label style={labelStyle}>Descrição</label>
           <textarea style={{ ...inputStyle, height: 80 }} value={editando.descricao || ''} onChange={e => setEditando({ ...editando, descricao: e.target.value })} />
