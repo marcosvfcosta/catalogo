@@ -71,7 +71,9 @@ export async function ajustarFoto(original: File): Promise<FotoAjustada> {
       : []
     const dist = (i: number) => Math.min(...coresFundo.map(([r, g, b]) =>
       Math.abs(px[i] - r) + Math.abs(px[i + 1] - g) + Math.abs(px[i + 2] - b)))
-    const bordasLisas = coresFundo.length > 0 && amostras.filter(i => dist(i) < TOLERANCIA).length / amostras.length > 0.75
+    // Fundo claro: basta 40% da borda (o aparelho pode encostar nas laterais). Fundo colorido: precisa de 75%.
+    const minimoBorda = principal && claroNeutro(principal) ? 0.4 : 0.75
+    const bordasLisas = coresFundo.length > 0 && amostras.filter(i => dist(i) < TOLERANCIA).length / amostras.length > minimoBorda
 
     const fundo = new Uint8Array(w * h) // 1 = fundo
     if (bordasLisas) {

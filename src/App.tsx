@@ -92,8 +92,13 @@ function abrirWhatsApp(texto: string) {
 
 const nomeCompleto = (p: Produto) => [p.marca === 'Apple' ? '' : p.marca, p.modelo, p.memoria].filter(Boolean).join(' ')
 
-function textoInteresse(p: Produto) {
-  return `Olá! Tenho interesse no ${nomeCompleto(p)} que vi no catálogo da Marcos Magazine.`
+// Link do produto com prévia (foto) no WhatsApp
+function linkProduto(p: Produto, cor?: string | null) {
+  return `${window.location.origin}/api/p?id=${p.id}${cor ? `&cor=${encodeURIComponent(cor)}` : ''}`
+}
+
+function textoInteresse(p: Produto, cor?: string | null) {
+  return `Olá! Tenho interesse no ${nomeCompleto(p)}${cor ? ` na cor ${cor}` : ''} que vi no catálogo da Marcos Magazine.\n${linkProduto(p, cor)}`
 }
 
 function lerSacola(): string[] {
@@ -161,6 +166,15 @@ function App() {
       setProdutos(((p.data || []) as Produto[]).filter(x => x.disponivel !== false))
       setBanners((h.data || []) as Banner[])
       setCarregando(false)
+      try {
+        const q = new URLSearchParams(window.location.search)
+        const id = q.get('produto')
+        if (id) {
+          const alvo = ((p.data || []) as Produto[]).find(x => x.id === id)
+          try { window.history.replaceState({}, '', window.location.pathname) } catch { /* ok */ }
+          if (alvo) abrirProduto(alvo, q.get('cor'))
+        }
+      } catch { /* ok */ }
     })
   }, [])
 
@@ -198,20 +212,25 @@ function App() {
 
   function enviarSacola() {
     if (!itensSacola.length) return
-    const lista = itensSacola.map((p, i) => `${i + 1}. ${nomeCompleto(p)}`).join('\n')
+    const lista = itensSacola.map((p, i) => `${i + 1}. ${nomeCompleto(p)}\n${linkProduto(p)}`).join('\n\n')
     abrirWhatsApp(`Olá! Vim pelo catálogo da Marcos Magazine e tenho interesse ${itensSacola.length > 1 ? 'nestes produtos' : 'neste produto'}:\n\n${lista}\n\nPode me passar valores e condições?`)
   }
 
   // ─── Navegação ───────────────────────────────────
-  async function abrirProduto(p: Produto) {
+  async function abrirProduto(p: Produto, corInicial?: string | null) {
     const capa = p.foto_url ? [{ url: p.foto_url, cor: p.foto_cor || null }] : []
-    setSelecionado(p); setFotoIndex(0); setFotosDetalhe(capa); setSacolaAberta(false); setCorEscolhida(p.foto_cor || null)
+    setSelecionado(p); setFotoIndex(0); setFotosDetalhe(capa); setSacolaAberta(false); setCorEscolhida(corInicial || p.foto_cor || null)
     window.history.pushState({ produto: p.id }, '')
     window.scrollTo(0, 0)
     const r1 = await supabase.from('produto_fotos').select('url, cor').eq('produto_id', p.id).order('ordem')
     const data = r1.error ? (await supabase.from('produto_fotos').select('url').eq('produto_id', p.id).order('ordem')).data : r1.data
     const extras = ((data || []) as { url: string; cor?: string | null }[]).map(f => ({ url: f.url, cor: f.cor || null }))
-    setFotosDetalhe([...capa, ...extras])
+    const todas = [...capa, ...extras]
+    setFotosDetalhe(todas)
+    if (corInicial) {
+      const i = todas.findIndex(f => f.cor && semAcento(f.cor) === semAcento(corInicial))
+      if (i > 0) setTimeout(() => { galeriaRef.current?.scrollTo({ left: i * (galeriaRef.current?.clientWidth || 0) }); setFotoIndex(i) }, 150)
+    }
   }
 
   // Toca na bolinha → mostra a foto daquela cor
@@ -429,7 +448,7 @@ function App() {
           <button className={dentro ? 'mm-btn-contorno mm-btn-sacola-grande dentro' : 'mm-btn-contorno mm-btn-sacola-grande'} onClick={() => alternarSacola(p)}>
             {dentro ? '✓ Na sacola' : <><IconeSacola tamanho={20} /> Sacola</>}
           </button>
-          <button className="mm-btn-verde" onClick={() => abrirWhatsApp(corEscolhida ? textoInteresse(p).replace(' que vi no catálogo', ` na cor ${corEscolhida} que vi no catálogo`) : textoInteresse(p))}><IconeWhats /> Tenho interesse</button>
+          <button className="mm-btn-verde" onClick={() => abrirWhatsApp(textoInteresse(p, corEscolhida))}><IconeWhats /> Tenho interesse</button>
         </div>
         {gavetaSacola}
         {avisoFlutuante}
