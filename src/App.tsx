@@ -425,6 +425,27 @@ function App() {
     categoriaAtiva ? `${categoriaAtiva}${marcaAtiva ? ` ${marcaAtiva}` : ''}` :
     marcaAtiva || `Busca: "${busca.trim()}"`
 
+  // "Todos os produtos" da tela inicial: 8 itens misturados (1 de cada categoria, revezando)
+  const vitrineMista = useMemo(() => {
+    const grupos = new Map<string, Produto[]>()
+    for (const p of produtos) {
+      const g = grupos.get(p.categoria) || []
+      g.push(p); grupos.set(p.categoria, g)
+    }
+    // Ordem: categorias do Admin primeiro, depois as outras
+    const ordem = [...categorias.map(c => c.nome).filter(n => grupos.has(n)), ...[...grupos.keys()].filter(n => !categorias.some(c => c.nome === n))]
+    const lista: Produto[] = []
+    for (let i = 0; lista.length < 8; i++) {
+      let pegou = false
+      for (const nome of ordem) {
+        const item = grupos.get(nome)?.[i]
+        if (item && lista.length < 8) { lista.push(item); pegou = true }
+      }
+      if (!pegou) break
+    }
+    return lista
+  }, [produtos, categorias])
+
   const destaques = produtos.filter(p => p.destaque)
   const lancamentos = produtos.filter(p => p.lancamento)
   const promocoes = produtos.filter(p => p.promocao)
@@ -874,7 +895,7 @@ function App() {
                     <button key={c.nome} onClick={() => aplicarFiltro({ categoria: c.nome })}>{c.nome}</button>
                   ))}
                 </div>
-                <div className="mm-grade">{produtos.slice(0, 8).map(p => cartao(p, true))}</div>
+                <div className="mm-grade">{vitrineMista.map(p => cartao(p, true))}</div>
                 {produtos.length > 8 && (
                   <button className="mm-btn-contorno mm-ver-mais" onClick={() => aplicarFiltro({ especial: 'todos' })}>Ver todos os {produtos.length} produtos ›</button>
                 )}
