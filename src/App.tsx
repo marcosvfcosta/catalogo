@@ -241,6 +241,13 @@ function App() {
       }
       try {
         const q = new URLSearchParams(window.location.search)
+        // Link do retorno: /?celular=ID&tipo=capa → abre os acessórios daquele celular
+        const celularId = q.get('celular')
+        const alvoCel = celularId ? novosModelos.find(x => x.id === celularId) : undefined
+        if (alvoCel) {
+          try { window.history.replaceState({}, '', window.location.pathname) } catch { /* ok */ }
+          escolherCelular(alvoCel, q.get('tipo') || '')
+        }
         const id = q.get('produto')
         if (id) {
           const alvo = ((p.data || []) as Produto[]).find(x => x.id === id)
@@ -308,6 +315,32 @@ function App() {
     }
   }
 
+  // Compartilhar: no celular manda a FOTO + nome/preço/link (WhatsApp, Instagram...). No PC copia o texto.
+  async function compartilhar(p: Produto) {
+    const fotoUrl = fotosDetalhe[fotoIndex]?.url || p.foto_url || ''
+    const cor = fotosDetalhe[fotoIndex]?.cor || corEscolhida
+    const preco = precoVisivel(p) ? `\n${temDesconto(p) ? `De ~${reais(p.preco_antigo || 0)}~ por ` : ''}*${reais(p.preco || 0)}*` : ''
+    const texto = `*${nomeCompleto(p)}*${cor ? ` · ${cor}` : ''}${preco}\n💳 Até ${PARCELAS}x no cartão\n\nVeja no catálogo da Marcos Magazine:\n${linkProduto(p, cor)}`
+    const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean }
+    try {
+      if (fotoUrl && nav.share) {
+        mostrarAviso('Preparando foto...')
+        const blob = await (await fetch(fotoUrl)).blob()
+        const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')
+        const arquivo = new File([blob], `${p.modelo.replace(/[^\w-]+/g, '-')}.${ext}`, { type: blob.type || 'image/jpeg' })
+        if (!nav.canShare || nav.canShare({ files: [arquivo] })) {
+          await nav.share({ files: [arquivo], text: texto })
+          return
+        }
+      }
+      if (nav.share) { await nav.share({ text: texto }); return }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return // a pessoa cancelou
+    }
+    try { await navigator.clipboard.writeText(texto); mostrarAviso('✓ Texto e link copiados') }
+    catch { abrirWhatsApp(texto) }
+  }
+
   // Toca na bolinha → mostra a foto daquela cor
   function escolherCor(nome: string) {
     setCorEscolhida(nome)
@@ -334,9 +367,9 @@ function App() {
   }
 
   // ─── Busca por modelo de celular ─────────────────
-  function escolherCelular(m: ModeloCelular) {
+  function escolherCelular(m: ModeloCelular, grupo = '') {
     setBusca(''); setCategoriaAtiva(null); setMarcaAtiva(null); setFiltroEspecial(null)
-    setMeuCelular(m); setGrupoAcessorio(''); setTextoCelular(''); setSugestoesAbertas(false)
+    setMeuCelular(m); setGrupoAcessorio(grupo); setTextoCelular(''); setSugestoesAbertas(false)
     campoCelularRef.current?.blur()
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -389,6 +422,18 @@ function App() {
   }
 
   const filtrando = !meuCelular && !!(busca.trim() || categoriaAtiva || marcaAtiva || filtroEspecial)
+
+  // Telas de Carregadores, Fones, Capas, Películas, Cabos → mostra "Qual é o seu celular?" também
+  const grupoDaCategoria = (() => {
+    const c = semAcento(categoriaAtiva || '')
+    if (!c || marcaAtiva || filtroEspecial || busca.trim()) return null
+    if (c.includes('carregador') || c.includes('cabo')) return 'carregador'
+    if (c.includes('fone')) return 'fone'
+    if (c.includes('pelicula')) return 'pelicula'
+    if (c.includes('capa') || c.includes('capinha')) return 'capa'
+    return null
+  })()
+  const mostrarBarraCelular = !filtrando || grupoDaCategoria !== null
 
   const resultados = useMemo(() => {
     const termo = semAcento(busca)
@@ -560,7 +605,13 @@ function App() {
           )}
           <div className="mm-detalhe-info">
             <p className="mm-detalhe-marca">{p.marca}</p>
-            <h1 className="mm-detalhe-nome">{p.modelo}</h1>
+            <div className="mm-nome-linha">
+              <h1 className="mm-detalhe-nome">{p.modelo}</h1>
+              <button className="mm-compartilhar" onClick={() => compartilhar(p)} aria-label="Compartilhar">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12" /><path d="m7 8 5-5 5 5" /><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" /></svg>
+                Enviar
+              </button>
+            </div>
             <PrecoProduto p={p} grande />
             {cores.length > 0 && (
               <div className="mm-cores mm-cores-grandes">
@@ -656,27 +707,28 @@ function App() {
         </div>
       )}
 
+      <div ref={topoRef} style={{ scrollMarginTop: 70 }} />
       {/* ─── Qual é o seu celular? ─── */}
-      {!filtrando && (
+      {mostrarBarraCelular && (
         <div className="mm-qual">
           <div className={sugestoesAbertas && textoCelular ? 'mm-qual-caixa aberta' : 'mm-qual-caixa'}>
             <IconeBusca />
-            <input ref={campoCelularRef} placeholder="Qual é o seu celular? Ex: iPhone 13" value={textoCelular}
+            <input ref={campoCelularRef} placeholder={grupoDaCategoria ? 'Qual é o seu celular?' : 'Qual é o seu celular? Ex: iPhone 13'} value={textoCelular}
               onFocus={() => setSugestoesAbertas(true)}
               onBlur={() => setTimeout(() => setSugestoesAbertas(false), 200)}
               onChange={e => { setTextoCelular(e.target.value); setSugestoesAbertas(true) }}
               onKeyDown={e => {
                 if (e.key !== 'Enter') return
-                if (sugestoesCelular.length) escolherCelular(sugestoesCelular[0]); else buscarTexto(textoCelular)
+                if (sugestoesCelular.length) escolherCelular(sugestoesCelular[0], grupoDaCategoria || ''); else buscarTexto(textoCelular)
               }} />
             {textoCelular && <button onClick={() => setTextoCelular('')} aria-label="Limpar">✕</button>}
           </div>
           {sugestoesAbertas && textoCelular.trim() && (
             <div className="mm-qual-lista">
               {sugestoesCelular.map(m => (
-                <button key={m.id} onMouseDown={e => e.preventDefault()} onClick={() => escolherCelular(m)}>
+                <button key={m.id} onMouseDown={e => e.preventDefault()} onClick={() => escolherCelular(m, grupoDaCategoria || '')}>
                   <span className="mm-qual-foto">{m.foto_url ? <img src={m.foto_url} alt="" /> : '📱'}</span>
-                  <span><b>{m.modelo}</b><small>Ver capas, películas e acessórios</small></span>
+                  <span><b>{m.modelo}</b><small>{grupoDaCategoria ? `Ver ${CHIPS_ACESSORIO.find(c => c.id === grupoDaCategoria)?.nome.toLowerCase()} que serve nele` : 'Ver capas, películas e acessórios'}</small></span>
                 </button>
               ))}
               <button className="mm-qual-texto" onMouseDown={e => e.preventDefault()} onClick={() => buscarTexto(textoCelular)}>
@@ -684,7 +736,7 @@ function App() {
               </button>
             </div>
           )}
-          {!meuCelular && (
+          {!meuCelular && !filtrando && (
             <button className="mm-usado-faixa" onClick={() => navigate('/entrada')}>
               <span className="mm-usado-bola">⇄</span>
               <span className="mm-usado-texto"><b>Avalie seu usado</b><small>Vale como entrada no novo</small></span>
@@ -693,8 +745,6 @@ function App() {
           )}
         </div>
       )}
-
-      <div ref={topoRef} />
 
       {meuCelular ? (
         /* ─── Acessórios para o celular escolhido ─── */
@@ -1127,6 +1177,9 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 .mm .mm-sem-foto-grande { font-size: 26px; }
 .mm .mm-detalhe-info { padding: 16px 20px 10px; }
 .mm .mm-detalhe-marca { color: var(--laranja); font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 2.5px; }
+.mm .mm-nome-linha { display: flex; align-items: flex-start; gap: 10px; }
+.mm .mm-nome-linha .mm-detalhe-nome { flex: 1; min-width: 0; }
+.mm .mm-compartilhar { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-top: 8px; padding: 9px 14px; border-radius: 20px; background: #fff1e6; color: var(--laranja); font-size: 15px; font-weight: 700; }
 .mm .mm-detalhe-nome { color: var(--tinta); font-size: 31px; font-weight: 800; letter-spacing: -0.6px; line-height: 1.15; margin-top: 4px; }
 .mm .mm-cores-grandes { gap: 14px; margin-top: 14px; }
 .mm .mm-cores-grandes { gap: 8px; }

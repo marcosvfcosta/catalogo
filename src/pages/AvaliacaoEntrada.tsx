@@ -48,7 +48,8 @@ function comprimir(arquivo: File): Promise<Blob> {
   })
 }
 const ESTADOS = ['Seminovo', 'Vitrine']
-const ACESSORIOS = ['Caixa', 'Cabo', 'Carregador']
+const ACESSORIOS = ['Cabo', 'Carregador']
+const POLITICA = 'A política da loja não permite a avaliação em celulares de vitrine ou sem caixa.'
 
 function mascaraTelefone(v: string) {
   const d = v.replace(/\D/g, '').slice(0, 11)
@@ -128,6 +129,7 @@ export default function AvaliacaoEntrada() {
     if (!modeloFinal) e.modelo = modelo === 'Outro' ? 'Digite o modelo do aparelho' : 'Escolha o modelo'
     if (!armazenamento) e.armazenamento = 'Escolha o armazenamento'
     if (!estado) e.estado = 'Escolha Seminovo ou Vitrine'
+    if (!temCaixa) e.temCaixa = 'Responda se o aparelho tem a caixa'
     if (!possuiDefeito) e.possuiDefeito = 'Responda se o aparelho possui defeito'
     if (possuiDefeito === 'Sim' && !defeito.trim()) e.defeito = 'Descreva o defeito'
     if (!interesse.trim()) e.interesse = 'Diga qual celular você quer comprar'
@@ -137,8 +139,16 @@ export default function AvaliacaoEntrada() {
     return Object.keys(e).length === 0
   }
 
+  const [temCaixa, setTemCaixa] = useState('')
+  const semCaixa = temCaixa === 'Não'
+  const bloqueado = estado === 'Vitrine' || semCaixa
+  const [tentouEnviar, setTentouEnviar] = useState(false)
+
   async function enviar() {
-    if (!validar()) {
+    setTentouEnviar(true)
+    const ok = validar()
+    if (bloqueado) return
+    if (!ok) {
       window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
@@ -170,7 +180,7 @@ export default function AvaliacaoEntrada() {
       possui_defeito: possuiDefeito === 'Sim',
       defeito: possuiDefeito === 'Sim' ? defeito.trim() : null,
       bateria,
-      acessorios,
+      acessorios: temCaixa === 'Sim' ? ['Caixa', ...acessorios] : acessorios,
       interesse: interesse.trim(),
     }
     let { error } = await supabase.from('entradas').insert([{ ...dados, fotos: enviadas.length ? enviadas : null }])
@@ -189,7 +199,7 @@ export default function AvaliacaoEntrada() {
   function novaAvaliacao() {
     setBuscaModelo(''); setModelo(''); setOutroModelo(''); setArmazenamento('')
     setEstado(''); setPossuiDefeito(''); setDefeito(''); setBateria(85)
-    setAcessorios([]); setInteresse(''); setErros({}); setEnviado(false); setFotos({})
+    setAcessorios([]); setTemCaixa(''); setInteresse(''); setErros({}); setEnviado(false); setFotos({})
   }
 
   function falarComLoja() {
@@ -263,6 +273,11 @@ export default function AvaliacaoEntrada() {
           <Chips opcoes={ESTADOS} valor={estado} erro={!!erros.estado}
             onChange={v => { setEstado(v); limparErro('estado') }} />
           {erros.estado && <p style={s.erro}>{erros.estado}</p>}
+          <p style={{ ...s.sectionTitle, fontSize: 15, marginTop: 18, marginBottom: 10 }}>Tem a caixa do aparelho?</p>
+          <Chips opcoes={['Sim', 'Não']} valor={temCaixa} erro={!!erros.temCaixa}
+            onChange={v => { setTemCaixa(v); limparErro('temCaixa') }} />
+          {erros.temCaixa && <p style={s.erro}>{erros.temCaixa}</p>}
+          {bloqueado && <div style={s.politica}>🚫 {POLITICA}</div>}
         </div>
 
         <div style={s.section}>
@@ -365,7 +380,12 @@ export default function AvaliacaoEntrada() {
           {erros.telefone && <p style={s.erro}>{erros.telefone}</p>}
         </div>
 
-        <button onClick={enviar} disabled={enviando} style={{ ...s.btnEnviar, opacity: enviando ? 0.7 : 1 }}>
+        {bloqueado && tentouEnviar && (
+          <div style={{ ...s.politica, marginBottom: 12, fontSize: 15 }}>
+            🚫 <b>Não é possível enviar.</b><br />{POLITICA}
+          </div>
+        )}
+        <button onClick={enviar} disabled={enviando} style={{ ...s.btnEnviar, opacity: enviando || (bloqueado && tentouEnviar) ? 0.5 : 1 }}>
           {enviando ? (progresso || 'Enviando...') : 'Enviar avaliação'}
         </button>
         <p style={{ color: '#86868b', fontSize: 12, textAlign: 'center', marginTop: 12, marginBottom: 40 }}>
@@ -395,6 +415,7 @@ const s: Record<string, React.CSSProperties> = {
   chip: { padding: '11px 17px', borderRadius: 22, border: '1.5px solid #e5e5ea', background: '#fff', color: '#333', fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' },
   chipAtivo: { background: '#fff1e6', color: '#ff6600', fontWeight: 800 },
   erro: { color: '#d93025', fontSize: 13, marginTop: 8, marginBottom: 0 },
+  politica: { marginTop: 12, padding: '12px 14px', borderRadius: 14, background: '#fff1f0', border: '1px solid #ffccc7', color: '#c4271b', fontSize: 14, fontWeight: 600, lineHeight: 1.45 },
   btnEnviar: { width: '100%', padding: 18, borderRadius: 18, border: 'none', background: '#ff6600', color: 'white', fontWeight: 800, fontSize: 17, cursor: 'pointer', fontFamily: 'inherit' },
   btnSecundario: { display: 'block', padding: 15, borderRadius: 16, border: '1.5px solid #e5e5ea', background: '#fff', color: '#1d1d1f', fontSize: 15, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', fontFamily: 'inherit' },
   checkCircle: { width: 84, height: 84, borderRadius: '50%', background: '#e9f9ef', color: '#1a9e4a', fontSize: 42, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' },

@@ -159,6 +159,35 @@ function resumoEntrada(e: Entrada) {
   ].filter(Boolean).join(' · ')
 }
 
+// ─── Retornos (chamar o cliente de novo depois de X dias) ───
+type Retorno = {
+  id: string; created_at: string; nome: string; telefone: string
+  modelo: string; modelo_id: string | null; intervalo_dias: number
+  proximo_contato: string; ultimo_contato: string | null; contatos: number
+  aceita: boolean; observacao: string | null; ativo: boolean
+  desconto_pct?: number | null; desconto_validade?: string | null; desconto_usado_em?: string | null
+  ultima_compra?: string | null; ultima_compra_em?: string | null
+}
+type LinhaTroca = { id: string; modelo: string; gb: string | null; cor: string | null; bateria: string | null; valor: number | null; ordem: number }
+const VALIDADES = [7, 15, 30]
+// Desconto ainda vale? (tem %, não foi usado e não venceu)
+const descontoAtivo = (r: Retorno, hoje: string) =>
+  !!r.desconto_pct && r.desconto_pct > 0 && !r.desconto_usado_em && !!r.desconto_validade && r.desconto_validade >= hoje
+const diasAte = (iso: string, hoje: string) => Math.round((new Date(iso + 'T12:00:00Z').getTime() - new Date(hoje + 'T12:00:00Z').getTime()) / 86400000)
+const semAc = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+type ModeloCel = { id: string; marca: string; modelo: string }
+const INTERVALOS = [15, 30, 45, 60, 90]
+
+// Data de hoje no horário de Brasília (AAAA-MM-DD)
+function hojeBR() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+}
+function somarDias(dataISO: string, dias: number) {
+  const d = new Date(dataISO + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + dias)
+  return d.toISOString().slice(0, 10)
+}
+const dataCurta = (iso: string) => iso.split('-').reverse().slice(0, 2).join('/')
+
 function linkWhatsApp(telefone: string, msg: string) {
   const d = telefone.replace(/\D/g, '')
   const numero = d.startsWith('55') && d.length > 11 ? d : `55${d}`
@@ -239,7 +268,18 @@ function chaveParaBytes(base64: string) {
 export default function Negociacao() {
   const celular = useCelular()
   const s = estilos(celular)
-  const [aba, setAba] = useState<'negociacao' | 'clientes' | 'relatorios' | 'entradas' | 'admin'>('negociacao')
+  const [aba, setAba] = useState<'negociacao' | 'clientes' | 'relatorios' | 'entradas' | 'retornos' | 'tabela' | 'admin'>('negociacao')
+  const [tabelaTroca, setTabelaTroca] = useState<LinhaTroca[]>([])
+  const [buscaTroca, setBuscaTroca] = useState('')
+  const [buscaTabela, setBuscaTabela] = useState('')
+  const [retornos, setRetornos] = useState<Retorno[]>([])
+  const [modelosCel, setModelosCel] = useState<ModeloCel[]>([])
+  const novoRetorno = { nome: '', telefone: '', modelo: '', modelo_id: null as string | null, intervalo_dias: 30, aceita: true, observacao: '', desconto_pct: '', validade_dias: 15, ultima_compra: '' }
+  const [formRet, setFormRet] = useState(novoRetorno)
+  const [sugestoesRet, setSugestoesRet] = useState<ModeloCel[]>([])
+  const [salvandoRet, setSalvandoRet] = useState(false)
+  const [erroRet, setErroRet] = useState('')
+  const [buscaRet, setBuscaRet] = useState('')
   const [menuAberto, setMenuAberto] = useState(false)
   const [clientes, setClientes] = useState<Negociacao[]>([])
   const [clienteSelecionado, setClienteSelecionado] = useState<Negociacao | null>(null)
@@ -265,7 +305,10 @@ export default function Negociacao() {
 
   // Abre direto em "Entradas" quando vem da notificação
   useEffect(() => {
-    try { if (new URLSearchParams(window.location.search).get('aba') === 'entradas') setAba('entradas') } catch { /* ok */ }
+    try {
+      const qAba = new URLSearchParams(window.location.search).get('aba')
+      if (qAba === 'entradas' || qAba === 'retornos' || qAba === 'tabela') setAba(qAba)
+    } catch { /* ok */ }
     verificarAvisos()
   }, [])
 
@@ -343,7 +386,136 @@ export default function Negociacao() {
     if (aba === 'clientes' || aba === 'relatorios') carregarClientes()
     if (aba === 'negociacao' || aba === 'admin') carregarAparelhos()
     carregarEntradas()
+    carregarRetornos()
+    if (aba === 'negociacao' || aba === 'tabela') carregarTabela()
   }, [aba])
+
+  // ─── Retornos ───
+  async function carregarRetornos() {
+    const { data } = await supabase.from('catalogo_retornos').select('*').eq('ativo', true).order('proximo_contato')
+    setRetornos((data || []) as Retorno[])
+    if (!modelosCel.length) {
+      const { data: m } = await supabase.from('capas_modelos').select('id, marca, modelo').order('modelo')
+      setModelosCel((m || []) as ModeloCel[])
+    }
+  }
+
+  function digitarModeloRet(t: string) {
+    const exato = modelosCel.find(m => m.modelo.toLowerCase() === t.trim().toLowerCase())
+    setFormRet({ ...formRet, modelo: t, modelo_id: exato ? exato.id : null })
+    const termo = t.trim().toLowerCase()
+    setSugestoesRet(termo.length < 2 ? [] : modelosCel.filter(m => `${m.marca} ${m.modelo}`.toLowerCase().includes(termo)).slice(0, 6))
+  }
+
+  async function salvarRetorno() {
+    setErroRet('')
+    if (!formRet.nome.trim()) { setErroRet('Coloque o nome'); return }
+    if (formRet.telefone.replace(/\D/g, '').length < 10) { setErroRet('WhatsApp com DDD'); return }
+    if (!formRet.modelo.trim()) { setErroRet('Coloque o modelo do celular'); return }
+    setSalvandoRet(true)
+    const dias = Math.max(1, Number(formRet.intervalo_dias) || 30)
+    const { error } = await supabase.from('catalogo_retornos').insert([{
+      nome: formRet.nome.trim(), telefone: formRet.telefone.trim(), modelo: formRet.modelo.trim(), modelo_id: formRet.modelo_id,
+      intervalo_dias: dias, proximo_contato: somarDias(hojeBR(), dias), aceita: formRet.aceita,
+      observacao: formRet.observacao.trim() || null,
+      ultima_compra: formRet.ultima_compra.trim() || null,
+      ultima_compra_em: formRet.ultima_compra.trim() ? hojeBR() : null,
+      ...(Number(formRet.desconto_pct.replace(',', '.')) > 0 ? {
+        desconto_pct: Number(formRet.desconto_pct.replace(',', '.')),
+        desconto_validade: somarDias(somarDias(hojeBR(), dias), formRet.validade_dias || 15),
+      } : {}),
+    }])
+    setSalvandoRet(false)
+    if (error) { setErroRet('Erro ao salvar: ' + error.message); return }
+    setFormRet(novoRetorno); setSugestoesRet([])
+    carregarRetornos()
+  }
+
+  function mensagemRetorno(r: Retorno) {
+    const primeiro = r.nome.trim().split(' ')[0]
+    const link = r.modelo_id ? `${window.location.origin}/?celular=${r.modelo_id}&tipo=capa` : `${window.location.origin}/capas`
+    const cupom = descontoAtivo(r, hojeBR()) ? `\n\n🎟 E você tem *${r.desconto_pct}% de desconto* em acessórios até ${dataCurta(r.desconto_validade!)}! É só mostrar essa mensagem na loja.` : ''
+    return `Oi ${primeiro}! Aqui é da Marcos Magazine 😊\n\nChegaram novidades em capas e acessórios para o seu *${r.modelo}*! Dá uma olhada:\n${link}${cupom}\n\nQualquer coisa é só chamar aqui 🧡`
+  }
+
+  async function marcarMandei(r: Retorno) {
+    const proximo = somarDias(hojeBR(), r.intervalo_dias || 30)
+    await supabase.from('catalogo_retornos').update({ ultimo_contato: new Date().toISOString(), contatos: (r.contatos || 0) + 1, proximo_contato: proximo }).eq('id', r.id)
+    carregarRetornos()
+  }
+
+  async function mudarIntervalo(r: Retorno, dias: number) {
+    const d = Math.max(1, dias || 30)
+    const base = r.ultimo_contato ? r.ultimo_contato.slice(0, 10) : r.created_at.slice(0, 10)
+    await supabase.from('catalogo_retornos').update({ intervalo_dias: d, proximo_contato: somarDias(base, d) }).eq('id', r.id)
+    carregarRetornos()
+  }
+
+  // Cliente comprou de novo → atualiza "o que comprou por último"
+  async function novaCompra(r: Retorno) {
+    const t = prompt(`O que ${r.nome} comprou agora?`, '')
+    if (!t || !t.trim()) return
+    await supabase.from('catalogo_retornos').update({ ultima_compra: t.trim(), ultima_compra_em: hojeBR() }).eq('id', r.id)
+    carregarRetornos()
+  }
+
+  async function darDesconto(r: Retorno) {
+    const pct = prompt(`Desconto para ${r.nome} (em %):`, r.desconto_pct ? String(r.desconto_pct) : '10')
+    if (pct === null) return
+    const n = Number(pct.replace(',', '.').replace('%', ''))
+    if (!(n > 0)) { alert('Coloque um número, ex: 10'); return }
+    const dias = Number(prompt('Vale por quantos dias? (7, 15, 30...)', '15')) || 15
+    await supabase.from('catalogo_retornos').update({ desconto_pct: n, desconto_validade: somarDias(hojeBR(), dias), desconto_usado_em: null }).eq('id', r.id)
+    carregarRetornos()
+  }
+
+  async function usarDesconto(r: Retorno) {
+    if (!confirm(`Marcar o desconto de ${r.desconto_pct}% de ${r.nome} como usado?`)) return
+    await supabase.from('catalogo_retornos').update({ desconto_usado_em: new Date().toISOString() }).eq('id', r.id)
+    carregarRetornos()
+  }
+
+  // ─── Tabela de troca ───
+  async function carregarTabela() {
+    const { data } = await supabase.from('catalogo_tabela_troca').select('*').order('ordem').order('modelo')
+    setTabelaTroca((data || []) as LinhaTroca[])
+  }
+
+  async function salvarLinha(l: LinhaTroca, campo: keyof LinhaTroca, valor: string) {
+    const v = campo === 'valor' ? (valor.trim() ? Number(valor.replace(/\./g, '').replace(',', '.')) || null : null) : (valor.trim() || null)
+    if ((l[campo] ?? null) === v) return
+    setTabelaTroca(t => t.map(x => x.id === l.id ? { ...x, [campo]: v } : x))
+    await supabase.from('catalogo_tabela_troca').update({ [campo]: v }).eq('id', l.id)
+  }
+
+  async function novaLinha() {
+    const ordem = tabelaTroca.reduce((m, l) => Math.max(m, l.ordem || 0), 0) + 1
+    const { data } = await supabase.from('catalogo_tabela_troca').insert([{ modelo: 'iPhone ', gb: '128GB', cor: 'Todas as cores', bateria: '', valor: null, ordem }]).select().single()
+    if (data) setTabelaTroca(t => [...t, data as LinhaTroca])
+  }
+
+  async function apagarLinha(l: LinhaTroca) {
+    if (!confirm(`Apagar ${l.modelo} ${l.gb || ''} ${l.bateria || ''}?`)) return
+    await supabase.from('catalogo_tabela_troca').delete().eq('id', l.id)
+    setTabelaTroca(t => t.filter(x => x.id !== l.id))
+  }
+
+  // "15 pro" acha "iPhone 15 Pro" (e não o 15 normal se tiver "pro")
+  function filtrarTabela(termo: string) {
+    const palavras = semAc(termo).replace(/iphone/g, '').split(/\s+/).filter(Boolean)
+    if (!palavras.length) return tabelaTroca
+    return tabelaTroca.filter(l => {
+      const nome = semAc(l.modelo).replace(/iphone/g, '').split(/\s+/).filter(Boolean)
+      const resto = semAc(`${l.gb || ''} ${l.cor || ''} ${l.bateria || ''}`)
+      return palavras.every(w => nome.includes(w) || resto.includes(w))
+    })
+  }
+
+  async function removerRetorno(r: Retorno) {
+    if (!confirm(`Tirar ${r.nome} da lista de retornos?`)) return
+    await supabase.from('catalogo_retornos').update({ ativo: false }).eq('id', r.id)
+    carregarRetornos()
+  }
 
   async function carregarClientes() {
     const { data } = await supabase.from('negociacoes').select('*').order('created_at', { ascending: false })
@@ -680,6 +852,16 @@ export default function Negociacao() {
   const fotoAtual = form.cor && aparelhoSelecionado?.fotos?.[form.cor]?.[0] || null
 
   const entradasNovas = entradas.filter(e => e.status === 'Nova').length
+  const hoje = hojeBR()
+  const retornosHoje = retornos.filter(r => r.aceita && r.proximo_contato <= hoje)
+  // Buscando (ex: cliente chegou na loja) → procura em todos, inclusive os de hoje
+  const termoRet = semAc(buscaRet.trim())
+  const digitosRet = buscaRet.replace(/\D/g, '')
+  const retornosFuturos = retornos
+    .filter(r => termoRet ? true : !retornosHoje.includes(r))
+    .filter(r => !termoRet
+      || semAc(`${r.nome} ${r.modelo}`).includes(termoRet)
+      || (digitosRet.length >= 4 && r.telefone.replace(/\D/g, '').includes(digitosRet)))
   const clientesPeriodo = clientes.filter(c => noPeriodo(c.created_at, periodo))
 
   const porVendedor = Object.values(
@@ -802,6 +984,10 @@ export default function Negociacao() {
           <p style={{ ...s.navItem, ...(aba === 'entradas' ? s.navAtivo : {}) }} onClick={() => { setAba('entradas'); setMenuAberto(false) }}>
             Entradas {entradasNovas > 0 && <span style={s.badgeNovas}>{entradasNovas}</span>}
           </p>
+          <p style={{ ...s.navItem, ...(aba === 'retornos' ? s.navAtivo : {}) }} onClick={() => { setAba('retornos'); setMenuAberto(false) }}>
+            Retornos {retornosHoje.length > 0 && <span style={s.badgeNovas}>{retornosHoje.length}</span>}
+          </p>
+          <p style={{ ...s.navItem, ...(aba === 'tabela' ? s.navAtivo : {}) }} onClick={() => { setAba('tabela'); setMenuAberto(false) }}>Tabela de troca</p>
         </nav>
       </aside>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: '100%' }}>
@@ -815,6 +1001,10 @@ export default function Negociacao() {
             <button style={aba === 'entradas' ? s.abaAtiva : s.abaInativa} onClick={() => setAba('entradas')}>
               Entradas{entradasNovas > 0 && <span style={{ ...s.badgeNovas, background: aba === 'entradas' ? 'white' : '#ff6600', color: aba === 'entradas' ? '#ff6600' : 'white' }}>{entradasNovas}</span>}
             </button>
+            <button style={aba === 'retornos' ? s.abaAtiva : s.abaInativa} onClick={() => setAba('retornos')}>
+              Retornos{retornosHoje.length > 0 && <span style={{ ...s.badgeNovas, background: aba === 'retornos' ? 'white' : '#ff6600', color: aba === 'retornos' ? '#ff6600' : 'white' }}>{retornosHoje.length}</span>}
+            </button>
+            <button style={aba === 'tabela' ? s.abaAtiva : s.abaInativa} onClick={() => setAba('tabela')}>Tabela</button>
           </div>
         </header>
         {aba === 'negociacao' && (
@@ -912,6 +1102,26 @@ export default function Negociacao() {
                   <div style={{ ...s.inputPrefix, borderColor: entradaVinculada ? '#ff6600' : '#2a2a2a' }}><span style={s.prefix}>R$</span><input style={{ ...s.input, borderRadius: '0 10px 10px 0' }} value={form.valor_entrada} onChange={e => setForm({ ...form, valor_entrada: e.target.value })} placeholder="0,00" /></div>
                 </div>
                 <div style={s.resumoBox}><p style={s.resumoLabel}>A Financiar</p><p style={s.resumoValor}>{fmt(valorFinanciar)}</p></div>
+              </div>
+              <div style={{ marginTop: 16 }}>
+                <label style={s.label}>🔍 Buscar na tabela de troca</label>
+                <input style={s.input} value={buscaTroca} onChange={e => setBuscaTroca(e.target.value)} placeholder="Modelo do aparelho do cliente — ex: 15 pro" />
+                {buscaTroca.trim() && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8, maxHeight: 320, overflowY: 'auto' }}>
+                    {filtrarTabela(buscaTroca).length === 0 && <p style={{ color: '#666', fontSize: 13, margin: 0 }}>Não está na tabela. Cadastre no menu "Tabela de troca".</p>}
+                    {filtrarTabela(buscaTroca).map(l => (
+                      <div key={l.id} onClick={() => { if (l.valor != null) { setForm({ ...form, valor_entrada: String(l.valor).replace('.', ',') }); setBuscaTroca('') } }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: '#151515', border: '1px solid #2a2a2a', cursor: l.valor != null ? 'pointer' : 'default' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, color: '#fff', fontWeight: 700, fontSize: 14 }}>{l.modelo} · {l.gb}</p>
+                          <p style={{ margin: 0, color: '#888', fontSize: 12 }}>{[l.cor, l.bateria && `🔋 ${l.bateria}`].filter(Boolean).join(' · ')}</p>
+                        </div>
+                        <span style={{ color: l.valor != null ? '#25D366' : '#666', fontWeight: 800, whiteSpace: 'nowrap' }}>{l.valor != null ? fmt(Number(l.valor)) : 'sem valor'}</span>
+                        {l.valor != null && <span style={{ color: '#ff8a3d', fontSize: 12, fontWeight: 700 }}>Usar ›</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
             <div style={s.section}>
@@ -1262,6 +1472,183 @@ export default function Negociacao() {
                 </div>
               )
             })()}
+          </div>
+        )}
+        {aba === 'retornos' && (
+          <div style={s.content}>
+            <h1 style={s.pageTitle}>Retornos</h1>
+            <p style={s.pageSubtitle}>Cliente que veio na loja → no dia certo você recebe o aviso para chamar no WhatsApp</p>
+
+            <div style={{ ...s.section, borderColor: retornosHoje.length ? '#ff6600' : '#1e1e1e' }}>
+              <h3 style={s.sectionTitle}>🔔 Para chamar hoje ({retornosHoje.length})</h3>
+              {retornosHoje.length === 0 ? (
+                <p style={{ color: '#666', margin: 0 }}>Ninguém para chamar hoje. 👍</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {retornosHoje.map(r => (
+                    <div key={r.id} style={{ background: '#151515', border: '1px solid #2a2a2a', borderRadius: 14, padding: 14 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                        <div>
+                          <p style={{ margin: 0, color: '#fff', fontWeight: 800, fontSize: 16 }}>{r.nome}</p>
+                          <p style={{ margin: '2px 0 0', color: '#ff8a3d', fontSize: 14 }}>📱 {r.modelo}</p>
+                          <p style={{ margin: '2px 0 0', color: '#777', fontSize: 12 }}>
+                            {r.contatos ? `${r.contatos}º contato · último em ${dataCurta(r.ultimo_contato!.slice(0, 10))}` : 'Primeiro contato'}
+                            {r.proximo_contato < hoje ? ` · atrasado desde ${dataCurta(r.proximo_contato)}` : ''}
+                          </p>
+                          {r.ultima_compra && <p style={{ margin: '4px 0 0', color: '#ccc', fontSize: 13 }}>🛍 Última compra: <b>{r.ultima_compra}</b>{r.ultima_compra_em ? ` (${dataCurta(r.ultima_compra_em)})` : ''}</p>}
+                          {r.observacao && <p style={{ margin: '4px 0 0', color: '#aaa', fontSize: 13 }}>📝 {r.observacao}</p>}
+                          {descontoAtivo(r, hoje) && <p style={{ margin: '4px 0 0', color: '#25D366', fontSize: 13, fontWeight: 700 }}>🎟 {r.desconto_pct}% até {dataCurta(r.desconto_validade!)} — vai na mensagem</p>}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                        <button style={{ ...s.btnFechar, flex: 2, padding: '12px 10px' }} onClick={() => window.open(linkWhatsApp(r.telefone, mensagemRetorno(r)), '_blank')}>💬 Abrir WhatsApp</button>
+                        <button style={{ ...s.btnFechar, flex: 1, padding: '12px 10px', background: '#ff6600' }} onClick={() => marcarMandei(r)}>✓ Mandei</button>
+                      </div>
+                      <p style={{ color: '#666', fontSize: 12, margin: '8px 0 0' }}>Ao tocar em "Mandei", volta para a lista em {r.intervalo_dias} dias e o aviso para.</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={s.section}>
+              <h3 style={s.sectionTitle}>➕ Cadastrar cliente</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: celular ? '1fr' : '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={s.label}>Nome *</label>
+                  <input style={s.input} value={formRet.nome} onChange={e => setFormRet({ ...formRet, nome: e.target.value })} placeholder="Nome do cliente" />
+                </div>
+                <div>
+                  <label style={s.label}>WhatsApp *</label>
+                  <input style={s.input} inputMode="tel" value={formRet.telefone} onChange={e => setFormRet({ ...formRet, telefone: e.target.value })} placeholder="(64) 99999-9999" />
+                </div>
+                <div style={{ position: 'relative' }}>
+                  <label style={s.label}>Celular do cliente *</label>
+                  <input style={s.input} value={formRet.modelo} onChange={e => digitarModeloRet(e.target.value)} onBlur={() => setTimeout(() => setSugestoesRet([]), 200)} placeholder="Ex: iPhone 13" />
+                  {formRet.modelo_id && <p style={{ color: '#25D366', fontSize: 12, margin: '4px 0 0' }}>✓ O link vai abrir as capas desse modelo</p>}
+                  {sugestoesRet.length > 0 && (
+                    <div style={s.sugestoesBox}>
+                      {sugestoesRet.map(m => (
+                        <div key={m.id} style={s.sugestaoItem} onMouseDown={e => e.preventDefault()}
+                          onClick={() => { setFormRet({ ...formRet, modelo: m.modelo, modelo_id: m.id }); setSugestoesRet([]) }}>
+                          <span style={{ color: 'white', fontWeight: 600 }}>{m.modelo}</span>
+                          <span style={{ color: '#666', fontSize: 12 }}>{m.marca}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label style={s.label}>Chamar de novo a cada</label>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {INTERVALOS.map(d => (
+                      <button key={d} style={formRet.intervalo_dias === d ? s.filtroBtnAtivo : s.filtroBtn} onClick={() => setFormRet({ ...formRet, intervalo_dias: d })}>{d} dias</button>
+                    ))}
+                    <input style={{ ...s.input, width: 80, padding: '8px 10px' }} inputMode="numeric" value={formRet.intervalo_dias}
+                      onChange={e => setFormRet({ ...formRet, intervalo_dias: Number(e.target.value.replace(/\D/g, '')) || 0 })} />
+                  </div>
+                </div>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#ccc', fontSize: 14, marginTop: 14, cursor: 'pointer' }}>
+                <input type="checkbox" checked={formRet.aceita} onChange={e => setFormRet({ ...formRet, aceita: e.target.checked })} style={{ width: 18, height: 18 }} />
+                Cliente aceitou receber novidades pelo WhatsApp
+              </label>
+              <div style={{ marginTop: 14 }}>
+                <label style={s.label}>🛍 O que comprou</label>
+                <input style={s.input} value={formRet.ultima_compra} onChange={e => setFormRet({ ...formRet, ultima_compra: e.target.value })}
+                  placeholder="Ex: iPhone 13 128GB + capa transparente + película 3D" />
+              </div>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 14 }}>
+                <div style={{ width: 130 }}>
+                  <label style={s.label}>🎟 Desconto (%)</label>
+                  <input style={s.input} inputMode="decimal" value={formRet.desconto_pct} onChange={e => setFormRet({ ...formRet, desconto_pct: e.target.value.replace(/[^\d,.]/g, '') })} placeholder="Ex: 10" />
+                </div>
+                {formRet.desconto_pct && (
+                  <div>
+                    <label style={s.label}>Vale por</label>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {VALIDADES.map(d => (
+                        <button key={d} style={formRet.validade_dias === d ? s.filtroBtnAtivo : s.filtroBtn} onClick={() => setFormRet({ ...formRet, validade_dias: d })}>{d} dias</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              {formRet.desconto_pct && <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0' }}>O desconto começa a contar no dia do retorno e vai junto na mensagem.</p>}
+              <input style={{ ...s.input, marginTop: 12 }} value={formRet.observacao} onChange={e => setFormRet({ ...formRet, observacao: e.target.value })} placeholder="Observação (opcional) — ex: gosta de capa transparente" />
+              {erroRet && <p style={{ color: '#ff4444', fontSize: 13, margin: '10px 0 0' }}>{erroRet}</p>}
+              <button style={{ ...s.btnFechar, width: '100%', marginTop: 14, background: '#ff6600' }} disabled={salvandoRet} onClick={salvarRetorno}>
+                {salvandoRet ? 'Salvando...' : `✅ Salvar — avisar em ${formRet.intervalo_dias || 30} dias`}
+              </button>
+            </div>
+
+            <div style={s.section}>
+              <h3 style={s.sectionTitle}>{termoRet ? `🔍 Encontrados (${retornosFuturos.length})` : `📅 Próximos (${retornosFuturos.length})`}</h3>
+              <input style={{ ...s.input, marginBottom: 12 }} value={buscaRet} onChange={e => setBuscaRet(e.target.value)} placeholder="Cliente chegou? Busque pelo WhatsApp ou nome para ver o desconto" />
+              {retornosFuturos.length === 0 ? <p style={{ color: '#666', margin: 0 }}>Nenhum cliente cadastrado ainda.</p> : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {retornosFuturos.map(r => (
+                    <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '10px 12px', background: '#0a0a0a', border: '1px solid #1e1e1e', borderRadius: 12 }}>
+                      <div style={{ flex: '1 1 180px', minWidth: 0 }}>
+                        <p style={{ margin: 0, color: '#fff', fontWeight: 700 }}>{r.nome} {!r.aceita && <span style={{ color: '#ff4444', fontSize: 11 }}>· não aceita</span>}</p>
+                        <p style={{ margin: 0, color: '#888', fontSize: 13 }}>{r.modelo} · chamar em <b style={{ color: '#ff8a3d' }}>{dataCurta(r.proximo_contato)}</b></p>
+                        {r.ultima_compra && <p style={{ margin: '4px 0 0', color: '#ccc', fontSize: 13 }}>🛍 Última compra: <b>{r.ultima_compra}</b>{r.ultima_compra_em ? ` (${dataCurta(r.ultima_compra_em)})` : ''}</p>}
+                        {descontoAtivo(r, hoje) && (
+                          <p style={{ margin: '2px 0 0', color: '#25D366', fontSize: 13, fontWeight: 700 }}>
+                            🎟 {r.desconto_pct}% · {diasAte(r.desconto_validade!, hoje) === 0 ? 'vence hoje' : `faltam ${diasAte(r.desconto_validade!, hoje)} dias`}
+                          </p>
+                        )}
+                      </div>
+                      {descontoAtivo(r, hoje)
+                        ? <button style={{ ...s.btnFechar, padding: '8px 10px', fontSize: 13 }} onClick={() => usarDesconto(r)}>✓ Usou</button>
+                        : <button style={{ ...s.btnLimpar, padding: '8px 10px', fontSize: 13, color: '#ff8a3d', borderColor: '#ff6600' }} onClick={() => darDesconto(r)}>🎟 Desconto</button>}
+                      <select value={r.intervalo_dias} onChange={e => mudarIntervalo(r, Number(e.target.value))}
+                        style={{ ...s.input, width: 'auto', padding: '8px 10px', fontSize: 13 }}>
+                        {[...new Set([...INTERVALOS, r.intervalo_dias])].sort((a, b) => a - b).map(d => <option key={d} value={d}>a cada {d} dias</option>)}
+                      </select>
+                      <button style={{ ...s.btnLimpar, padding: '8px 10px', fontSize: 13 }} onClick={() => novaCompra(r)}>🛍 Comprou</button>
+                      <button style={{ ...s.btnLimpar, padding: '8px 10px', fontSize: 13 }} onClick={() => removerRetorno(r)}>Tirar</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        {aba === 'tabela' && (
+          <div style={s.content}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+              <div>
+                <h1 style={s.pageTitle}>Tabela de troca</h1>
+                <p style={s.pageSubtitle}>Quanto cada aparelho vale como entrada. Toque no campo, altere e pronto — salva sozinho.</p>
+              </div>
+              <button style={{ ...s.btnFechar, background: '#ff6600' }} onClick={novaLinha}>＋ Nova linha</button>
+            </div>
+            <input style={{ ...s.input, margin: '8px 0 14px' }} value={buscaTabela} onChange={e => setBuscaTabela(e.target.value)} placeholder="Buscar modelo — ex: 16 pro" />
+            {!celular && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.7fr 1.2fr 1fr 0.9fr 40px', gap: 8, padding: '0 4px 6px', color: '#777', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                <span>Modelo</span><span>Memória</span><span>Cor</span><span>Bateria</span><span>Valor (R$)</span><span />
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {filtrarTabela(buscaTabela).map(l => {
+                const campo = (k: 'modelo' | 'gb' | 'cor' | 'bateria' | 'valor', ph: string) => (
+                  <input key={`${l.id}-${k}-${l[k] ?? ''}`} style={{ ...s.input, padding: '9px 10px', fontSize: 14, ...(k === 'valor' ? { color: '#25D366', fontWeight: 700 } : {}) }}
+                    defaultValue={k === 'valor' ? (l.valor != null ? String(l.valor).replace('.', ',') : '') : (l[k] ?? '') as string}
+                    inputMode={k === 'valor' ? 'decimal' : undefined} placeholder={ph}
+                    onBlur={e => salvarLinha(l, k, e.target.value)} />
+                )
+                return (
+                  <div key={l.id} style={celular
+                    ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: 10, background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 12 }
+                    : { display: 'grid', gridTemplateColumns: '1.4fr 0.7fr 1.2fr 1fr 0.9fr 40px', gap: 8, alignItems: 'center' }}>
+                    {campo('modelo', 'Modelo')}{campo('gb', 'GB')}{campo('cor', 'Cor')}{campo('bateria', 'Bateria')}{campo('valor', 'Valor')}
+                    <button onClick={() => apagarLinha(l)} title="Apagar" style={{ ...s.btnLimpar, padding: '8px 0', color: '#ff4444', borderColor: '#3a1a1a' }}>✕</button>
+                  </div>
+                )
+              })}
+            </div>
+            {tabelaTroca.length === 0 && <p style={{ color: '#666' }}>Tabela vazia. Rode o SQL que preenche ou toque em "Nova linha".</p>}
           </div>
         )}
         {aba === 'admin' && (
