@@ -20,7 +20,15 @@ type Produto = {
   lancamento?: boolean
   promocao?: boolean
   mais_procurado?: boolean
+  preco?: number | null
+  preco_antigo?: number | null
+  mostrar_preco?: boolean | null
+  tipo?: string | null
+  compativel?: string[] | null
+  conector?: string | null
 }
+
+type ModeloCelular = { id: string; marca: string; modelo: string; entrada?: string | null; foto_url?: string | null }
 
 type Banner = {
   id: string
@@ -34,13 +42,27 @@ type Banner = {
   arte?: boolean | null
 }
 
-type FiltroEspecial = 'destaques' | 'lancamentos' | 'promocoes' | 'mais_procurados' | null
+type FiltroEspecial = 'destaques' | 'lancamentos' | 'promocoes' | 'mais_procurados' | 'todos' | null
 
 // ─── Dados fixos da loja ───────────────────────────
 const WHATSAPP = '5564993374281'
 const PARCELAS = 18
 const STORAGE = 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public'
 const CHAVE_SACOLA = 'mm-sacola'
+const CHAVE_CELULAR = 'mm-meu-celular'
+const DESCONTO_KIT = 0.1 // 10% de desconto no kit
+
+// Grupos de acessório na busca por modelo
+const GRUPOS_ACESSORIO = [
+  { id: 'capa', nome: 'Capas', tipos: ['capa'] },
+  { id: 'pelicula', nome: 'Películas', tipos: ['pelicula'] },
+  { id: 'carregador', nome: 'Carregadores e cabos', tipos: ['carregador', 'cabo'] },
+  { id: 'fone', nome: 'Fones', tipos: ['fone'] },
+]
+const CHIPS_ACESSORIO = [
+  { id: '', nome: 'Tudo' }, { id: 'capa', nome: 'Capa' }, { id: 'pelicula', nome: 'Película' },
+  { id: 'carregador', nome: 'Carregador' }, { id: 'fone', nome: 'Fone' },
+]
 
 type ItemVitrine = { nome: string; img: string | null; capas?: boolean; padrao?: boolean }
 
@@ -101,6 +123,45 @@ function textoInteresse(p: Produto, cor?: string | null) {
   return `Olá! Tenho interesse no ${nomeCompleto(p)}${cor ? ` na cor ${cor}` : ''} que vi no catálogo da Marcos Magazine.\n${linkProduto(p, cor)}`
 }
 
+const reais = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
+// Preço só aparece se tiver valor e (for acessório ou estiver marcado "mostrar preço")
+function precoVisivel(p: Produto) {
+  return !!p.preco && p.preco > 0 && (!!p.tipo || !!p.mostrar_preco)
+}
+const temDesconto = (p: Produto) => precoVisivel(p) && !!p.preco_antigo && p.preco_antigo > (p.preco || 0)
+
+function PrecoProduto({ p, grande = false }: { p: Produto; grande?: boolean }) {
+  if (!precoVisivel(p)) return null
+  const pct = temDesconto(p) ? Math.round((1 - (p.preco || 0) / (p.preco_antigo || 1)) * 100) : 0
+  return (
+    <div className={grande ? 'mm-preco mm-preco-grande' : 'mm-preco'}>
+      {pct > 0 && <span className="mm-preco-de"><s>{reais(p.preco_antigo || 0)}</s><em>-{pct}%</em></span>}
+      <b>{reais(p.preco || 0)}</b>
+    </div>
+  )
+}
+
+// Acessório serve no celular escolhido?
+function serveNoCelular(p: Produto, m: ModeloCelular) {
+  if (!p.tipo) return false
+  if (p.tipo === 'capa' || p.tipo === 'pelicula') return (p.compativel || []).includes(m.id)
+  if (!p.conector || p.conector === 'Bluetooth' || !m.entrada) return true
+  return p.conector === m.entrada
+}
+
+// Guarda a última versão do catálogo no aparelho → abre na hora, sem piscar a tela padrão
+const CHAVE_CACHE = 'mm-cache-v1'
+type CacheCatalogo = { produtos: Produto[]; banners: Banner[]; categorias: ItemVitrine[] | null; marcas: ItemVitrine[] | null; modelos: ModeloCelular[] }
+function lerCache(): CacheCatalogo | null {
+  try { const v = JSON.parse(localStorage.getItem(CHAVE_CACHE) || 'null'); return v && Array.isArray(v.produtos) ? v : null } catch { return null }
+}
+const CACHE = typeof window !== 'undefined' ? lerCache() : null
+
+function lerCelular(): ModeloCelular | null {
+  try { const v = JSON.parse(localStorage.getItem(CHAVE_CELULAR) || 'null'); return v && v.id ? v : null } catch { return null }
+}
+
 function lerSacola(): string[] {
   try { const v = JSON.parse(localStorage.getItem(CHAVE_SACOLA) || '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
 }
@@ -129,13 +190,12 @@ const IconeWhats = ({ tamanho = 20 }: { tamanho?: number }) => (
 
 function App() {
   const navigate = useNavigate()
-  const [produtos, setProdutos] = useState<Produto[]>([])
-  const [banners, setBanners] = useState<Banner[]>([])
-  const [categorias, setCategorias] = useState<ItemVitrine[]>(CATEGORIAS_PADRAO)
-  const [marcas, setMarcas] = useState<ItemVitrine[]>(MARCAS_PADRAO)
-  const [carregando, setCarregando] = useState(true)
+  const [produtos, setProdutos] = useState<Produto[]>(CACHE?.produtos || [])
+  const [banners, setBanners] = useState<Banner[]>(CACHE?.banners || [])
+  const [categorias, setCategorias] = useState<ItemVitrine[]>(CACHE?.categorias || [])
+  const [marcas, setMarcas] = useState<ItemVitrine[]>(CACHE?.marcas || [])
+  const [carregando, setCarregando] = useState(!CACHE)
   const [menuAberto, setMenuAberto] = useState(false)
-  const [buscaAberta, setBuscaAberta] = useState(false)
   const [busca, setBusca] = useState('')
   const [categoriaAtiva, setCategoriaAtiva] = useState<string | null>(null)
   const [marcaAtiva, setMarcaAtiva] = useState<string | null>(null)
@@ -149,6 +209,13 @@ function App() {
   const [sacola, setSacola] = useState<string[]>(lerSacola)
   const [sacolaAberta, setSacolaAberta] = useState(false)
   const [aviso, setAviso] = useState('')
+  const [modelos, setModelos] = useState<ModeloCelular[]>(CACHE?.modelos || [])
+  const [meuCelular, setMeuCelular] = useState<ModeloCelular | null>(null)
+  const [ultimoCelular, setUltimoCelular] = useState<ModeloCelular | null>(lerCelular)
+  const [textoCelular, setTextoCelular] = useState('')
+  const [sugestoesAbertas, setSugestoesAbertas] = useState(false)
+  const [grupoAcessorio, setGrupoAcessorio] = useState('')
+  const campoCelularRef = useRef<HTMLInputElement>(null)
   const toqueInicio = useRef<number | null>(null)
   const topoRef = useRef<HTMLDivElement>(null)
 
@@ -158,14 +225,26 @@ function App() {
       supabase.from('hero_imagens').select('*').eq('ativo', true).order('ordem', { ascending: true }),
       supabase.from('catalogo_categorias').select('*').eq('ativo', true).order('ordem'),
       supabase.from('catalogo_marcas').select('*').eq('ativo', true).order('ordem'),
-    ]).then(([p, h, c, m]) => {
+      supabase.from('capas_modelos').select('*').order('ordem').order('modelo'),
+    ]).then(([p, h, c, m, cm]) => {
+      const novosModelos = (cm.data || []) as ModeloCelular[]
       const cats = (c.data || []) as { nome: string; foto_url: string | null; tipo: string }[]
-      if (cats.length) setCategorias(cats.map(x => ({ nome: x.nome, img: x.foto_url, capas: x.tipo === 'capas' })))
+      const novasCategorias = cats.length ? cats.map(x => ({ nome: x.nome, img: x.foto_url, capas: x.tipo === 'capas' })) : CATEGORIAS_PADRAO
       const mrs = (m.data || []) as { nome: string; logo_url: string | null }[]
-      if (mrs.length) setMarcas(mrs.map(x => ({ nome: x.nome, img: x.logo_url, padrao: !!x.logo_url && x.logo_url.includes('/logo_') })))
-      setProdutos(((p.data || []) as Produto[]).filter(x => x.disponivel !== false))
-      setBanners((h.data || []) as Banner[])
+      const novasMarcas = mrs.length ? mrs.map(x => ({ nome: x.nome, img: x.logo_url, padrao: !!x.logo_url && x.logo_url.includes('/logo_') })) : MARCAS_PADRAO
+      const novosProdutos = ((p.data || []) as Produto[]).filter(x => x.disponivel !== false)
+      const novosBanners = (h.data || []) as Banner[]
+      const falhou = !!p.error
+      if (!falhou || !CACHE) {
+        setModelos(novosModelos); setCategorias(novasCategorias); setMarcas(novasMarcas)
+        setProdutos(novosProdutos); setBanners(novosBanners)
+      }
       setCarregando(false)
+      if (!falhou) {
+        try {
+          localStorage.setItem(CHAVE_CACHE, JSON.stringify({ produtos: novosProdutos, banners: novosBanners, categorias: novasCategorias, marcas: novasMarcas, modelos: novosModelos }))
+        } catch { /* sem espaço: tudo bem */ }
+      }
       try {
         const q = new URLSearchParams(window.location.search)
         const id = q.get('produto')
@@ -212,8 +291,10 @@ function App() {
 
   function enviarSacola() {
     if (!itensSacola.length) return
-    const lista = itensSacola.map((p, i) => `${i + 1}. ${nomeCompleto(p)}\n${linkProduto(p)}`).join('\n\n')
-    abrirWhatsApp(`Olá! Vim pelo catálogo da Marcos Magazine e tenho interesse ${itensSacola.length > 1 ? 'nestes produtos' : 'neste produto'}:\n\n${lista}\n\nPode me passar valores e condições?`)
+    const lista = itensSacola.map((p, i) => `${i + 1}. ${nomeCompleto(p)}${precoVisivel(p) ? ` — ${reais(p.preco || 0)}` : ''}\n${linkProduto(p)}`).join('\n\n')
+    const comPreco = itensSacola.filter(precoVisivel)
+    const total = comPreco.length > 1 ? `\n\nTotal dos itens com preço: ${reais(comPreco.reduce((t, p) => t + (p.preco || 0), 0))}` : ''
+    abrirWhatsApp(`Olá! Vim pelo catálogo da Marcos Magazine e tenho interesse ${itensSacola.length > 1 ? 'nestes produtos' : 'neste produto'}:\n\n${lista}${total}\n\nPode me passar valores e condições?`)
   }
 
   // ─── Navegação ───────────────────────────────────
@@ -255,7 +336,54 @@ function App() {
   }
 
   function limparFiltros() {
+    setBusca(''); setCategoriaAtiva(null); setMarcaAtiva(null); setFiltroEspecial(null); setMeuCelular(null)
+  }
+
+  // ─── Busca por modelo de celular ─────────────────
+  function escolherCelular(m: ModeloCelular) {
     setBusca(''); setCategoriaAtiva(null); setMarcaAtiva(null); setFiltroEspecial(null)
+    setMeuCelular(m); setUltimoCelular(m); setGrupoAcessorio(''); setTextoCelular(''); setSugestoesAbertas(false)
+    campoCelularRef.current?.blur()
+    try { localStorage.setItem(CHAVE_CELULAR, JSON.stringify(m)) } catch { /* ok */ }
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function buscarTexto(t: string) {
+    if (!t.trim()) return
+    setMeuCelular(null); setCategoriaAtiva(null); setMarcaAtiva(null); setFiltroEspecial(null)
+    setBusca(t.trim()); setTextoCelular(''); setSugestoesAbertas(false)
+    campoCelularRef.current?.blur()
+  }
+
+  function abrirBuscaCelular() {
+    if (selecionado) fecharProduto()
+    limparFiltros()
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    setTimeout(() => { campoCelularRef.current?.focus(); setSugestoesAbertas(true) }, 120)
+  }
+
+  const sugestoesCelular = useMemo(() => {
+    const palavras = semAcento(textoCelular).split(/\s+/).filter(Boolean)
+    if (!palavras.length) return []
+    return modelos.filter(m => {
+      const alvo = semAcento(`${m.marca} ${m.modelo}`)
+      return palavras.every(w => alvo.includes(w))
+    }).slice(0, 6)
+  }, [modelos, textoCelular])
+
+  const acessoriosDoCelular = useMemo(
+    () => meuCelular ? produtos.filter(p => serveNoCelular(p, meuCelular)) : [],
+    [produtos, meuCelular])
+
+  function kitDoCelular() {
+    const maisBarato = (tipos: string[]) => acessoriosDoCelular
+      .filter(p => tipos.includes(p.tipo || '') && precoVisivel(p))
+      .sort((a, b) => (a.preco || 0) - (b.preco || 0))[0]
+    const itens = [maisBarato(['capa']), maisBarato(['pelicula']), maisBarato(['carregador'])].filter(Boolean) as Produto[]
+    if (itens.length < 2) return null
+    const soma = itens.reduce((t, p) => t + (p.preco || 0), 0)
+    const comDesconto = soma * (1 - DESCONTO_KIT)
+    return { itens, soma, preco: comDesconto > 10 ? Math.floor(comDesconto) - 0.1 : Math.round(comDesconto * 100) / 100 }
   }
 
   function aplicarFiltro(f: { categoria?: string; marca?: string; especial?: FiltroEspecial }) {
@@ -267,7 +395,7 @@ function App() {
     setTimeout(() => topoRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
   }
 
-  const filtrando = !!(busca.trim() || categoriaAtiva || marcaAtiva || filtroEspecial)
+  const filtrando = !meuCelular && !!(busca.trim() || categoriaAtiva || marcaAtiva || filtroEspecial)
 
   const resultados = useMemo(() => {
     const termo = semAcento(busca)
@@ -293,6 +421,7 @@ function App() {
     filtroEspecial === 'lancamentos' ? 'Lançamentos' :
     filtroEspecial === 'promocoes' ? 'Promoções' :
     filtroEspecial === 'mais_procurados' ? 'Mais procurados' :
+    filtroEspecial === 'todos' ? 'Todos os produtos' :
     categoriaAtiva ? `${categoriaAtiva}${marcaAtiva ? ` ${marcaAtiva}` : ''}` :
     marcaAtiva || `Busca: "${busca.trim()}"`
 
@@ -304,7 +433,7 @@ function App() {
   // ─── Pedaços da tela ─────────────────────────────
   const cartao = (p: Produto, grade = false) => {
     const cores = coresDoProduto(p.cor)
-    const selo = p.lancamento ? { t: 'LANÇAMENTO', c: '#1d1d1f' } : p.promocao ? { t: 'OFERTA', c: '#e5332a' } : p.mais_procurado ? { t: 'TOP', c: '#ff6600' } : null
+    const selo = p.lancamento ? { t: 'LANÇAMENTO', c: '#1d1d1f' } : (p.promocao || temDesconto(p)) ? { t: 'OFERTA', c: '#e5332a' } : p.mais_procurado ? { t: 'TOP', c: '#ff6600' } : null
     const dentro = naSacola(p.id)
     return (
       <div key={p.id} className={grade ? 'mm-card mm-card-grade' : 'mm-card'} onClick={() => abrirProduto(p)}>
@@ -314,6 +443,7 @@ function App() {
         </div>
         <b className="mm-card-nome">{p.modelo}</b>
         <small className="mm-card-info">{[p.memoria, p.condicao].filter(Boolean).join(' · ') || p.marca}</small>
+        <PrecoProduto p={p} />
         <div className="mm-cores">
           {cores.map(c => <i key={c.nome} title={c.nome} style={{ background: c.hex }} />)}
         </div>
@@ -365,6 +495,7 @@ function App() {
                   <div style={{ flex: 1, minWidth: 0 }} onClick={() => abrirProduto(p)}>
                     <b>{p.modelo}</b>
                     <small>{[p.marca, p.memoria].filter(Boolean).join(' · ')}</small>
+                    <PrecoProduto p={p} />
                   </div>
                   <button className="mm-gaveta-remover" onClick={() => setSacola(s => s.filter(x => x !== p.id))} aria-label="Remover">✕</button>
                 </div>
@@ -416,6 +547,7 @@ function App() {
           <div className="mm-detalhe-info">
             <p className="mm-detalhe-marca">{p.marca}</p>
             <h1 className="mm-detalhe-nome">{p.modelo}</h1>
+            <PrecoProduto p={p} grande />
             {cores.length > 0 && (
               <div className="mm-cores mm-cores-grandes">
                 {cores.map(c => {
@@ -499,10 +631,10 @@ function App() {
       <header className="mm-topo">
         <button className="mm-icone" onClick={() => setMenuAberto(true)} aria-label="Menu"><IconeMenu /></button>
         <Logo onClick={irParaInicio} />
-        <button className="mm-icone" onClick={() => setBuscaAberta(!buscaAberta)} aria-label="Buscar"><IconeBusca /></button>
+        <button className="mm-icone" onClick={abrirBuscaCelular} aria-label="Buscar"><IconeBusca /></button>
         {botaoSacolaTopo}
       </header>
-      {(buscaAberta || busca) && (
+      {busca && filtrando && (
         <div className="mm-busca">
           <IconeBusca />
           <input autoFocus placeholder="Buscar celular, fone, capinha..." value={busca} onChange={e => setBusca(e.target.value)} />
@@ -510,9 +642,115 @@ function App() {
         </div>
       )}
 
+      {/* ─── Qual é o seu celular? ─── */}
+      {!filtrando && (
+        <div className="mm-qual">
+          <div className={sugestoesAbertas && textoCelular ? 'mm-qual-caixa aberta' : 'mm-qual-caixa'}>
+            <IconeBusca />
+            <input ref={campoCelularRef} placeholder="Qual é o seu celular? Ex: iPhone 13" value={textoCelular}
+              onFocus={() => setSugestoesAbertas(true)}
+              onBlur={() => setTimeout(() => setSugestoesAbertas(false), 200)}
+              onChange={e => { setTextoCelular(e.target.value); setSugestoesAbertas(true) }}
+              onKeyDown={e => {
+                if (e.key !== 'Enter') return
+                if (sugestoesCelular.length) escolherCelular(sugestoesCelular[0]); else buscarTexto(textoCelular)
+              }} />
+            {textoCelular && <button onClick={() => setTextoCelular('')} aria-label="Limpar">✕</button>}
+          </div>
+          {sugestoesAbertas && textoCelular.trim() && (
+            <div className="mm-qual-lista">
+              {sugestoesCelular.map(m => (
+                <button key={m.id} onMouseDown={e => e.preventDefault()} onClick={() => escolherCelular(m)}>
+                  <span className="mm-qual-foto">{m.foto_url ? <img src={m.foto_url} alt="" /> : '📱'}</span>
+                  <span><b>{m.modelo}</b><small>Ver capas, películas e acessórios</small></span>
+                </button>
+              ))}
+              <button className="mm-qual-texto" onMouseDown={e => e.preventDefault()} onClick={() => buscarTexto(textoCelular)}>
+                <IconeBusca /> Buscar “{textoCelular.trim()}” em todo o catálogo
+              </button>
+            </div>
+          )}
+          {!meuCelular && !textoCelular && ultimoCelular && (
+            <button className="mm-qual-ultimo" onClick={() => escolherCelular(ultimoCelular)}>
+              Acessórios para o seu <b>{ultimoCelular.modelo}</b> ›
+            </button>
+          )}
+        </div>
+      )}
+
       <div ref={topoRef} />
 
-      {filtrando ? (
+      {meuCelular ? (
+        /* ─── Acessórios para o celular escolhido ─── */
+        (() => {
+          const kit = kitDoCelular()
+          const grupos = GRUPOS_ACESSORIO
+            .filter(g => !grupoAcessorio || g.id === grupoAcessorio)
+            .map(g => ({ ...g, lista: acessoriosDoCelular.filter(p => g.tipos.includes(p.tipo || '')) }))
+          const nada = grupos.every(g => g.lista.length === 0)
+          return (
+            <main className="mm-conteudo mm-acessorios">
+              <div className="mm-celular-escolhido">
+                <span className="mm-celular-foto">{meuCelular.foto_url ? <img src={meuCelular.foto_url} alt="" /> : '📱'}</span>
+                <div>
+                  <small>Acessórios para o seu</small>
+                  <b>{meuCelular.modelo}</b>
+                  {meuCelular.entrada && <em>Entrada {meuCelular.entrada}</em>}
+                </div>
+                <button className="mm-link" onClick={() => { setMeuCelular(null); setTimeout(abrirBuscaCelular, 50) }}>Trocar</button>
+              </div>
+
+              <div className="mm-chips">
+                {CHIPS_ACESSORIO.map(c => (
+                  <button key={c.id} className={grupoAcessorio === c.id ? 'on' : ''} onClick={() => setGrupoAcessorio(c.id)}>{c.nome}</button>
+                ))}
+              </div>
+
+              {kit && !grupoAcessorio && (
+                <div className="mm-kit">
+                  <div className="mm-kit-topo"><span>KIT PROTEÇÃO</span><em>-{Math.round(DESCONTO_KIT * 100)}%</em></div>
+                  <div className="mm-kit-fotos">
+                    {kit.itens.map(p => (
+                      <button key={p.id} onClick={() => abrirProduto(p)}>
+                        {p.foto_url ? <img src={p.foto_url} alt="" /> : <span>{p.modelo}</span>}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mm-kit-nomes">{kit.itens.map(p => p.modelo).join(' + ')}</p>
+                  <div className="mm-preco mm-preco-grande">
+                    <span className="mm-preco-de"><s>{reais(kit.soma)}</s></span>
+                    <b>{reais(kit.preco)}</b>
+                  </div>
+                  <div className="mm-kit-botoes">
+                    <button className="mm-btn-contorno" onClick={() => {
+                      setSacola(s => [...s, ...kit.itens.map(p => p.id).filter(id => !s.includes(id))]); mostrarAviso('✓ Kit na sacola')
+                    }}><IconeSacola tamanho={18} /> Sacola</button>
+                    <button className="mm-btn-verde" onClick={() => abrirWhatsApp(
+                      `Olá! Quero o kit de proteção para o meu ${meuCelular.modelo}:\n\n${kit.itens.map(p => `• ${nomeCompleto(p)} — ${reais(p.preco || 0)}`).join('\n')}\n\nDe ${reais(kit.soma)} por ${reais(kit.preco)} no kit.`
+                    )}><IconeWhats /> Quero o kit</button>
+                  </div>
+                </div>
+              )}
+
+              {nada ? (
+                <div className="mm-vazio">
+                  <p>Ainda não cadastramos {grupoAcessorio ? 'esse acessório' : 'acessórios'} para o {meuCelular.modelo} aqui no catálogo.</p>
+                  <button className="mm-btn-verde" onClick={() => abrirWhatsApp(`Olá! Vocês têm ${grupoAcessorio ? CHIPS_ACESSORIO.find(c => c.id === grupoAcessorio)?.nome.toLowerCase() : 'acessórios'} para ${meuCelular.modelo}?`)}><IconeWhats /> Perguntar no WhatsApp</button>
+                </div>
+              ) : grupos.map(g => g.lista.length === 0 ? null : (
+                <section key={g.id} className="mm-secao">
+                  <div className="mm-secao-topo"><h2>{g.nome}</h2><small className="mm-contador">{g.lista.length}</small></div>
+                  <div className={grupoAcessorio ? 'mm-grade' : 'mm-trilho'}>{g.lista.map(p => cartao(p, !!grupoAcessorio))}</div>
+                </section>
+              ))}
+
+              {(!grupoAcessorio || grupoAcessorio === 'capa') && (
+                <button className="mm-btn-contorno mm-ver-mais" onClick={() => navigate('/capas')}>🛡 Ver vitrine de capinhas ›</button>
+              )}
+            </main>
+          )
+        })()
+      ) : filtrando ? (
         /* ─── Resultado de filtro / busca ─── */
         <main className="mm-conteudo">
           <div className="mm-chips">
@@ -553,6 +791,7 @@ function App() {
       ) : (
         <main>
           {/* ─── Banner carrossel ─── */}
+          {carregando && !banner ? <section className="mm-hero mm-hero-fantasma" /> : (
           <section className={banner?.arte ? 'mm-hero mm-hero-arte' : 'mm-hero'}
             onTouchStart={e => { toqueInicio.current = e.touches[0].clientX }}
             onTouchEnd={e => {
@@ -572,6 +811,7 @@ function App() {
               </div>
             )}
           </section>
+          )}
           {banners.length > 1 && (
             <div className="mm-pontos">
               {banners.map((b, i) => <i key={b.id} className={i === heroIndex % banners.length ? 'on' : ''} onClick={() => setHeroIndex(i)} />)}
@@ -634,9 +874,9 @@ function App() {
                     <button key={c.nome} onClick={() => aplicarFiltro({ categoria: c.nome })}>{c.nome}</button>
                   ))}
                 </div>
-                <div className="mm-grade">{produtos.slice(0, 24).map(p => cartao(p, true))}</div>
-                {produtos.length > 24 && (
-                  <button className="mm-btn-contorno mm-ver-mais" onClick={() => aplicarFiltro({ categoria: 'Celulares' })}>Ver todos os celulares ›</button>
+                <div className="mm-grade">{produtos.slice(0, 8).map(p => cartao(p, true))}</div>
+                {produtos.length > 8 && (
+                  <button className="mm-btn-contorno mm-ver-mais" onClick={() => aplicarFiltro({ especial: 'todos' })}>Ver todos os {produtos.length} produtos ›</button>
                 )}
               </section>
             </>
@@ -912,6 +1152,54 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 .mm .mm-btn-verde { display: flex; align-items: center; justify-content: center; gap: 8px; flex: 1; width: 100%; text-align: center; background: var(--verde); color: #fff; border-radius: 18px; padding: 15px 18px; font-size: 17px; font-weight: 800; max-width: 600px; }
 
 /* Telas maiores (iPad / computador) */
+/* Preço */
+.mm .mm-preco { display: flex; flex-direction: column; margin-top: 6px; line-height: 1.15; }
+.mm .mm-preco b { font-size: 19px; font-weight: 800; color: var(--tinta); letter-spacing: -0.3px; }
+.mm .mm-preco-de { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #8e8e93; }
+.mm .mm-preco-de em { font-style: normal; font-size: 11px; font-weight: 800; color: #fff; background: #e5332a; border-radius: 6px; padding: 1px 5px; }
+.mm .mm-preco-grande { margin: 8px 0 4px; }
+.mm .mm-preco-grande b { font-size: 30px; }
+.mm .mm-preco-grande .mm-preco-de { font-size: 16px; }
+.mm .mm-gaveta-item .mm-preco b { font-size: 15px; }
+
+/* Qual é o seu celular? */
+.mm .mm-qual { position: relative; margin: 12px auto 4px; width: calc(100% - 32px); max-width: 1068px; }
+.mm .mm-qual-caixa { display: flex; align-items: center; gap: 8px; background: #fff; border: 1.5px solid var(--borda); border-radius: 18px; padding: 4px 6px 4px 14px; color: var(--laranja); box-shadow: 0 6px 18px rgba(0,0,0,0.05); }
+.mm .mm-qual-caixa.aberta { border-color: var(--laranja); border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.mm .mm-qual-caixa input { flex: 1; min-width: 0; border: none; outline: none; background: none; font-size: 17px; padding: 12px 0; font-family: inherit; color: var(--tinta); }
+.mm .mm-qual-caixa button { width: 36px; height: 36px; color: #888; font-size: 16px; }
+.mm .mm-qual-lista { position: absolute; left: 0; right: 0; top: 100%; z-index: 40; background: #fff; border: 1.5px solid var(--laranja); border-top: none; border-radius: 0 0 18px 18px; overflow: hidden; box-shadow: 0 16px 30px rgba(0,0,0,0.12); }
+.mm .mm-qual-lista button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; text-align: left; border-top: 1px solid var(--borda); }
+.mm .mm-qual-lista b { display: block; font-size: 16px; color: var(--tinta); }
+.mm .mm-qual-lista small { display: block; font-size: 13px; color: #86868b; }
+.mm .mm-qual-foto { width: 42px; height: 42px; border-radius: 12px; background: var(--cinza); display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; }
+.mm .mm-qual-foto img { width: 100%; height: 100%; object-fit: contain; mix-blend-mode: multiply; }
+.mm .mm-qual-texto { color: var(--laranja); font-weight: 700; font-size: 15px; }
+.mm .mm-qual-texto svg { width: 18px; height: 18px; }
+.mm .mm-qual-ultimo { margin-top: 8px; font-size: 14px; color: #6e6e73; }
+.mm .mm-qual-ultimo b { color: var(--laranja); }
+
+/* Resultado por celular */
+.mm .mm-celular-escolhido { display: flex; align-items: center; gap: 12px; margin: 4px 16px 12px; padding: 12px; border-radius: 20px; background: linear-gradient(135deg, #fff4ec, #f5f5f7); }
+.mm .mm-celular-foto { width: 56px; height: 56px; border-radius: 16px; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 26px; overflow: hidden; flex-shrink: 0; }
+.mm .mm-celular-foto img { width: 100%; height: 100%; object-fit: contain; }
+.mm .mm-celular-escolhido div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mm .mm-celular-escolhido small { font-size: 13px; color: #6e6e73; }
+.mm .mm-celular-escolhido b { font-size: 20px; color: var(--tinta); }
+.mm .mm-celular-escolhido em { font-style: normal; font-size: 12px; color: var(--laranja); font-weight: 700; }
+.mm .mm-kit { margin: 4px 16px 18px; padding: 16px; border-radius: 24px; background: var(--tinta); color: #fff; }
+.mm .mm-kit-topo { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 800; letter-spacing: 1.5px; color: var(--laranja); }
+.mm .mm-kit-topo em { font-style: normal; background: var(--laranja); color: #fff; border-radius: 8px; padding: 2px 8px; letter-spacing: 0; }
+.mm .mm-kit-fotos { display: flex; gap: 8px; margin: 12px 0 8px; }
+.mm .mm-kit-fotos button { flex: 1; aspect-ratio: 1; background: #fff; border-radius: 16px; overflow: hidden; display: flex; align-items: center; justify-content: center; color: var(--tinta); font-size: 12px; padding: 6px; }
+.mm .mm-kit-fotos img { width: 100%; height: 100%; object-fit: contain; }
+.mm .mm-kit-nomes { font-size: 14px; color: #c7c7cc; }
+.mm .mm-kit .mm-preco b { color: #fff; }
+.mm .mm-kit-botoes { display: flex; gap: 8px; margin-top: 10px; }
+.mm .mm-kit-botoes .mm-btn-contorno { flex: 0 0 36%; margin: 0; display: flex; align-items: center; justify-content: center; gap: 6px; background: transparent; color: #fff; border-color: #48484a; }
+.mm .mm-kit-botoes .mm-btn-verde { flex: 1; margin: 0; }
+.mm .mm-hero-fantasma { min-height: 400px; background: linear-gradient(90deg, #f5f5f7 25%, #ececf0 50%, #f5f5f7 75%); background-size: 200% 100%; animation: mmBrilho 1.2s infinite linear; }
+@keyframes mmBrilho { from { background-position: 200% 0 } to { background-position: -200% 0 } }
 @media (min-width: 760px) {
   .mm .mm-hero { border-radius: 28px; margin: 16px 16px 0; }
   .mm .mm-hero-arte { background: none; padding: 0; }

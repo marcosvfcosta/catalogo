@@ -17,7 +17,12 @@ type Produto = {
   descricao?: string
   foto_url?: string
   foto_cor?: string | null
+  tipo?: string | null
+  compativel?: string[] | null
+  conector?: string | null
   preco?: number
+  preco_antigo?: number | null
+  mostrar_preco?: boolean | null
   disponivel?: boolean
   destaque?: boolean
   lancamento?: boolean
@@ -108,6 +113,7 @@ type CapaModelo = {
   id: string
   marca: string
   modelo: string
+  entrada?: string | null
   foto_url: string | null
   ordem: number
 }
@@ -117,6 +123,35 @@ type CapaFoto = {
   modelo_id: string
   tipo: string
   url: string
+}
+
+// ─── Acessórios: tipo e compatibilidade ───
+const TIPOS_ACESSORIO = [
+  { v: '', l: 'Não é acessório (celular, tablet...)' },
+  { v: 'capa', l: '📱 Capa' },
+  { v: 'pelicula', l: '🛡 Película' },
+  { v: 'carregador', l: '🔌 Carregador' },
+  { v: 'cabo', l: '➰ Cabo' },
+  { v: 'fone', l: '🎧 Fone' },
+]
+const ENTRADAS = ['USB-C', 'Lightning']
+type CamposAcessorio = { tipo: string; compativel: string[]; conector: string }
+function numeroBR(v: string | number | null | undefined) {
+  if (v === null || v === undefined || v === '') return null
+  if (typeof v === 'number') return v
+  const t = v.replace(/[^\d,.-]/g, '')
+  const n = Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t)
+  return isFinite(n) && n > 0 ? n : null
+}
+
+function dadosAcessorio(v: CamposAcessorio) {
+  const porModelo = v.tipo === 'capa' || v.tipo === 'pelicula'
+  const porEntrada = v.tipo === 'carregador' || v.tipo === 'cabo' || v.tipo === 'fone'
+  return {
+    tipo: v.tipo || null,
+    compativel: porModelo ? v.compativel : null,
+    conector: porEntrada ? (v.conector || null) : null,
+  }
 }
 
 const CATEGORIAS_PADRAO = ['Celulares', 'Tablet', 'Carregadores', 'Fones', 'Smartwatch', 'Caixa de som']
@@ -179,7 +214,8 @@ export default function Admin() {
   // ─── Capas ───
   const [capasModelos, setCapasModelos] = useState<CapaModelo[]>([])
   const [capasFotos, setCapasFotos] = useState<CapaFoto[]>([])
-  const [capaForm, setCapaForm] = useState({ marca: 'Apple', modelo: '', foto_url: '' })
+  const [capaForm, setCapaForm] = useState({ marca: 'Apple', modelo: '', foto_url: '', entrada: '' })
+  const [buscaCompat, setBuscaCompat] = useState('')
   const [capaEditandoId, setCapaEditandoId] = useState<string | null>(null)
   const [capaSalvando, setCapaSalvando] = useState(false)
   const [capaUploadModelo, setCapaUploadModelo] = useState(false)
@@ -195,6 +231,8 @@ export default function Admin() {
     bateria_saude: '', preco: '', foto_url: '', descricao: '',
     disponivel: true, destaque: false, lancamento: false,
     promocao: false, mais_procurado: false,
+    tipo: '', compativel: [] as string[], conector: '',
+    preco_antigo: '', mostrar_preco: false,
   })
 
   useEffect(() => {
@@ -204,6 +242,12 @@ export default function Admin() {
   async function carregarProdutos() {
     const { data } = await supabase.from('produtos_catalogo').select('*').order('created_at', { ascending: false })
     setProdutos(data || [])
+  }
+
+  async function colocarHeroPrimeiro(id: string) {
+    const menor = Math.min(0, ...heroImagens.map(h => h.ordem || 0))
+    await supabase.from('hero_imagens').update({ ordem: menor - 1, ativo: true }).eq('id', id)
+    carregarHeroImagens()
   }
 
   async function carregarHeroImagens() {
@@ -399,7 +443,7 @@ export default function Admin() {
   }
 
   function limparCapaForm() {
-    setCapaForm({ marca: 'Apple', modelo: '', foto_url: '' })
+    setCapaForm({ marca: 'Apple', modelo: '', foto_url: '', entrada: '' })
     setCapaEditandoId(null)
   }
 
@@ -407,7 +451,7 @@ export default function Admin() {
     const modelo = capaForm.modelo.trim()
     if (!modelo) { alert('Informe o modelo do celular'); return }
     setCapaSalvando(true)
-    const dados = { marca: capaForm.marca, modelo, foto_url: capaForm.foto_url || null }
+    const dados = { marca: capaForm.marca, modelo, foto_url: capaForm.foto_url || null, entrada: capaForm.entrada || null }
     if (capaEditandoId) {
       const { error } = await supabase.from('capas_modelos').update(dados).eq('id', capaEditandoId)
       setCapaSalvando(false)
@@ -426,7 +470,7 @@ export default function Admin() {
   }
 
   function editarCapaModelo(m: CapaModelo) {
-    setCapaForm({ marca: m.marca || 'Apple', modelo: m.modelo, foto_url: m.foto_url || '' })
+    setCapaForm({ marca: m.marca || 'Apple', modelo: m.modelo, foto_url: m.foto_url || '', entrada: m.entrada || '' })
     setCapaEditandoId(m.id)
     window.scrollTo(0, 0)
   }
@@ -501,6 +545,58 @@ export default function Admin() {
     carregarHeroImagens()
   }
 
+  // Campos de acessório (tipo + compatibilidade), usados no cadastro e na edição
+  function camposAcessorio(v: CamposAcessorio, alterar: (patch: Partial<CamposAcessorio>) => void) {
+    const porModelo = v.tipo === 'capa' || v.tipo === 'pelicula'
+    const porEntrada = v.tipo === 'carregador' || v.tipo === 'cabo' || v.tipo === 'fone'
+    const termo = buscaCompat.trim().toLowerCase()
+    const modelos = capasModelos.filter(m => !termo || `${m.marca} ${m.modelo}`.toLowerCase().includes(termo))
+    const marcar = (id: string, sim: boolean) => alterar({ compativel: sim ? Array.from(new Set([...v.compativel, id])) : v.compativel.filter(x => x !== id) })
+    return (
+      <div style={{ ...tagsBox, borderColor: v.tipo ? '#5a3a20' : '#222' }}>
+        <p style={tagsTitle}>🔎 Acessório (busca "Qual é o seu celular?")</p>
+        <select style={inputStyle} value={v.tipo} onChange={e => alterar({ tipo: e.target.value })}>
+          {TIPOS_ACESSORIO.map(t => <option key={t.v} value={t.v}>{t.l}</option>)}
+        </select>
+        {porModelo && (
+          <>
+            <label style={labelStyle}>Serve em quais modelos? ({v.compativel.length} marcado{v.compativel.length === 1 ? '' : 's'})</label>
+            {capasModelos.length === 0 ? (
+              <p style={{ color: '#888', fontSize: 13 }}>Cadastre os modelos de celular na aba 📱 Capas primeiro.</p>
+            ) : (
+              <>
+                <input style={{ ...inputStyle, marginBottom: 8 }} placeholder="⌕ Filtrar modelos..." value={buscaCompat} onChange={e => setBuscaCompat(e.target.value)} />
+                <div style={{ maxHeight: 230, overflowY: 'auto', border: '1px solid #222', borderRadius: 10, padding: '6px 10px', marginBottom: 6 }}>
+                  {modelos.map(m => (
+                    <label key={m.id} style={{ ...checkLabel, marginBottom: 6 }}>
+                      <input type="checkbox" checked={v.compativel.includes(m.id)} onChange={e => marcar(m.id, e.target.checked)} />
+                      <span>{m.modelo} <span style={{ color: '#666', fontSize: 12 }}>· {m.marca}</span></span>
+                    </label>
+                  ))}
+                </div>
+                {termo && modelos.length > 1 && (
+                  <button style={{ ...btnSecundario, fontSize: 12, padding: '6px 10px' }} onClick={() => alterar({ compativel: Array.from(new Set([...v.compativel, ...modelos.map(m => m.id)])) })}>
+                    Marcar os {modelos.length} filtrados
+                  </button>
+                )}
+              </>
+            )}
+          </>
+        )}
+        {porEntrada && (
+          <>
+            <label style={labelStyle}>{v.tipo === 'fone' ? 'Conexão' : 'Entrada'}</label>
+            <select style={inputStyle} value={v.conector} onChange={e => alterar({ conector: e.target.value })}>
+              <option value="">Selecione...</option>
+              {ENTRADAS.map(c => <option key={c}>{c}</option>)}
+              {v.tipo === 'fone' && <option value="Bluetooth">Bluetooth (serve em todos)</option>}
+            </select>
+          </>
+        )}
+      </div>
+    )
+  }
+
   async function salvarProduto() {
     if (!novoProduto.marca || !novoProduto.modelo || !novoProduto.categoria) {
       alert('Preencha categoria, marca e modelo.'); return
@@ -508,12 +604,14 @@ export default function Admin() {
     const { data, error } = await supabase.from('produtos_catalogo').insert([{
       categoria: novoProduto.categoria, marca: novoProduto.marca, modelo: novoProduto.modelo,
       memoria: novoProduto.memoria, cor: novoProduto.cor, condicao: novoProduto.condicao,
-      bateria_saude: novoProduto.bateria_saude, preco: novoProduto.preco ? Number(novoProduto.preco) : null,
+      bateria_saude: novoProduto.bateria_saude, preco: numeroBR(novoProduto.preco),
+      preco_antigo: numeroBR(novoProduto.preco_antigo), mostrar_preco: novoProduto.mostrar_preco || !!novoProduto.tipo,
       foto_url: fotosNovas[0] || '', descricao: novoProduto.descricao, disponivel: novoProduto.disponivel,
       destaque: novoProduto.destaque, lancamento: novoProduto.lancamento,
       promocao: novoProduto.promocao, mais_procurado: novoProduto.mais_procurado,
+      ...dadosAcessorio(novoProduto),
     }]).select()
-    if (error) { alert('Erro ao salvar produto'); return }
+    if (error) { alert('Erro ao salvar produto' + (error.message?.includes('column') ? ' — rode o SQL novo no Supabase' : '')); return }
     if (data && data[0] && fotosNovas.length > 1) {
       const produtoId = data[0].id
       const extras = fotosNovas.slice(1)
@@ -522,7 +620,7 @@ export default function Admin() {
       }
     }
     alert('Produto cadastrado!')
-    setNovoProduto({ categoria: 'Celulares', marca: '', modelo: '', memoria: '', cor: '', condicao: '', bateria_saude: '', preco: '', foto_url: '', descricao: '', disponivel: true, destaque: false, lancamento: false, promocao: false, mais_procurado: false })
+    setNovoProduto({ categoria: 'Celulares', marca: '', modelo: '', memoria: '', cor: '', condicao: '', bateria_saude: '', preco: '', foto_url: '', descricao: '', disponivel: true, destaque: false, lancamento: false, promocao: false, mais_procurado: false, tipo: '', compativel: [], conector: '', preco_antigo: '', mostrar_preco: false })
     setFotosNovas([])
     carregarProdutos()
     setAba('lista')
@@ -533,12 +631,14 @@ export default function Admin() {
     const { error } = await supabase.from('produtos_catalogo').update({
       categoria: editando.categoria, marca: editando.marca, modelo: editando.modelo,
       memoria: editando.memoria, cor: editando.cor, condicao: editando.condicao,
-      bateria_saude: editando.bateria_saude, preco: editando.preco,
+      bateria_saude: editando.bateria_saude, preco: numeroBR(editando.preco), preco_antigo: numeroBR(editando.preco_antigo),
+      mostrar_preco: !!editando.mostrar_preco || !!editando.tipo,
       foto_url: editando.foto_url, descricao: editando.descricao, disponivel: editando.disponivel,
       destaque: editando.destaque, lancamento: editando.lancamento,
       promocao: editando.promocao, mais_procurado: editando.mais_procurado,
+      ...dadosAcessorio({ tipo: editando.tipo || '', compativel: editando.compativel || [], conector: editando.conector || '' }),
     }).eq('id', editando.id)
-    if (error) { alert('Erro ao editar produto'); return }
+    if (error) { alert('Erro ao editar produto' + (error.message?.includes('column') ? ' — rode o SQL novo no Supabase' : '')); return }
     alert('Produto atualizado!')
     setEditando(null)
     setFotosEdicao([])
@@ -838,8 +938,30 @@ export default function Admin() {
           </select>
           <label style={labelStyle}>Saúde da bateria</label>
           <input style={inputStyle} value={editando.bateria_saude || ''} onChange={e => setEditando({ ...editando, bateria_saude: e.target.value })} />
-          <label style={labelStyle}>Preço</label>
-          <input style={inputStyle} type="number" value={editando.preco || ''} onChange={e => setEditando({ ...editando, preco: Number(e.target.value) })} />
+          {camposAcessorio(
+            { tipo: editando.tipo || '', compativel: editando.compativel || [], conector: editando.conector || '' },
+            patch => setEditando({ ...editando, ...patch }),
+          )}
+          <div style={tagsBox}>
+            <p style={tagsTitle}>💰 Preço</p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>Preço</label>
+                <input style={inputStyle} inputMode="decimal" placeholder="Ex: 49,90" value={editando.preco ?? ''}
+                  onChange={e => setEditando({ ...editando, preco: (e.target.value as unknown as number) })} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>Preço antigo (riscado)</label>
+                <input style={inputStyle} inputMode="decimal" placeholder="Ex: 79,90" value={editando.preco_antigo ?? ''}
+                  onChange={e => setEditando({ ...editando, preco_antigo: (e.target.value as unknown as number) })} />
+              </div>
+            </div>
+            <label style={checkLabel}>
+              <input type="checkbox" checked={!!editando.mostrar_preco || !!editando.tipo} disabled={!!editando.tipo}
+                onChange={e => setEditando({ ...editando, mostrar_preco: e.target.checked })} />
+              Mostrar preço no catálogo {editando.tipo ? '(acessório: sempre mostra)' : ''}
+            </label>
+          </div>
           <label style={labelStyle}>Fotos</label>
           {seletorAjuste}
           <label style={uploadBox}>
@@ -1055,8 +1177,25 @@ export default function Admin() {
           </select>
           <label style={labelStyle}>Saúde da bateria</label>
           <input style={inputStyle} placeholder="Ex: 89%" value={novoProduto.bateria_saude} onChange={e => setNovoProduto({ ...novoProduto, bateria_saude: e.target.value })} />
-          <label style={labelStyle}>Preço (interno)</label>
-          <input style={inputStyle} placeholder="Ex: 2999" value={novoProduto.preco} onChange={e => setNovoProduto({ ...novoProduto, preco: e.target.value })} />
+          {camposAcessorio(novoProduto, patch => setNovoProduto({ ...novoProduto, ...patch }))}
+          <div style={tagsBox}>
+            <p style={tagsTitle}>💰 Preço</p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>Preço</label>
+                <input style={inputStyle} inputMode="decimal" placeholder={novoProduto.tipo ? 'Ex: 49,90' : 'Ex: 2999'} value={novoProduto.preco} onChange={e => setNovoProduto({ ...novoProduto, preco: e.target.value })} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>Preço antigo (riscado)</label>
+                <input style={inputStyle} inputMode="decimal" placeholder="Ex: 79,90" value={novoProduto.preco_antigo} onChange={e => setNovoProduto({ ...novoProduto, preco_antigo: e.target.value })} />
+              </div>
+            </div>
+            <label style={checkLabel}>
+              <input type="checkbox" checked={novoProduto.mostrar_preco || !!novoProduto.tipo} disabled={!!novoProduto.tipo}
+                onChange={e => setNovoProduto({ ...novoProduto, mostrar_preco: e.target.checked })} />
+              Mostrar preço no catálogo {novoProduto.tipo ? '(acessório: sempre mostra)' : ''}
+            </label>
+          </div>
           <label style={labelStyle}>Fotos</label>
           {seletorAjuste}
           <label style={uploadBox}>
@@ -1161,6 +1300,11 @@ export default function Admin() {
             <label style={labelStyle}>Modelo</label>
             <input style={inputStyle} placeholder="Ex: iPhone 17 Pro Max / 18 Pro Max" value={capaForm.modelo}
               onChange={e => setCapaForm({ ...capaForm, modelo: e.target.value })} />
+            <label style={labelStyle}>Entrada do carregador</label>
+            <select style={inputStyle} value={capaForm.entrada} onChange={e => setCapaForm({ ...capaForm, entrada: e.target.value })}>
+              <option value="">Selecione...</option>
+              {ENTRADAS.map(c => <option key={c}>{c}</option>)}
+            </select>
             <label style={labelStyle}>Foto do celular (só 1 · aparece na lista de modelos)</label>
             {seletorAjuste}
             <label style={uploadBox}>
@@ -1415,6 +1559,8 @@ export default function Admin() {
                       style={{ flex: 1, padding: '6px 4px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: img.ativo ? '#1a4a1a' : '#2a2a2a', color: img.ativo ? '#25D366' : '#888' }}>
                       {img.ativo ? '● Ativo' : '○ Inativo'}
                     </button>
+                    <button onClick={() => colocarHeroPrimeiro(img.id)} title="Mostrar primeiro no carrossel"
+                      style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #5a3a20', background: '#1a0f05', color: '#ff8a3d', cursor: 'pointer', fontSize: 12, fontWeight: 800 }}>1º</button>
                     <button onClick={() => excluirHeroImagem(img.id, img.url)}
                       style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #ff3333', background: '#7a1111', color: '#fff', cursor: 'pointer', fontSize: 14 }}>🗑</button>
                   </div>

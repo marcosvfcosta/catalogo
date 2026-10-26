@@ -176,7 +176,8 @@ export default function AssistenteIA({ produtos, banners, ajusteAuto, aoMudar }:
   async function aplicar() {
     setAplicando(true)
     let erros = 0
-    let ordem = Math.max(0, ...banners.map(b => b.ordem || 0))
+    // Banner novo entra em PRIMEIRO no carrossel
+    let ordem = Math.min(0, ...banners.map(b => b.ordem || 0))
     for (let i = 0; i < acoes.length; i++) {
       if (!marcadas[i]) continue
       const a = acoes[i]
@@ -194,7 +195,7 @@ export default function AssistenteIA({ produtos, banners, ajusteAuto, aoMudar }:
         } else if (a.tipo === 'banner') {
           const p = porId(a.produto_id)
           if (!p?.foto_url) { erros++; continue }
-          ordem++
+          ordem--
           const { error } = await supabase.from('hero_imagens').insert([{
             url: p.foto_url, ordem, ativo: true, produto_id: p.id,
             etiqueta: a.etiqueta || null, titulo: a.titulo || p.modelo, subtitulo: a.subtitulo || null,
@@ -357,7 +358,7 @@ export default function AssistenteIA({ produtos, banners, ajusteAuto, aoMudar }:
       const up = await supabase.storage.from('hero').upload(nome, previa.blob, { contentType: previa.blob.type || 'image/jpeg', upsert: true })
       if (up.error) throw up.error
       const url = supabase.storage.from('hero').getPublicUrl(nome).data.publicUrl
-      const ordem = Math.max(0, ...banners.map(b => b.ordem || 0)) + 1
+      const ordem = Math.min(0, ...banners.map(b => b.ordem || 0)) - 1 // entra em primeiro no carrossel
       const { error } = await supabase.from('hero_imagens').insert([{
         url, ordem, ativo: true, arte: true, titulo: bIdeia.trim().slice(0, 60), produto_id: bProduto || null,
       }])
