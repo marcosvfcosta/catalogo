@@ -245,7 +245,7 @@ function estilos(celular: boolean): Record<string, React.CSSProperties> {
     input: { ...base.input, fontSize: 16 },
     parcelasGrid: { ...base.parcelasGrid, gridTemplateColumns: 'minmax(0, 1fr)' },
     parcelaCard: { ...base.parcelaCard, padding: '12px 14px', minWidth: 0 },
-    resumoFinal: { ...base.resumoFinal, gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', padding: 16, gap: 10 },
+    resumoFinal: { ...base.resumoFinal, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', padding: 16, gap: 14 },
     botoesRow: { ...base.botoesRow, flexDirection: 'column', alignItems: 'stretch' },
     btnPendente: { ...base.btnPendente, flex: 1, padding: '14px 12px' },
     btnFechar: { ...base.btnFechar, flex: 1, padding: '14px 12px' },
@@ -1176,6 +1176,7 @@ export default function Negociacao() {
                 <div style={s.resumoItem}><span style={s.resumoItemLabel}>Parcelas</span><span style={s.resumoItemValor}>{taxaAtual.taxa === 0 ? taxaAtual.label : parcelaSelecionada === 1 ? 'Crédito 1x' : parcelaSelecionada + 'x'}</span></div>
                 <div style={s.resumoItem}><span style={s.resumoItemLabel}>Taxa</span><span style={s.resumoItemValor}>{taxaAtual.taxa}%</span></div>
                 <div style={s.resumoItem}><span style={s.resumoItemLabel}>Parcela</span><span style={{ ...s.resumoItemValor, color: '#ff6600', fontSize: celular ? 20 : 26, fontWeight: 900, whiteSpace: 'nowrap' }}>{fmt(valorParcela)}</span></div>
+                <div style={s.resumoItem}><span style={s.resumoItemLabel}>Total no cartão</span><span style={{ ...s.resumoItemValor, whiteSpace: 'nowrap' }}>{fmt(valorComTaxa)}</span></div>
               </div>
             )}
             <div style={s.section}>
@@ -1828,7 +1829,7 @@ const base: Record<string, React.CSSProperties> = {
   parcelasGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
   parcelaCard: { background: '#0a0a0a', borderRadius: 10, padding: '12px 16px', cursor: 'pointer' },
   parcelaAtiva: { background: 'rgba(255,102,0,0.1)' },
-  resumoFinal: { background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 16, padding: 24, marginBottom: 20, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, alignItems: 'center' },
+  resumoFinal: { background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 16, padding: 24, marginBottom: 20, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, alignItems: 'center' },
   resumoItem: { display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 4 },
   resumoItemLabel: { color: '#666', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
   resumoItemValor: { color: 'white', fontSize: 18, fontWeight: 700 },
