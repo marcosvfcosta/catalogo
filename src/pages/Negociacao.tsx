@@ -13,6 +13,40 @@ type Negociacao = {
 type Aparelho = {
   id: string; modelo: string; cores: string[]; fotos: Record<string, string[]>
   preco?: number | null; disponivel?: boolean | null
+  doCatalogo?: boolean
+}
+
+type ProdutoCatalogo = {
+  id: string; categoria: string; modelo: string; memoria?: string | null; cor?: string | null
+  foto_url?: string | null; foto_cor?: string | null; preco?: number | null; disponivel?: boolean | null
+}
+
+const tirarAcento = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+
+// Celulares e tablets cadastrados no catálogo viram aparelhos da Negociação (com as fotos de cada cor)
+function aparelhosDoCatalogo(produtos: ProdutoCatalogo[], fotos: { produto_id: string; url: string; cor: string | null }[]): Aparelho[] {
+  return produtos
+    .filter(p => /celular|tablet|ipad/.test(tirarAcento(p.categoria || '')))
+    .map(p => {
+      const cores = (p.cor || '').split(/[,/;]| e /).map(c => c.trim()).filter(Boolean)
+      const porCor: Record<string, string[]> = {}
+      const guardar = (cor: string | null | undefined, url: string | null | undefined) => {
+        if (!url) return
+        const nome = cores.find(c => cor && tirarAcento(c) === tirarAcento(cor)) || cor || cores[0] || 'Padrão'
+        porCor[nome] = [...(porCor[nome] || []), url]
+      }
+      guardar(p.foto_cor, p.foto_url)
+      fotos.filter(f => f.produto_id === p.id).forEach(f => guardar(f.cor, f.url))
+      const todasCores = [...new Set([...cores, ...Object.keys(porCor)])]
+      // Cor sem foto própria usa a foto principal
+      todasCores.forEach(c => { if (!porCor[c] && p.foto_url) porCor[c] = [p.foto_url] })
+      return {
+        id: `cat-${p.id}`,
+        modelo: [p.modelo, p.memoria].filter(Boolean).join(' '),
+        cores: todasCores, fotos: porCor,
+        preco: p.preco ?? null, disponivel: p.disponivel !== false, doCatalogo: true,
+      }
+    })
 }
 
 type Entrada = {
@@ -214,6 +248,7 @@ export default function Negociacao() {
   const [erros, setErros] = useState<Record<string, string>>({})
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [aparelhos, setAparelhos] = useState<Aparelho[]>([])
+  const [aparelhosCatalogo, setAparelhosCatalogo] = useState<Aparelho[]>([])
   const [buscaModelo, setBuscaModelo] = useState('')
   const [modeloSugestoes, setModeloSugestoes] = useState<Aparelho[]>([])
   const [filtro, setFiltro] = useState('Todos')
@@ -318,7 +353,28 @@ export default function Negociacao() {
   async function carregarAparelhos() {
     const { data } = await supabase.from('aparelhos').select('*').order('modelo')
     setAparelhos(data || [])
+    // Fotos dos celulares/tablets do catálogo
+    const [prod, fts] = await Promise.all([
+      supabase.from('produtos_catalogo').select('id, categoria, modelo, memoria, cor, foto_url, foto_cor, preco, disponivel'),
+      supabase.from('produto_fotos').select('produto_id, url, cor').order('ordem'),
+    ])
+    setAparelhosCatalogo(aparelhosDoCatalogo((prod.data || []) as ProdutoCatalogo[], (fts.data || []) as { produto_id: string; url: string; cor: string | null }[]))
   }
+
+  // Lista usada na negociação: cadastrados aqui + do catálogo (o daqui vale primeiro; completa cores/fotos que faltarem)
+  const todosAparelhos: Aparelho[] = (() => {
+    const lista = aparelhos.map(a => ({ ...a, cores: [...(a.cores || [])], fotos: { ...(a.fotos || {}) } }))
+    for (const c of aparelhosCatalogo) {
+      const igual = lista.find(a => tirarAcento(a.modelo) === tirarAcento(c.modelo))
+      if (!igual) { lista.push(c); continue }
+      for (const cor of c.cores) {
+        if (!igual.cores.some(x => tirarAcento(x) === tirarAcento(cor))) igual.cores.push(cor)
+        if (!igual.fotos[cor]?.length && c.fotos[cor]) igual.fotos[cor] = c.fotos[cor]
+      }
+      if (igual.preco == null && c.preco != null) igual.preco = c.preco
+    }
+    return lista.sort((a, b) => a.modelo.localeCompare(b.modelo))
+  })()
 
   async function carregarEntradas() {
     const { data } = await supabase.from('entradas').select('*').order('created_at', { ascending: false })
@@ -372,7 +428,7 @@ export default function Negociacao() {
     setBuscaModelo(texto)
     setForm({ ...form, modelo: texto, cor: '' })
     if (texto.length < 2) { setModeloSugestoes([]); return }
-    const sugestoes = aparelhos.filter(a => a.disponivel !== false && a.modelo.toLowerCase().includes(texto.toLowerCase()))
+    const sugestoes = todosAparelhos.filter(a => a.disponivel !== false && tirarAcento(a.modelo).includes(tirarAcento(texto)))
     setModeloSugestoes(sugestoes)
   }
 
@@ -619,7 +675,7 @@ export default function Negociacao() {
 
   // ---------- Dados derivados ----------
 
-  const aparelhoSelecionado = aparelhos.find(a => a.modelo === form.modelo)
+  const aparelhoSelecionado = todosAparelhos.find(a => a.modelo === form.modelo)
   const coresDisponiveis = aparelhoSelecionado?.cores || []
   const fotoAtual = form.cor && aparelhoSelecionado?.fotos?.[form.cor]?.[0] || null
 
@@ -1281,6 +1337,11 @@ export default function Negociacao() {
             </div>
             <div style={s.section}>
               <h3 style={s.sectionTitle}>Aparelhos Cadastrados ({aparelhos.length})</h3>
+              {aparelhosCatalogo.length > 0 && (
+                <p style={{ color: '#ff8a3d', fontSize: 13, margin: '0 0 12px' }}>
+                  📱 + {aparelhosCatalogo.length} celulares/tablets do catálogo entram automático na negociação, com as fotos de cada cor.
+                </p>
+              )}
               {aparelhos.length === 0 ? (
                 <p style={{ color: '#555', textAlign: 'center', padding: 20 }}>Nenhum aparelho cadastrado ainda</p>
               ) : (
