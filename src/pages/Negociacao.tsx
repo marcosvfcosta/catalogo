@@ -201,7 +201,8 @@ const dataCurta = (iso: string) => iso.split('-').reverse().slice(0, 2).join('/'
 function linkWhatsApp(telefone: string, msg: string) {
   const d = telefone.replace(/\D/g, '')
   const numero = d.startsWith('55') && d.length > 11 ? d : `55${d}`
-  return `https://wa.me/${numero}?text=${encodeURIComponent(msg)}`
+  // api.whatsapp.com em vez de wa.me: o wa.me estraga os emojis (aparece �) em alguns celulares
+  return `https://api.whatsapp.com/send?phone=${numero}&text=${encodeURIComponent(msg)}`
 }
 
 // Detecta tela de celular (largura menor que 700px) e acompanha giro de tela
@@ -244,7 +245,7 @@ function estilos(celular: boolean): Record<string, React.CSSProperties> {
     input: { ...base.input, fontSize: 16 },
     parcelasGrid: { ...base.parcelasGrid, gridTemplateColumns: 'minmax(0, 1fr)' },
     parcelaCard: { ...base.parcelaCard, padding: '12px 14px', minWidth: 0 },
-    resumoFinal: { ...base.resumoFinal, gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', padding: 16, gap: 14 },
+    resumoFinal: { ...base.resumoFinal, gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', padding: 16, gap: 10 },
     botoesRow: { ...base.botoesRow, flexDirection: 'column', alignItems: 'stretch' },
     btnPendente: { ...base.btnPendente, flex: 1, padding: '14px 12px' },
     btnFechar: { ...base.btnFechar, flex: 1, padding: '14px 12px' },
@@ -450,9 +451,9 @@ export default function Negociacao() {
       ? `${window.location.origin}/?celular=${r.modelo_id}&tipo=capa${paramCupom ? `&${paramCupom}` : ''}`
       : `${window.location.origin}/${paramCupom ? `?${paramCupom}` : 'capas'}`
     const cupom = temCupom
-      ? `\n\n🎟 E tem presente pra você: cupom *#${r.cupom}* com *${r.desconto_pct}% de desconto* em acessórios até ${dataCurta(r.desconto_validade!)}. Ele já vem ativado no link acima 😉`
-      : descontoAtivo(r, hojeBR()) ? `\n\n🎟 E você tem *${r.desconto_pct}% de desconto* em acessórios até ${dataCurta(r.desconto_validade!)}! É só mostrar essa mensagem na loja.` : ''
-    return `Oi ${primeiro}! Aqui é da Marcos Magazine 😊\n\nChegaram novidades em capas e acessórios para o seu *${r.modelo}*! Dá uma olhada:\n${link}${cupom}\n\nQualquer coisa é só chamar aqui 🧡`
+      ? `\n\n★ E tem presente pra você: cupom *#${r.cupom}* com *${r.desconto_pct}% de desconto* em acessórios até ${dataCurta(r.desconto_validade!)}. Ele já vem ativado no link acima!`
+      : descontoAtivo(r, hojeBR()) ? `\n\n★ E você tem *${r.desconto_pct}% de desconto* em acessórios até ${dataCurta(r.desconto_validade!)}! É só mostrar essa mensagem na loja.` : ''
+    return `Oi ${primeiro}! Aqui é da Marcos Magazine ✨\n\nChegaram novidades em capas e acessórios para o seu *${r.modelo}*! Dá uma olhada:\n${link}${cupom}\n\nQualquer coisa é só chamar aqui!`
   }
 
   async function marcarMandei(r: Retorno) {
@@ -811,8 +812,9 @@ export default function Negociacao() {
     const cor = c.cor ? ` ${c.cor}` : ''
     const parcelas = c.forma_pagamento && c.forma_pagamento.includes('sem juros') ? c.forma_pagamento.toLowerCase()
       : c.parcelas === 1 ? 'no crédito 1x' : `em ${c.parcelas}x de ${fmt(c.valor_parcela)}`
-    const msg = `Olá ${c.nome}! 👋\n\nSegue o resumo da sua negociação:\n\n📱 *${modelo}${cor}*\n💰 Valor: ${fmt(c.valor_aparelho)}\n📋 Pagamento: ${parcelas}\n💵 Total: ${fmt(c.valor_total)}\n\nQualquer dúvida estou à disposição! 😊\n\n_Marcos Magazine_`
-    window.open(`https://wa.me/55${tel}?text=${encodeURIComponent(msg)}`, '_blank')
+    const entrada = Number(c.valor_entrada) > 0 ? `\n✅ Entrada: ${fmt(Number(c.valor_entrada))}` : ''
+    const msg = `Olá ${c.nome.trim()}! ✨\n\nSegue o resumo da sua negociação:\n\n📱 *${modelo}${cor}*\n✅ Valor: ${fmt(c.valor_aparelho)}\n✅ Pagamento: ${parcelas}${entrada}\n\nQualquer dúvida estou à disposição!\n\n_Marcos Magazine_`
+    window.open(linkWhatsApp(tel, msg), '_blank')
   }
 
   // ---------- Entradas (aparelhos enviados pelo catálogo) ----------
@@ -849,7 +851,7 @@ export default function Negociacao() {
 
   function whatsAppEntrada(e: Entrada) {
     const interesse = e.interesse ? ` na compra do *${e.interesse}*` : ''
-    const msg = `Olá ${e.nome}! 👋\n\nRecebemos a avaliação do seu *${e.modelo} ${e.armazenamento}* (${e.estado}).\n\nVamos conversar sobre a proposta para usar como entrada${interesse}? 😊\n\n_Marcos Magazine_`
+    const msg = `Olá ${e.nome}! ✨\n\nRecebemos a avaliação do seu *${e.modelo} ${e.armazenamento}* (${e.estado}).\n\nVamos conversar sobre a proposta para usar como entrada${interesse}?\n\n_Marcos Magazine_`
     window.open(linkWhatsApp(e.telefone, msg), '_blank')
   }
 
@@ -948,7 +950,6 @@ export default function Negociacao() {
             <p style={s.detalheLabel}>Parcela</p>
             <p style={{ ...s.detalheValor, color: '#ff6600', fontSize: 24, fontWeight: 900 }}>{fmt(clienteSelecionado.valor_parcela)}</p>
           </div>
-          <div style={s.detalheCard}><p style={s.detalheLabel}>Total</p><p style={s.detalheValor}>{fmt(clienteSelecionado.valor_total)}</p></div>
 
           <div style={s.detalheCard}><p style={s.detalheLabel}>Data</p><p style={s.detalheValor}>{new Date(clienteSelecionado.created_at).toLocaleDateString('pt-BR')}</p></div>
         </div>
@@ -1163,7 +1164,6 @@ export default function Negociacao() {
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <p style={{ color: ativo ? '#ff6600' : '#fff', fontWeight: 700, margin: 0 }}>{fmt(vP)}</p>
-                          <p style={{ color: '#888', fontSize: 11, margin: 0 }}>Total: {fmt(vC + valorEntrada)}</p>
                         </div>
                       </div>
                     </div>
@@ -1175,8 +1175,7 @@ export default function Negociacao() {
               <div style={s.resumoFinal}>
                 <div style={s.resumoItem}><span style={s.resumoItemLabel}>Parcelas</span><span style={s.resumoItemValor}>{taxaAtual.taxa === 0 ? taxaAtual.label : parcelaSelecionada === 1 ? 'Crédito 1x' : parcelaSelecionada + 'x'}</span></div>
                 <div style={s.resumoItem}><span style={s.resumoItemLabel}>Taxa</span><span style={s.resumoItemValor}>{taxaAtual.taxa}%</span></div>
-                <div style={s.resumoItem}><span style={s.resumoItemLabel}>Parcela</span><span style={{ ...s.resumoItemValor, color: '#ff6600', fontSize: 26, fontWeight: 900 }}>{fmt(valorParcela)}</span></div>
-                <div style={s.resumoItem}><span style={s.resumoItemLabel}>Total</span><span style={s.resumoItemValor}>{fmt(valorTotal)}</span></div>
+                <div style={s.resumoItem}><span style={s.resumoItemLabel}>Parcela</span><span style={{ ...s.resumoItemValor, color: '#ff6600', fontSize: celular ? 20 : 26, fontWeight: 900, whiteSpace: 'nowrap' }}>{fmt(valorParcela)}</span></div>
               </div>
             )}
             <div style={s.section}>
@@ -1582,7 +1581,7 @@ export default function Negociacao() {
                   <label style={s.label}>🎟 Desconto (%)</label>
                   <input style={s.input} inputMode="decimal" value={formRet.desconto_pct} onChange={e => setFormRet({ ...formRet, desconto_pct: e.target.value.replace(/[^\d,.]/g, '') })} placeholder="Ex: 10" />
                 </div>
-                {formRet.desconto_pct && (
+                {(
                   <div style={{ width: 170 }}>
                     <label style={s.label}>🏷 Cupom</label>
                     <input style={{ ...s.input, textTransform: 'uppercase', color: '#ff8a3d', fontWeight: 800 }} value={formRet.cupom}
@@ -1590,7 +1589,7 @@ export default function Negociacao() {
                       placeholder={gerarCupom(formRet.nome || 'CLIENTE', formRet.desconto_pct, [])} />
                   </div>
                 )}
-                {formRet.desconto_pct && (
+                {(
                   <div>
                     <label style={s.label}>Vale por</label>
                     <div style={{ display: 'flex', gap: 6 }}>
@@ -1829,8 +1828,8 @@ const base: Record<string, React.CSSProperties> = {
   parcelasGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
   parcelaCard: { background: '#0a0a0a', borderRadius: 10, padding: '12px 16px', cursor: 'pointer' },
   parcelaAtiva: { background: 'rgba(255,102,0,0.1)' },
-  resumoFinal: { background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 16, padding: 24, marginBottom: 20, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20 },
-  resumoItem: { display: 'flex', flexDirection: 'column', gap: 4 },
+  resumoFinal: { background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 16, padding: 24, marginBottom: 20, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, alignItems: 'center' },
+  resumoItem: { display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 4 },
   resumoItemLabel: { color: '#666', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
   resumoItemValor: { color: 'white', fontSize: 18, fontWeight: 700 },
   botoesRow: { display: 'flex', gap: 16, alignItems: 'flex-start', marginTop: 8, marginBottom: 40, flexWrap: 'wrap' },

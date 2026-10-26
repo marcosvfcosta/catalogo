@@ -108,7 +108,7 @@ function coresDoProduto(cor?: string) {
 }
 
 function abrirWhatsApp(texto: string) {
-  window.open(`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(texto)}`, '_blank')
+  window.open(`https://api.whatsapp.com/send?phone=${WHATSAPP}&text=${encodeURIComponent(texto)}`, '_blank')
 }
 
 const nomeCompleto = (p: Produto) => [p.marca === 'Apple' ? '' : p.marca, p.modelo, p.memoria].filter(Boolean).join(' ')

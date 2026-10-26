@@ -94,7 +94,7 @@ export default function Comparar() {
 
   function tenhoInteresse(nome: string) {
     const msg = `Olá! Vi a comparação no catálogo da Marcos Magazine e tenho interesse no *${nome}*. Pode me passar mais informações? 😊`
-    window.open(`https://wa.me/${LOJA_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank')
+    window.open(`https://api.whatsapp.com/send?phone=${LOJA_WHATSAPP}&text=${encodeURIComponent(msg)}`, '_blank')
   }
 
   const nome1 = res?.modelo1?.nome || modelo1

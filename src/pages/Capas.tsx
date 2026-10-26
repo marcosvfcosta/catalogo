@@ -71,7 +71,7 @@ export default function Capas() {
       if (c?.codigo && c.validade >= new Date().toISOString().slice(0, 10)) cupom = `\n\n🎟 Tenho o cupom *#${c.codigo}* (${c.pct}% de desconto)`
     } catch { /* ok */ }
     const msg = `Olá! Vi no catálogo e quero essa capinha 😍\n\n📱 Modelo: *${aberto.modelo}*\n🏷 ${foto.tipo}\n\n📷 Foto da capinha:\n${foto.url}${cupom}`
-    window.open(`https://wa.me/${LOJA_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank')
+    window.open(`https://api.whatsapp.com/send?phone=${LOJA_WHATSAPP}&text=${encodeURIComponent(msg)}`, '_blank')
   }
 
   const cabecalho = (

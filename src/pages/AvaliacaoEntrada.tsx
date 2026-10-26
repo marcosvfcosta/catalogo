@@ -204,7 +204,7 @@ export default function AvaliacaoEntrada() {
 
   function falarComLoja() {
     const msg = `Olá! Acabei de enviar a avaliação do meu ${modeloFinal} ${armazenamento} (${estado}) pelo catálogo. Tenho interesse no ${interesse.trim()}. Meu nome é ${nome.trim()}.`
-    window.open(`https://wa.me/${LOJA_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank')
+    window.open(`https://api.whatsapp.com/send?phone=${LOJA_WHATSAPP}&text=${encodeURIComponent(msg)}`, '_blank')
   }
 
   if (enviado) return (
