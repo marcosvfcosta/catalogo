@@ -119,7 +119,8 @@ function linkProduto(p: Produto, cor?: string | null) {
 }
 
 function textoInteresse(p: Produto, cor?: string | null) {
-  return `Olá! Tenho interesse no ${nomeCompleto(p)}${cor ? ` na cor ${cor}` : ''} que vi no catálogo da Marcos Magazine.\n${linkProduto(p, cor)}`
+  const cupom = cupomVale(p) ? `\n\n🎟 Cupom *#${CUPOM!.codigo}* (${CUPOM!.pct}%): de ${reais(p.preco || 0)} por *${reais(precoFinal(p))}*` : ''
+  return `Olá! Tenho interesse no ${nomeCompleto(p)}${cor ? ` na cor ${cor}` : ''} que vi no catálogo da Marcos Magazine.\n${linkProduto(p, cor)}${cupom}`
 }
 
 const reais = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -130,8 +131,29 @@ function precoVisivel(p: Produto) {
 }
 const temDesconto = (p: Produto) => precoVisivel(p) && !!p.preco_antigo && p.preco_antigo > (p.preco || 0)
 
+// ─── Cupom do cliente (vem no link do WhatsApp: ?cupom=JOAO10) ───
+type Cupom = { codigo: string; pct: number; validade: string }
+const CHAVE_CUPOM = 'mm-cupom'
+let CUPOM: Cupom | null = null // atualizado a cada render do App
+const hojeISO = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+function lerCupom(): Cupom | null {
+  try { const c = JSON.parse(localStorage.getItem(CHAVE_CUPOM) || 'null'); return c?.codigo && c.validade >= hojeISO() ? c : null } catch { return null }
+}
+// Cupom vale só em acessórios com preço
+const cupomVale = (p: Produto) => !!CUPOM && !!p.tipo && precoVisivel(p)
+const precoFinal = (p: Produto) => cupomVale(p) ? Math.round((p.preco || 0) * (1 - CUPOM!.pct / 100) * 100) / 100 : (p.preco || 0)
+
 function PrecoProduto({ p, grande = false }: { p: Produto; grande?: boolean }) {
   if (!precoVisivel(p)) return null
+  if (cupomVale(p)) {
+    const de = temDesconto(p) ? (p.preco_antigo || 0) : (p.preco || 0)
+    return (
+      <div className={grande ? 'mm-preco mm-preco-grande' : 'mm-preco'}>
+        <span className="mm-preco-de"><s>{reais(de)}</s><em className="mm-tag-cupom">#{CUPOM!.codigo} -{CUPOM!.pct}%</em></span>
+        <b className="mm-preco-cupom">{reais(precoFinal(p))}</b>
+      </div>
+    )
+  }
   const pct = temDesconto(p) ? Math.round((1 - (p.preco || 0) / (p.preco_antigo || 1)) * 100) : 0
   return (
     <div className={grande ? 'mm-preco mm-preco-grande' : 'mm-preco'}>
@@ -205,6 +227,10 @@ function App() {
   const [sacolaAberta, setSacolaAberta] = useState(false)
   const [aviso, setAviso] = useState('')
   const [modelos, setModelos] = useState<ModeloCelular[]>(CACHE?.modelos || [])
+  const [cupom, setCupom] = useState<Cupom | null>(lerCupom)
+  const [codigoDigitado, setCodigoDigitado] = useState('')
+  const [erroCupom, setErroCupom] = useState('')
+  CUPOM = cupom && cupom.validade >= hojeISO() ? cupom : null
   const [meuCelular, setMeuCelular] = useState<ModeloCelular | null>(null)
   const [textoCelular, setTextoCelular] = useState('')
   const [sugestoesAbertas, setSugestoesAbertas] = useState(false)
@@ -262,6 +288,36 @@ function App() {
     try { localStorage.setItem(CHAVE_SACOLA, JSON.stringify(sacola)) } catch { /* sem armazenamento */ }
   }, [sacola])
 
+  // Cupom: do link (?cupom=X) ou o que já estava salvo → confere se ainda vale
+  useEffect(() => {
+    let codigo = ''
+    try { codigo = new URLSearchParams(window.location.search).get('cupom') || '' } catch { /* ok */ }
+    if (codigo) aplicarCupom(codigo, true)
+    else if (cupom) aplicarCupom(cupom.codigo, false, true)
+  }, [])
+
+  async function aplicarCupom(codigoBruto: string, avisar = true, silencioso = false) {
+    const codigo = codigoBruto.replace('#', '').trim().toUpperCase()
+    if (!codigo) return
+    setErroCupom('')
+    const { data, error } = await supabase.rpc('validar_cupom', { p_codigo: codigo })
+    const c = Array.isArray(data) ? data[0] : data
+    if (error || !c || !c.pct) {
+      if (silencioso) { setCupom(null); try { localStorage.removeItem(CHAVE_CUPOM) } catch { /* ok */ } }
+      else setErroCupom('Cupom inválido ou vencido')
+      return
+    }
+    const novo = { codigo, pct: Number(c.pct), validade: String(c.validade) }
+    setCupom(novo); setCodigoDigitado('')
+    try { localStorage.setItem(CHAVE_CUPOM, JSON.stringify(novo)) } catch { /* ok */ }
+    if (avisar) mostrarAviso(`🎟 Cupom #${codigo} ativado: ${novo.pct}% off em acessórios`)
+  }
+
+  function tirarCupom() {
+    setCupom(null)
+    try { localStorage.removeItem(CHAVE_CUPOM) } catch { /* ok */ }
+  }
+
   // Botão "voltar" do celular fecha o produto aberto
   useEffect(() => {
     const aoVoltar = () => { setSelecionado(null); setFotosDetalhe([]) }
@@ -292,10 +348,14 @@ function App() {
 
   function enviarSacola() {
     if (!itensSacola.length) return
-    const lista = itensSacola.map((p, i) => `${i + 1}. ${nomeCompleto(p)}${precoVisivel(p) ? ` — ${reais(p.preco || 0)}` : ''}\n${linkProduto(p)}`).join('\n\n')
+    const lista = itensSacola.map((p, i) => {
+      const preco = !precoVisivel(p) ? '' : cupomVale(p) ? ` — ~${reais(p.preco || 0)}~ *${reais(precoFinal(p))}* (cupom)` : ` — ${reais(p.preco || 0)}`
+      return `${i + 1}. ${nomeCompleto(p)}${preco}\n${linkProduto(p)}`
+    }).join('\n\n')
     const comPreco = itensSacola.filter(precoVisivel)
-    const total = comPreco.length > 1 ? `\n\nTotal dos itens com preço: ${reais(comPreco.reduce((t, p) => t + (p.preco || 0), 0))}` : ''
-    abrirWhatsApp(`Olá! Vim pelo catálogo da Marcos Magazine e tenho interesse ${itensSacola.length > 1 ? 'nestes produtos' : 'neste produto'}:\n\n${lista}${total}\n\nPode me passar valores e condições?`)
+    const total = comPreco.length > 1 ? `\n\nTotal dos itens com preço: *${reais(comPreco.reduce((t, p) => t + precoFinal(p), 0))}*` : ''
+    const linhaCupom = CUPOM && itensSacola.some(cupomVale) ? `\n\n🎟 Cupom: *#${CUPOM.codigo}* (${CUPOM.pct}% em acessórios)` : ''
+    abrirWhatsApp(`Olá! Vim pelo catálogo da Marcos Magazine e tenho interesse ${itensSacola.length > 1 ? 'nestes produtos' : 'neste produto'}:\n\n${lista}${total}${linhaCupom}\n\nPode me passar valores e condições?`)
   }
 
   // ─── Navegação ───────────────────────────────────
@@ -561,6 +621,16 @@ function App() {
               ))}
             </div>
             <div className="mm-gaveta-rodape">
+              {cupom ? (
+                <div className="mm-cupom-ativo">🎟 Cupom <b>#{cupom.codigo}</b> · {cupom.pct}% off em acessórios <button onClick={tirarCupom} aria-label="Tirar cupom">✕</button></div>
+              ) : (
+                <div className="mm-cupom-campo">
+                  <input placeholder="Tem cupom? Digite aqui" value={codigoDigitado} onChange={e => setCodigoDigitado(e.target.value.toUpperCase())}
+                    onKeyDown={e => e.key === 'Enter' && aplicarCupom(codigoDigitado)} />
+                  <button onClick={() => aplicarCupom(codigoDigitado)}>Aplicar</button>
+                </div>
+              )}
+              {erroCupom && <small className="mm-cupom-erro">{erroCupom}</small>}
               <button className="mm-btn-verde" onClick={enviarSacola}><IconeWhats /> Enviar pelo WhatsApp ({itensSacola.length})</button>
               <button className="mm-link mm-limpar" onClick={() => setSacola([])}>Esvaziar sacola</button>
             </div>
@@ -690,7 +760,9 @@ function App() {
       </aside>
 
       {/* Faixa de aviso */}
-      <div className="mm-aviso">💳 <b>Parcele em até {PARCELAS}x</b> · ⇄ Aceitamos seu usado</div>
+      {cupom
+        ? <div className="mm-aviso mm-aviso-cupom">🎟 Cupom <b>#{cupom.codigo}</b> ativo: <b>{cupom.pct}% off</b> em acessórios até {cupom.validade.split('-').reverse().slice(0, 2).join('/')}</div>
+        : <div className="mm-aviso">💳 <b>Parcele em até {PARCELAS}x</b> · ⇄ Aceitamos seu usado</div>}
 
       {/* Topo */}
       <header className="mm-topo">
@@ -1258,6 +1330,16 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 .mm .mm-usado-texto b { font-size: 19px; font-weight: 800; color: #fff; }
 .mm .mm-usado-texto small { font-size: 14px; color: #ffb27a; }
 .mm .mm-usado-seta { width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.14); display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
+.mm .mm-aviso-cupom { background: linear-gradient(90deg, #ff6600, #ff8a3d); color: #fff; }
+.mm .mm-aviso-cupom b { color: #fff; }
+.mm .mm-preco-de em.mm-tag-cupom { background: var(--laranja); }
+.mm .mm-preco b.mm-preco-cupom { color: var(--laranja); }
+.mm .mm-cupom-campo { display: flex; gap: 8px; width: 100%; }
+.mm .mm-cupom-campo input { flex: 1; min-width: 0; border: 1.5px dashed #ffb27a; border-radius: 14px; padding: 11px 14px; font-size: 16px; font-family: inherit; outline: none; text-transform: uppercase; color: var(--tinta); }
+.mm .mm-cupom-campo button { background: var(--tinta); color: #fff; border-radius: 14px; padding: 0 16px; font-weight: 700; font-size: 15px; }
+.mm .mm-cupom-ativo { width: 100%; display: flex; align-items: center; gap: 6px; background: #fff1e6; color: var(--laranja); border-radius: 14px; padding: 11px 14px; font-size: 14px; }
+.mm .mm-cupom-ativo button { margin-left: auto; color: #b0b0b5; font-size: 15px; }
+.mm .mm-cupom-erro { color: #e5332a; font-size: 13px; }
 @media (min-width: 760px) {
   .mm .mm-hero { border-radius: 28px; margin: 16px 16px 0; }
   .mm .mm-hero-arte { background: none; padding: 0; }

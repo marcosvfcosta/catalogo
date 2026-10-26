@@ -167,6 +167,7 @@ type Retorno = {
   aceita: boolean; observacao: string | null; ativo: boolean
   desconto_pct?: number | null; desconto_validade?: string | null; desconto_usado_em?: string | null
   ultima_compra?: string | null; ultima_compra_em?: string | null
+  cupom?: string | null
 }
 type LinhaTroca = { id: string; modelo: string; gb: string | null; cor: string | null; bateria: string | null; valor: number | null; ordem: number }
 const VALIDADES = [7, 15, 30]
@@ -186,6 +187,15 @@ function somarDias(dataISO: string, dias: number) {
   const d = new Date(dataISO + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + dias)
   return d.toISOString().slice(0, 10)
 }
+// Código do cupom: NOME + % (ex: JOAO10). Se já existir, junta 2 números
+function gerarCupom(nome: string, pct: number | string, existentes: string[]) {
+  const base = (nome.trim().split(' ')[0] || 'CLIENTE').normalize('NFD').replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 8) + String(pct).replace(/\D/g, '')
+  let codigo = base
+  while (existentes.includes(codigo)) codigo = base + Math.floor(10 + Math.random() * 90)
+  return codigo
+}
+const limparCupom = (t: string) => t.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 16)
+
 const dataCurta = (iso: string) => iso.split('-').reverse().slice(0, 2).join('/')
 
 function linkWhatsApp(telefone: string, msg: string) {
@@ -274,7 +284,7 @@ export default function Negociacao() {
   const [buscaTabela, setBuscaTabela] = useState('')
   const [retornos, setRetornos] = useState<Retorno[]>([])
   const [modelosCel, setModelosCel] = useState<ModeloCel[]>([])
-  const novoRetorno = { nome: '', telefone: '', modelo: '', modelo_id: null as string | null, intervalo_dias: 30, aceita: true, observacao: '', desconto_pct: '', validade_dias: 15, ultima_compra: '' }
+  const novoRetorno = { nome: '', telefone: '', modelo: '', modelo_id: null as string | null, intervalo_dias: 30, aceita: true, observacao: '', desconto_pct: '', validade_dias: 15, ultima_compra: '', cupom: '' }
   const [formRet, setFormRet] = useState(novoRetorno)
   const [sugestoesRet, setSugestoesRet] = useState<ModeloCel[]>([])
   const [salvandoRet, setSalvandoRet] = useState(false)
@@ -422,6 +432,7 @@ export default function Negociacao() {
       ultima_compra_em: formRet.ultima_compra.trim() ? hojeBR() : null,
       ...(Number(formRet.desconto_pct.replace(',', '.')) > 0 ? {
         desconto_pct: Number(formRet.desconto_pct.replace(',', '.')),
+        cupom: limparCupom(formRet.cupom) || gerarCupom(formRet.nome, formRet.desconto_pct, retornos.map(r => r.cupom || '')),
         desconto_validade: somarDias(somarDias(hojeBR(), dias), formRet.validade_dias || 15),
       } : {}),
     }])
@@ -433,8 +444,14 @@ export default function Negociacao() {
 
   function mensagemRetorno(r: Retorno) {
     const primeiro = r.nome.trim().split(' ')[0]
-    const link = r.modelo_id ? `${window.location.origin}/?celular=${r.modelo_id}&tipo=capa` : `${window.location.origin}/capas`
-    const cupom = descontoAtivo(r, hojeBR()) ? `\n\n🎟 E você tem *${r.desconto_pct}% de desconto* em acessórios até ${dataCurta(r.desconto_validade!)}! É só mostrar essa mensagem na loja.` : ''
+    const temCupom = descontoAtivo(r, hojeBR()) && !!r.cupom
+    const paramCupom = temCupom ? `cupom=${r.cupom}` : ''
+    const link = r.modelo_id
+      ? `${window.location.origin}/?celular=${r.modelo_id}&tipo=capa${paramCupom ? `&${paramCupom}` : ''}`
+      : `${window.location.origin}/${paramCupom ? `?${paramCupom}` : 'capas'}`
+    const cupom = temCupom
+      ? `\n\n🎟 E tem presente pra você: cupom *#${r.cupom}* com *${r.desconto_pct}% de desconto* em acessórios até ${dataCurta(r.desconto_validade!)}. Ele já vem ativado no link acima 😉`
+      : descontoAtivo(r, hojeBR()) ? `\n\n🎟 E você tem *${r.desconto_pct}% de desconto* em acessórios até ${dataCurta(r.desconto_validade!)}! É só mostrar essa mensagem na loja.` : ''
     return `Oi ${primeiro}! Aqui é da Marcos Magazine 😊\n\nChegaram novidades em capas e acessórios para o seu *${r.modelo}*! Dá uma olhada:\n${link}${cupom}\n\nQualquer coisa é só chamar aqui 🧡`
   }
 
@@ -465,7 +482,9 @@ export default function Negociacao() {
     const n = Number(pct.replace(',', '.').replace('%', ''))
     if (!(n > 0)) { alert('Coloque um número, ex: 10'); return }
     const dias = Number(prompt('Vale por quantos dias? (7, 15, 30...)', '15')) || 15
-    await supabase.from('catalogo_retornos').update({ desconto_pct: n, desconto_validade: somarDias(hojeBR(), dias), desconto_usado_em: null }).eq('id', r.id)
+    const outros = retornos.filter(x => x.id !== r.id).map(x => x.cupom || '')
+    const cupom = limparCupom(prompt('Código do cupom (pode mudar):', gerarCupom(r.nome, n, outros)) || '') || gerarCupom(r.nome, n, outros)
+    await supabase.from('catalogo_retornos').update({ desconto_pct: n, cupom, desconto_validade: somarDias(hojeBR(), dias), desconto_usado_em: null }).eq('id', r.id)
     carregarRetornos()
   }
 
@@ -860,7 +879,7 @@ export default function Negociacao() {
   const retornosFuturos = retornos
     .filter(r => termoRet ? true : !retornosHoje.includes(r))
     .filter(r => !termoRet
-      || semAc(`${r.nome} ${r.modelo}`).includes(termoRet)
+      || semAc(`${r.nome} ${r.modelo} ${r.cupom || ''}`).includes(termoRet.replace('#', ''))
       || (digitosRet.length >= 4 && r.telefone.replace(/\D/g, '').includes(digitosRet)))
   const clientesPeriodo = clientes.filter(c => noPeriodo(c.created_at, periodo))
 
@@ -1497,7 +1516,7 @@ export default function Negociacao() {
                           </p>
                           {r.ultima_compra && <p style={{ margin: '4px 0 0', color: '#ccc', fontSize: 13 }}>🛍 Última compra: <b>{r.ultima_compra}</b>{r.ultima_compra_em ? ` (${dataCurta(r.ultima_compra_em)})` : ''}</p>}
                           {r.observacao && <p style={{ margin: '4px 0 0', color: '#aaa', fontSize: 13 }}>📝 {r.observacao}</p>}
-                          {descontoAtivo(r, hoje) && <p style={{ margin: '4px 0 0', color: '#25D366', fontSize: 13, fontWeight: 700 }}>🎟 {r.desconto_pct}% até {dataCurta(r.desconto_validade!)} — vai na mensagem</p>}
+                          {descontoAtivo(r, hoje) && <p style={{ margin: '4px 0 0', color: '#25D366', fontSize: 13, fontWeight: 700 }}>🎟 {r.cupom ? `#${r.cupom} · ` : ''}{r.desconto_pct}% até {dataCurta(r.desconto_validade!)} — vai na mensagem</p>}
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
@@ -1564,6 +1583,14 @@ export default function Negociacao() {
                   <input style={s.input} inputMode="decimal" value={formRet.desconto_pct} onChange={e => setFormRet({ ...formRet, desconto_pct: e.target.value.replace(/[^\d,.]/g, '') })} placeholder="Ex: 10" />
                 </div>
                 {formRet.desconto_pct && (
+                  <div style={{ width: 170 }}>
+                    <label style={s.label}>🏷 Cupom</label>
+                    <input style={{ ...s.input, textTransform: 'uppercase', color: '#ff8a3d', fontWeight: 800 }} value={formRet.cupom}
+                      onChange={e => setFormRet({ ...formRet, cupom: limparCupom(e.target.value) })}
+                      placeholder={gerarCupom(formRet.nome || 'CLIENTE', formRet.desconto_pct, [])} />
+                  </div>
+                )}
+                {formRet.desconto_pct && (
                   <div>
                     <label style={s.label}>Vale por</label>
                     <div style={{ display: 'flex', gap: 6 }}>
@@ -1574,7 +1601,7 @@ export default function Negociacao() {
                   </div>
                 )}
               </div>
-              {formRet.desconto_pct && <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0' }}>O desconto começa a contar no dia do retorno e vai junto na mensagem.</p>}
+              {formRet.desconto_pct && <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0' }}>O cupom vai na mensagem e já abre ativado no catálogo (o desconto aparece sozinho nos acessórios). Deixe o código em branco para gerar automático.</p>}
               <input style={{ ...s.input, marginTop: 12 }} value={formRet.observacao} onChange={e => setFormRet({ ...formRet, observacao: e.target.value })} placeholder="Observação (opcional) — ex: gosta de capa transparente" />
               {erroRet && <p style={{ color: '#ff4444', fontSize: 13, margin: '10px 0 0' }}>{erroRet}</p>}
               <button style={{ ...s.btnFechar, width: '100%', marginTop: 14, background: '#ff6600' }} disabled={salvandoRet} onClick={salvarRetorno}>
@@ -1595,7 +1622,7 @@ export default function Negociacao() {
                         {r.ultima_compra && <p style={{ margin: '4px 0 0', color: '#ccc', fontSize: 13 }}>🛍 Última compra: <b>{r.ultima_compra}</b>{r.ultima_compra_em ? ` (${dataCurta(r.ultima_compra_em)})` : ''}</p>}
                         {descontoAtivo(r, hoje) && (
                           <p style={{ margin: '2px 0 0', color: '#25D366', fontSize: 13, fontWeight: 700 }}>
-                            🎟 {r.desconto_pct}% · {diasAte(r.desconto_validade!, hoje) === 0 ? 'vence hoje' : `faltam ${diasAte(r.desconto_validade!, hoje)} dias`}
+                            🎟 {r.cupom ? `#${r.cupom} · ` : ''}{r.desconto_pct}% · {diasAte(r.desconto_validade!, hoje) === 0 ? 'vence hoje' : `faltam ${diasAte(r.desconto_validade!, hoje)} dias`}
                           </p>
                         )}
                       </div>

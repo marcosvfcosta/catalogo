@@ -144,3 +144,26 @@ where not exists (select 1 from public.catalogo_tabela_troca);
 -- 11) O que o cliente comprou por último (Retornos)
 alter table public.catalogo_retornos add column if not exists ultima_compra text;
 alter table public.catalogo_retornos add column if not exists ultima_compra_em date;
+
+-- 12) Cupom: código que vai na mensagem e dá desconto automático no catálogo
+alter table public.catalogo_retornos add column if not exists cupom text;
+create index if not exists catalogo_retornos_cupom_idx on public.catalogo_retornos (upper(cupom));
+
+-- O catálogo (sem login) só consegue CONFERIR um cupom: recebe % e validade, nada do cliente
+create or replace function public.validar_cupom(p_codigo text)
+returns table (pct numeric, validade date)
+language sql
+security definer
+set search_path = public
+as $$
+  select r.desconto_pct, r.desconto_validade
+  from public.catalogo_retornos r
+  where upper(r.cupom) = upper(replace(trim(p_codigo), '#', ''))
+    and r.ativo
+    and r.desconto_pct > 0
+    and r.desconto_usado_em is null
+    and r.desconto_validade >= (now() at time zone 'America/Sao_Paulo')::date
+  limit 1
+$$;
+revoke all on function public.validar_cupom(text) from public;
+grant execute on function public.validar_cupom(text) to anon, authenticated;

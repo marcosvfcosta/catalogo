@@ -1,5 +1,5 @@
 -- Aviso de hora em hora dos Retornos (rode UMA vez no SQL Editor)
--- ANTES: troque sb_publishable__ufxNgI5l4WBTgWf5Hw2iQ_ABeGecHx pela sua chave anon
+-- ANTES: troque COLE_AQUI_A_ANON_KEY pela sua chave anon
 --        (é a mesma do VITE_SUPABASE_ANON_KEY do arquivo .env — essa chave é pública, sem problema)
 
 create extension if not exists pg_cron;
