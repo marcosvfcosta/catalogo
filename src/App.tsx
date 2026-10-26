@@ -49,7 +49,6 @@ const WHATSAPP = '5564993374281'
 const PARCELAS = 18
 const STORAGE = 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public'
 const CHAVE_SACOLA = 'mm-sacola'
-const CHAVE_CELULAR = 'mm-meu-celular'
 const DESCONTO_KIT = 0.1 // 10% de desconto no kit
 
 // Grupos de acessório na busca por modelo
@@ -158,10 +157,6 @@ function lerCache(): CacheCatalogo | null {
 }
 const CACHE = typeof window !== 'undefined' ? lerCache() : null
 
-function lerCelular(): ModeloCelular | null {
-  try { const v = JSON.parse(localStorage.getItem(CHAVE_CELULAR) || 'null'); return v && v.id ? v : null } catch { return null }
-}
-
 function lerSacola(): string[] {
   try { const v = JSON.parse(localStorage.getItem(CHAVE_SACOLA) || '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
 }
@@ -211,7 +206,6 @@ function App() {
   const [aviso, setAviso] = useState('')
   const [modelos, setModelos] = useState<ModeloCelular[]>(CACHE?.modelos || [])
   const [meuCelular, setMeuCelular] = useState<ModeloCelular | null>(null)
-  const [ultimoCelular, setUltimoCelular] = useState<ModeloCelular | null>(lerCelular)
   const [textoCelular, setTextoCelular] = useState('')
   const [sugestoesAbertas, setSugestoesAbertas] = useState(false)
   const [grupoAcessorio, setGrupoAcessorio] = useState('')
@@ -342,9 +336,8 @@ function App() {
   // ─── Busca por modelo de celular ─────────────────
   function escolherCelular(m: ModeloCelular) {
     setBusca(''); setCategoriaAtiva(null); setMarcaAtiva(null); setFiltroEspecial(null)
-    setMeuCelular(m); setUltimoCelular(m); setGrupoAcessorio(''); setTextoCelular(''); setSugestoesAbertas(false)
+    setMeuCelular(m); setGrupoAcessorio(''); setTextoCelular(''); setSugestoesAbertas(false)
     campoCelularRef.current?.blur()
-    try { localStorage.setItem(CHAVE_CELULAR, JSON.stringify(m)) } catch { /* ok */ }
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -691,9 +684,11 @@ function App() {
               </button>
             </div>
           )}
-          {!meuCelular && !textoCelular && ultimoCelular && (
-            <button className="mm-qual-ultimo" onClick={() => escolherCelular(ultimoCelular)}>
-              Acessórios para o seu <b>{ultimoCelular.modelo}</b> ›
+          {!meuCelular && (
+            <button className="mm-usado-faixa" onClick={() => navigate('/entrada')}>
+              <span className="mm-usado-bola">⇄</span>
+              <span className="mm-usado-texto"><b>Avalie seu usado</b><small>Vale como entrada no novo</small></span>
+              <span className="mm-usado-seta">›</span>
             </button>
           )}
         </div>
@@ -864,24 +859,6 @@ function App() {
             <>
               {secao('Destaques da semana', destaques.length ? destaques : produtos.slice(0, 10), destaques.length ? 'destaques' : null)}
 
-              {/* ─── Cartões: usado e comparar ─── */}
-              <div className="mm-duo">
-                <button className="mm-duo-escuro" onClick={() => navigate('/entrada')}>
-                  <span className="mm-duo-bola">⇄</span>
-                  <span className="mm-novo">NOVO</span>
-                  <b>Avalie seu usado</b>
-                  <small>Use como entrada no seu novo ›</small>
-                </button>
-                <button className="mm-duo-claro" onClick={() => navigate('/comparar')}>
-                  <span className="mm-duo-vs">
-                    <img src="/comparar-iphone.png" alt="iPhone" />
-                    <i>VS</i>
-                    <img src="/comparar-samsung.png" alt="Samsung" />
-                  </span>
-                  <b>Compare celulares</b>
-                  <small>Veja qual é o melhor ›</small>
-                </button>
-              </div>
 
               {secao('Lançamentos', lancamentos, 'lancamentos')}
               {secao('Promoções', promocoes, 'promocoes')}
@@ -1184,7 +1161,7 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 .mm .mm-gaveta-item .mm-preco b { font-size: 15px; }
 
 /* Qual é o seu celular? */
-.mm .mm-qual { position: relative; margin: 12px auto 4px; width: calc(100% - 32px); max-width: 1068px; }
+.mm .mm-qual { position: relative; margin: 12px auto 14px; width: calc(100% - 32px); max-width: 1068px; }
 .mm .mm-qual-caixa { display: flex; align-items: center; gap: 8px; background: #fff; border: 1.5px solid var(--borda); border-radius: 18px; padding: 4px 6px 4px 14px; color: var(--laranja); box-shadow: 0 6px 18px rgba(0,0,0,0.05); }
 .mm .mm-qual-caixa.aberta { border-color: var(--laranja); border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .mm .mm-qual-caixa input { flex: 1; min-width: 0; border: none; outline: none; background: none; font-size: 17px; padding: 12px 0; font-family: inherit; color: var(--tinta); }
@@ -1221,6 +1198,13 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 .mm .mm-kit-botoes .mm-btn-verde { flex: 1; margin: 0; }
 .mm .mm-hero-fantasma { min-height: 400px; background: linear-gradient(90deg, #f5f5f7 25%, #ececf0 50%, #f5f5f7 75%); background-size: 200% 100%; animation: mmBrilho 1.2s infinite linear; }
 @keyframes mmBrilho { from { background-position: 200% 0 } to { background-position: -200% 0 } }
+.mm .mm-usado-faixa { display: flex; align-items: center; gap: 14px; width: 100%; margin-top: 10px; padding: 14px 16px; border-radius: 20px; text-align: left;
+  background: linear-gradient(110deg, #1d1d1f 0%, #2c2c2e 55%, #ff6600 140%); color: #fff; box-shadow: 0 10px 24px rgba(255,102,0,0.18); }
+.mm .mm-usado-bola { width: 48px; height: 48px; border-radius: 50%; background: var(--laranja); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+.mm .mm-usado-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mm .mm-usado-texto b { font-size: 19px; font-weight: 800; color: #fff; }
+.mm .mm-usado-texto small { font-size: 14px; color: #ffb27a; }
+.mm .mm-usado-seta { width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.14); display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
 @media (min-width: 760px) {
   .mm .mm-hero { border-radius: 28px; margin: 16px 16px 0; }
   .mm .mm-hero-arte { background: none; padding: 0; }
