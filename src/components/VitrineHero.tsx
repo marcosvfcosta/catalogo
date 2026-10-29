@@ -1,36 +1,37 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 // ─── Abertura "parede de nichos" (estilo loja de perfumes) ───────────────────
-// Parede de pedra escura com nichos iluminados. Ao escolher um celular, a luz dos
-// outros nichos apaga, a câmera aproxima do escolhido e aparecem o nome e as
-// especificações. O "✕" (ou tocar fora) volta e as luzes acendem de novo.
-// Passando o dedo na parede, o celular cresce e o nicho acende em laranja.
-// Sem bibliotecas: só React + CSS. O zoom muda o tamanho real da parede
-// (não é "scale" de imagem), então as fotos continuam nítidas.
+// Nichos cavados numa parede de rocha escura. Dentro de cada nicho: fundo de pedra
+// iluminado por uma luz de teto (spot), paredes laterais acesas com a cor do produto
+// e chão de vidro com reflexo. Deslizando para o lado, o nicho do meio acende em
+// laranja e o celular cresce um pouco. Tocando, a luz dos outros nichos apaga e
+// aparecem o nome e as especificações. Sem bibliotecas: só React + CSS.
 
 export type ItemVitrine = {
   id: string
   nome: string
   foto: string                                  // de preferência sem fundo (PNG transparente)
-  detalhe?: string                              // ex: "256GB · Lançamento"
+  detalhe?: string                              // ex: "Lançamento"
   marca?: string
   specs?: { rotulo: string; valor: string }[]   // memória, condição, bateria, cores...
   preco?: string                                // só se estiver liberado para mostrar
-  cor?: string                                  // (não usado neste estilo)
+  cor?: string                                  // cor da luz do nicho (#hex)
 }
 
 type Props = {
-  itens: ItemVitrine[]                  // até 10
-  destaqueId?: string                   // (opcional) celular aberto ao carregar
+  itens: ItemVitrine[]                  // até 8
+  destaqueId?: string                   // (opcional) começa centralizado nele
   onVerProduto: (id: string) => void
   onInteresse?: (id: string) => void
   titulo?: string
 }
 
-// Textura de pedra escura (gerada pelo navegador, sem imagem externa)
-const PEDRA = `url("data:image/svg+xml,${encodeURIComponent(
-  `<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.62' numOctaves='4' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.55  0 0 0 0 0.54  0 0 0 0 0.58  0 0 0 0.5 0'/></filter><rect width='100%' height='100%' filter='url(#n)'/></svg>`,
+// Rocha com relevo (gerada pelo navegador, sem imagem externa)
+const rocha = (claridade: number, freq: number) => `url("data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns='http://www.w3.org/2000/svg' width='420' height='420'><filter id='f' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='${freq}' numOctaves='5' seed='7' stitchTiles='stitch' result='n'/><feDiffuseLighting in='n' surfaceScale='7' lighting-color='rgb(${claridade},${claridade},${claridade + 6})'><feDistantLight azimuth='235' elevation='38'/></feDiffuseLighting></filter><rect width='100%' height='100%' filter='url(#f)'/></svg>`,
 )}")`
+const ROCHA_ESCURA = rocha(48, 0.02)
+const PEDRA_CLARA = rocha(228, 0.03)
 
 // ─── Corta as sobras transparentes da foto (foto quadrada sem fundo deixa o celular pequeno) ───
 const cacheRecorte: Record<string, string> = {}
@@ -77,201 +78,246 @@ function useFotoRecortada(url: string) {
   return final
 }
 
-function FotoNicho({ url, nome }: { url: string; nome: string }) {
-  const src = useFotoRecortada(url)
-  return <img src={src} alt={nome} draggable={false} />
+function Nicho({ it, estado, onToque }: { it: ItemVitrine; estado: string; onToque: () => void }) {
+  const foto = useFotoRecortada(it.foto)
+  return (
+    <div className={'vn-coluna ' + estado} data-id={it.id} onClick={onToque}>
+      <div className="vn-nicho" style={{ ['--cor' as string]: it.cor || '#ffd9b0' }}>
+        <div className="vn-costas" />
+        <div className="vn-tinta" />
+        <div className="vn-teto" />
+        <div className="vn-lado vn-esq" />
+        <div className="vn-lado vn-dir" />
+        <div className="vn-cone" />
+        <div className="vn-led" />
+        <div className="vn-chao"><img src={foto} alt="" aria-hidden draggable={false} /></div>
+        <img className="vn-foto" src={foto} alt={it.nome} draggable={false} />
+        <div className="vn-laranja" />
+      </div>
+      <p className="vn-nome">{it.nome}</p>
+    </div>
+  )
 }
 
 export default function VitrineHero({ itens, destaqueId, onVerProduto, onInteresse, titulo = 'A coleção Marcos Magazine' }: Props) {
-  const lista = useMemo(() => itens.filter(i => i.foto).slice(0, 10), [itens])
-  const linhas = useMemo(() => {
-    if (lista.length <= 5) return [lista]
-    const meio = Math.ceil(lista.length / 2)
-    return [lista.slice(0, meio), lista.slice(meio)]
-  }, [lista])
+  const lista = useMemo(() => itens.filter(i => i.foto).slice(0, 8), [itens])
+  const trilhoRef = useRef<HTMLDivElement>(null)
+  const [ativo, setAtivo] = useState<string | null>(null)        // nicho no meio da tela (aceso em laranja)
+  const [escolhido, setEscolhido] = useState<string | null>(null) // tocado: os outros apagam
+  const [largo, setLargo] = useState(false)
+  const fimRolagem = useRef(0)
 
-  const [foco, setFoco] = useState<string | null>(lista.find(i => i.id === destaqueId)?.id || null)
-  const [realce, setRealce] = useState<string | null>(null)
-  const [animar, setAnimar] = useState(false)
-  const palcoRef = useRef<HTMLDivElement>(null)
-  const paredeRef = useRef<HTMLDivElement>(null)
-  const nichoRefs = useRef<Record<string, HTMLDivElement | null>>({})
-  const toque = useRef<{ x: number; y: number } | null>(null)
-  const [tam, setTam] = useState({ w: 0, h: 0 })
-  const [camera, setCamera] = useState({ left: 0, top: 0, largura: 0 })
-  const largo = tam.w >= 760 // iPad/computador: especificações ao lado
-
+  // Começa com o destaque (ou o 1º) no meio
   useEffect(() => {
-    const medir = () => { const p = palcoRef.current; if (p) setTam({ w: p.clientWidth, h: p.clientHeight }) }
-    medir()
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(medir) : null
-    if (ro && palcoRef.current) ro.observe(palcoRef.current)
-    window.addEventListener('resize', medir)
-    return () => { ro?.disconnect(); window.removeEventListener('resize', medir) }
+    const t = trilhoRef.current
+    if (!t || !lista.length) return
+    const alvo = (destaqueId && t.querySelector(`[data-id="${destaqueId}"]`)) || t.querySelector('.vn-coluna')
+    if (alvo) centralizar(alvo as HTMLElement, false)
+    medirMeio()
   }, [lista.length])
 
-  // Câmera: a parede inteira, ou o nicho escolhido grande (no celular fica em cima; no iPad, à direita)
-  useLayoutEffect(() => {
-    const parede = paredeRef.current
-    if (!parede || !tam.w) return
-    const W = parede.offsetWidth || 1
-    const larguraBase = Math.min(tam.w * 0.94, 1100)
-    const alturaRel = parede.offsetHeight / W
-    const el = foco ? nichoRefs.current[foco] : null
-    if (!el) {
-      setCamera({ left: (tam.w - larguraBase) / 2, top: Math.max(10, (tam.h - alturaRel * larguraBase) / 2 + tam.h * 0.04), largura: larguraBase })
-    } else {
-      let x = 0, y = 0
-      let n: HTMLElement | null = el
-      while (n && n !== parede) { x += n.offsetLeft; y += n.offsetTop; n = n.offsetParent as HTMLElement | null }
-      const rx = (x + el.offsetWidth / 2) / W, ry = (y + el.offsetHeight / 2) / W
-      const rw = el.offsetWidth / W, rh = el.offsetHeight / W
-      const altura = largo ? tam.h * 0.86 : tam.h * 0.58
-      const largura = Math.max(larguraBase, Math.min(altura / rh, (largo ? tam.w * 0.42 : tam.w * 0.62) / rw))
-      const alvoX = largo ? tam.w * 0.66 : tam.w / 2
-      const alvoY = largo ? tam.h * 0.5 : tam.h * 0.33
-      setCamera({ left: alvoX - rx * largura, top: alvoY - ry * largura, largura })
-    }
-    if (!animar) setTimeout(() => setAnimar(true), 80)
-  }, [foco, tam.w, tam.h, lista.length, largo])
+  useEffect(() => {
+    const medir = () => setLargo(window.innerWidth >= 760)
+    medir(); window.addEventListener('resize', medir)
+    return () => window.removeEventListener('resize', medir)
+  }, [])
 
-  function idNoPonto(x: number, y: number) {
-    const el = document.elementFromPoint(x, y)?.closest('.vn-nicho') as HTMLElement | null
-    return el?.dataset.id || null
+  // Fechado: nicho no meio da tela. Aberto: nicho encostado à esquerda e as especificações do lado.
+  const MARGEM_ABERTO = largo ? 48 : 14
+  function centralizar(el: HTMLElement, suave = true, aberto = !!escolhido) {
+    const t = trilhoRef.current
+    if (!t) return
+    const left = aberto ? el.offsetLeft - MARGEM_ABERTO : el.offsetLeft + el.offsetWidth / 2 - t.clientWidth / 2
+    t.scrollTo({ left, behavior: suave ? 'smooth' : 'auto' })
   }
-  function passar(direcao: 1 | -1) {
-    const i = foco ? lista.findIndex(x => x.id === foco) : -1
-    const prox = i < 0 ? 0 : (i + direcao + lista.length) % lista.length
-    setFoco(lista[prox].id)
+
+  // Depois que o layout muda (abre/fecha), reposiciona o nicho escolhido
+  useEffect(() => {
+    const t = trilhoRef.current
+    const id = escolhido || ativo
+    if (!t || !id) return
+    const el = t.querySelector(`[data-id="${id}"]`) as HTMLElement | null
+    if (!el) return
+    const q = requestAnimationFrame(() => centralizar(el, true, !!escolhido))
+    return () => cancelAnimationFrame(q)
+  }, [!!escolhido])
+
+  // Qual nicho está no meio da tela
+  function medirMeio() {
+    const t = trilhoRef.current
+    if (!t) return null
+    const primeira = t.querySelector<HTMLElement>('.vn-coluna')
+    const meio = escolhido && primeira ? t.scrollLeft + MARGEM_ABERTO + primeira.offsetWidth / 2 : t.scrollLeft + t.clientWidth / 2
+    let melhor: string | null = null, dist = Infinity
+    t.querySelectorAll<HTMLElement>('.vn-coluna').forEach(c => {
+      const d = Math.abs(c.offsetLeft + c.offsetWidth / 2 - meio)
+      if (d < dist) { dist = d; melhor = c.dataset.id || null }
+    })
+    setAtivo(melhor)
+    return melhor
+  }
+
+  function aoRolar() {
+    const id = medirMeio()
+    // Com um celular aberto, deslizar para o lado passa para o próximo (já com as especificações)
+    clearTimeout(fimRolagem.current)
+    fimRolagem.current = window.setTimeout(() => { if (escolhido && id && id !== escolhido) setEscolhido(id) }, 140)
+  }
+
+  function tocar(id: string, el: HTMLElement | null) {
+    if (escolhido === id) { onVerProduto(id); return }
+    const jaAberto = !!escolhido
+    setEscolhido(id)
+    if (el && jaAberto) centralizar(el, true, true)
   }
 
   if (lista.length === 0) return null
-  const atual = lista.find(i => i.id === foco) || null
+  const atual = lista.find(i => i.id === escolhido) || null
 
   return (
-    <section className="vn">
+    <section className={'vn' + (escolhido ? ' vn-aberto' : '') + (largo ? ' vn-largo' : '')} style={{ backgroundImage: `${ROCHA_ESCURA}` }}>
       <style>{CSS}</style>
-      <div ref={palcoRef} className={'vn-palco' + (foco ? ' vn-focado' : '') + (largo ? ' vn-largo' : '')}
-        style={{ backgroundImage: `${PEDRA}, radial-gradient(80% 60% at 50% 20%, #2b2a2f 0%, #18171b 60%, #0d0c0f 100%)` }}
-        onTouchStart={e => {
-          toque.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
-          if (!foco) setRealce(idNoPonto(e.touches[0].clientX, e.touches[0].clientY))
-        }}
-        onTouchMove={e => { if (!foco) setRealce(idNoPonto(e.touches[0].clientX, e.touches[0].clientY)) }}
-        onTouchEnd={e => {
-          const t = toque.current; toque.current = null
-          setRealce(null)
-          if (!t || !foco) return
-          const dx = e.changedTouches[0].clientX - t.x, dy = e.changedTouches[0].clientY - t.y
-          if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.3) passar(dx < 0 ? 1 : -1)
-        }}
-        onMouseMove={e => { if (!foco) setRealce(idNoPonto(e.clientX, e.clientY)) }}
-        onMouseLeave={() => setRealce(null)}>
+      <div className="vn-cabeca">
+        <span>VITRINE</span>
+        <h2>{titulo}</h2>
+      </div>
+      {escolhido && <button className="vn-fechar" onClick={() => setEscolhido(null)} aria-label="Voltar">✕</button>}
 
-        <div ref={paredeRef} className={animar ? 'vn-parede vn-anima' : 'vn-parede'}
-          style={{ left: camera.left, top: camera.top, width: camera.largura || 400, fontSize: (camera.largura || 400) / 100, visibility: camera.largura ? 'visible' : 'hidden' }}>
-          {linhas.map((linha, li) => (
-            <div key={li} className="vn-linha">
-              {linha.map(it => {
-                const estado = foco ? (foco === it.id ? ' escolhido' : ' apagado') : realce === it.id ? ' realce' : ''
-                return (
-                  <div key={it.id} data-id={it.id} ref={r => { nichoRefs.current[it.id] = r }}
-                    className={'vn-nicho' + estado}
-                    onClick={e => { e.stopPropagation(); if (foco === it.id) onVerProduto(it.id); else setFoco(it.id) }}>
-                    <div className="vn-fundo" />
-                    <div className="vn-luz" />
-                    <FotoNicho url={it.foto} nome={it.nome} />
-                    <div className="vn-base" />
-                  </div>
-                )
-              })}
+      <div className="vn-palco">
+      <div ref={trilhoRef} className="vn-trilho" onScroll={aoRolar}>
+        {lista.map(it => {
+          const estado = escolhido ? (escolhido === it.id ? 'escolhido' : 'apagado') : ativo === it.id ? 'ativo' : ''
+          return <Nicho key={it.id} it={it} estado={estado}
+            onToque={() => tocar(it.id, trilhoRef.current?.querySelector(`[data-id="${it.id}"]`) as HTMLElement | null)} />
+        })}
+      </div>
+
+      <div className="vn-info" aria-hidden={!atual}>
+        {atual && (
+          <div className="vn-info-dentro" key={atual.id}>
+            {atual.marca && <span className="vn-marca">{atual.marca}</span>}
+            <h3>{atual.nome}</h3>
+            {atual.detalhe && <p className="vn-detalhe">{atual.detalhe}</p>}
+            {!!atual.specs?.length && (
+              <ul className="vn-specs">
+                {atual.specs.map(s => <li key={s.rotulo}><span>{s.rotulo}</span><b>{s.valor}</b></li>)}
+              </ul>
+            )}
+            {atual.preco && <p className="vn-preco">{atual.preco}</p>}
+            <div className="vn-botoes">
+              <button className="vn-bt-claro" onClick={() => onVerProduto(atual.id)}>Ver no catálogo</button>
+              {onInteresse && <button className="vn-bt-verde" onClick={() => onInteresse(atual.id)}>Tenho interesse</button>}
             </div>
-          ))}
-        </div>
-
-        <div className="vn-sombra" />
-
-        <div className="vn-topo" style={{ opacity: foco ? 0 : 1 }}>
-          <span>VITRINE</span>
-          <h2>{titulo}</h2>
-        </div>
-
-        {foco && <button className="vn-fechar" onClick={() => setFoco(null)} aria-label="Voltar para a vitrine">✕</button>}
-
-        <div className={largo ? 'vn-info vn-info-lado' : 'vn-info'} style={{ opacity: atual ? 1 : 0, transform: atual ? 'none' : 'translateY(18px)', pointerEvents: atual ? 'auto' : 'none' }}>
-          {atual?.marca && <span className="vn-marca">{atual.marca}</span>}
-          <h3>{atual?.nome}</h3>
-          {atual?.detalhe && <p className="vn-detalhe">{atual.detalhe}</p>}
-          {!!atual?.specs?.length && (
-            <ul className="vn-specs">
-              {atual.specs.map(s => <li key={s.rotulo}><span>{s.rotulo}</span><b>{s.valor}</b></li>)}
-            </ul>
-          )}
-          {atual?.preco && <p className="vn-preco">{atual.preco}</p>}
-          <div className="vn-botoes">
-            <button className="vn-bt-claro" onClick={() => atual && onVerProduto(atual.id)}>Ver no catálogo</button>
-            {onInteresse && <button className="vn-bt-verde" onClick={() => atual && onInteresse(atual.id)}>Tenho interesse</button>}
           </div>
-        </div>
+        )}
+      </div>
       </div>
     </section>
   )
 }
 
-// 1em = 1% da largura da parede: tudo cresce junto no zoom (fotos nítidas)
 const CSS = `
-.vn { position: relative; }
-.vn-palco { position: relative; height: min(84svh, 720px); min-height: 520px; overflow: hidden; background-color: #141317;
-  background-size: 260px 260px, cover; isolation: isolate; user-select: none; -webkit-user-select: none; touch-action: pan-y; }
-.vn-parede { position: absolute; display: flex; flex-direction: column; gap: 4em; }
-.vn-parede.vn-anima { transition: left 1.05s cubic-bezier(.22,.8,.2,1), top 1.05s cubic-bezier(.22,.8,.2,1), width 1.05s cubic-bezier(.22,.8,.2,1), font-size 1.05s cubic-bezier(.22,.8,.2,1); }
-.vn-linha { display: flex; justify-content: center; gap: 2.6em; }
-.vn-nicho { position: relative; flex: 0 0 16.8em; height: 36em; border-radius: 0.6em 0.6em 0.3em 0.3em; cursor: pointer; overflow: hidden;
-  box-shadow: inset 0 0 0 0.12em rgba(255,255,255,0.05), inset 0 1.8em 3em rgba(0,0,0,0.85), inset 0 -1em 2.4em rgba(0,0,0,0.7), 0 1.6em 3em rgba(0,0,0,0.6);
-  transition: filter .7s ease; }
-.vn-fundo { position: absolute; inset: 0; background: linear-gradient(180deg, #3a383f 0%, #222126 55%, #141317 100%); transition: background .7s ease; }
-.vn-luz { position: absolute; inset: 0; pointer-events: none; transition: opacity .7s ease;
-  background: radial-gradient(55% 9% at 50% 0%, rgba(255,250,240,0.95), rgba(255,250,240,0) 100%),
-    linear-gradient(180deg, rgba(255,244,230,0.42) 0%, rgba(255,244,230,0.14) 45%, rgba(255,244,230,0) 78%);
-  clip-path: polygon(36% 0, 64% 0, 100% 100%, 0 100%); mix-blend-mode: screen; }
-.vn-nicho img { position: absolute; left: 50%; bottom: 4.2em; width: 78%; height: 62%; object-fit: contain; object-position: bottom; transform: translateX(-50%);
-  transform-origin: 50% 100%; filter: drop-shadow(0 1em 1.2em rgba(0,0,0,0.7)); transition: transform .25s ease, filter .7s ease; }
-.vn-base { position: absolute; left: 8%; right: 8%; bottom: 3.6em; height: 0.35em; border-radius: 0.2em; background: rgba(255,255,255,0.16); transition: background .3s, box-shadow .3s; }
+.vn { position: relative; background-color: #0e0d10; background-size: 420px 420px; padding: 22px 0 26px; overflow: hidden; }
+.vn::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(120% 70% at 50% 40%, transparent 30%, rgba(0,0,0,0.75) 100%), linear-gradient(180deg, rgba(0,0,0,0.45), transparent 18%, transparent 80%, rgba(0,0,0,0.6)); }
+.vn-cabeca { position: relative; text-align: center; color: #fff; padding: 0 20px 14px; transition: opacity .5s; }
+.vn-aberto .vn-cabeca { opacity: 0.25; }
+.vn-cabeca span { font-size: 11px; letter-spacing: 5px; font-weight: 700; color: #ffb27a; }
+.vn-cabeca h2 { margin: 4px 0 0; font-size: clamp(22px, 5.6vw, 34px); font-weight: 800; letter-spacing: -0.6px; color: #fff; }
+.vn .vn-fechar { position: absolute; top: 16px; left: 14px; z-index: 5; width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.2); color: #fff; font-size: 16px; font-family: inherit; background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; }
 
-/* passando o dedo: cresce e o nicho acende em laranja */
-.vn-nicho.realce img { transform: translateX(-50%) translateY(-0.8em) scale(1.14); }
-.vn-nicho.realce .vn-base { background: #ff7a1a; box-shadow: 0 0 0.8em #ff7a1a, 0 0 2.4em rgba(255,122,26,0.8); }
-.vn-nicho.realce .vn-fundo { background: linear-gradient(180deg, #4a3a32 0%, #2a2220 55%, #161315 100%); }
+/* trilho que desliza para o lado */
+.vn-trilho { position: relative; display: flex; gap: 18px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+  padding: 6px calc(50% - 37vw) 4px; -webkit-overflow-scrolling: touch; }
+.vn-trilho::-webkit-scrollbar { display: none; }
+.vn-coluna { flex: 0 0 74vw; scroll-snap-align: center; cursor: pointer; transition: opacity .7s ease, filter .7s ease, flex-basis .55s ease; }
+.vn-palco { position: relative; }
+/* aberto: nicho encosta à esquerda e as especificações ficam do lado */
+.vn-aberto .vn-trilho { padding-left: 14px; padding-right: 60vw; scroll-padding-left: 14px; }
+.vn-aberto .vn-coluna { flex-basis: 50vw; scroll-snap-align: start; }
+.vn-largo.vn-aberto .vn-trilho { padding-left: 48px; scroll-padding-left: 48px; }
+.vn-largo.vn-aberto .vn-coluna { flex-basis: 240px; }
+.vn-largo .vn-trilho { padding: 6px 48px 4px; gap: 24px; }
+.vn-largo .vn-trilho::after { content: ''; flex: 0 0 24px; }
+.vn-largo .vn-coluna { flex-basis: 240px; }
 
-/* escolhido: luz forte; os outros apagam */
-.vn-nicho.escolhido .vn-luz { opacity: 1; }
-.vn-nicho.escolhido .vn-base { background: #ff7a1a; box-shadow: 0 0 0.8em #ff7a1a, 0 0 2.4em rgba(255,122,26,0.8); }
-.vn-nicho.apagado .vn-luz { opacity: 0; }
-.vn-nicho.apagado { filter: brightness(0.32) saturate(0.6); }
+/* o nicho cavado na rocha */
+.vn-nicho { position: relative; height: min(66svh, 580px); min-height: 430px; overflow: hidden; background: #040405;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.04), 0 30px 60px rgba(0,0,0,0.75); }
+.vn-largo .vn-nicho { height: 520px; }
+/* parede de pedra do fundo: só aparece onde a luz bate (cone que abre de cima para baixo) */
+.vn-costas { position: absolute; inset: 0; background-image: ${PEDRA_CLARA}; background-size: 260px 260px; background-position: center top;
+  -webkit-mask-image: radial-gradient(85% 110% at 50% -4%, #000 0%, rgba(0,0,0,0.92) 35%, rgba(0,0,0,0.6) 65%, rgba(0,0,0,0.25) 88%, rgba(0,0,0,0.1) 100%);
+  mask-image: radial-gradient(85% 110% at 50% -4%, #000 0%, rgba(0,0,0,0.92) 35%, rgba(0,0,0,0.6) 65%, rgba(0,0,0,0.25) 88%, rgba(0,0,0,0.1) 100%);
+  transition: opacity .8s ease; }
+/* cor da luz (tom do aparelho) */
+.vn-tinta { position: absolute; inset: 0; mix-blend-mode: color; opacity: .5;
+  background: radial-gradient(80% 90% at 50% 10%, var(--cor), transparent 80%); transition: opacity .8s ease; }
+/* sombra de profundidade nas bordas de dentro */
+.vn-teto { position: absolute; inset: 0; pointer-events: none;
+  box-shadow: inset 0 26px 30px -10px #000, inset 18px 0 26px -8px rgba(0,0,0,0.85), inset -26px 0 30px -8px #000, inset 0 -10px 20px -6px #000; }
+/* filete de luz na lateral de dentro, como no vídeo */
+.vn-lado { position: absolute; top: 3%; bottom: 7%; width: 5px; transition: opacity .8s ease, background .4s; pointer-events: none; }
+.vn-esq { left: 3.5%; border-radius: 3px; opacity: .95;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--cor) 55%, #fff) 25%, #fff 55%, color-mix(in srgb, var(--cor) 60%, #fff) 85%, transparent);
+  box-shadow: 0 0 12px 2px color-mix(in srgb, var(--cor) 70%, transparent), 10px 0 40px 6px color-mix(in srgb, var(--cor) 25%, transparent); }
+.vn-dir { right: 3.5%; width: 3px; opacity: .35; background: linear-gradient(180deg, transparent, rgba(255,255,255,0.7) 50%, transparent); }
+/* feixe de luz do spot */
+.vn-cone { position: absolute; left: 50%; top: 2.5%; width: 64%; height: 82%; transform: translateX(-50%); pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,253,248,1), rgba(255,250,242,0.45) 35%, rgba(255,250,242,0.14) 75%, rgba(255,250,242,0.04));
+  clip-path: polygon(45% 0, 55% 0, 100% 100%, 0 100%); filter: blur(16px); mix-blend-mode: screen; transition: opacity .8s ease; }
+.vn-led { position: absolute; left: 50%; top: 2.2%; width: 34px; height: 6px; transform: translateX(-50%); border-radius: 50%;
+  background: #fff; box-shadow: 0 0 8px 3px #fff, 0 0 28px 10px rgba(255,245,230,0.9), 0 10px 60px 24px rgba(255,240,220,0.45); transition: opacity .6s ease; }
+/* prateleira: borda de vidro acesa + reflexo */
+.vn-chao { position: absolute; left: 0; right: 0; bottom: 0; height: 9%; overflow: hidden;
+  background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.03) 45%, rgba(0,0,0,0.7)); }
+.vn-chao::before { content: ''; position: absolute; left: 3%; right: 3%; top: 0; height: 2px; background: rgba(255,255,255,0.75);
+  box-shadow: 0 0 10px rgba(255,255,255,0.55); }
+.vn-chao img { position: absolute; left: 50%; top: 3px; width: 62%; transform: translateX(-50%) scaleY(-1); opacity: .2; filter: blur(2px); }
+.vn-foto { position: absolute; left: 50%; bottom: 9%; width: 62%; height: 54%; object-fit: contain; object-position: bottom;
+  transform: translateX(-50%); transform-origin: 50% 100%; transition: transform .45s cubic-bezier(.2,.8,.2,1), filter .8s ease;
+  filter: drop-shadow(0 14px 14px rgba(0,0,0,0.6)) brightness(1.12); }
+.vn-laranja { position: absolute; left: 3%; right: 3%; bottom: 9%; height: 3px; border-radius: 2px; opacity: 0; transition: opacity .35s ease;
+  background: #ff7a1a; box-shadow: 0 0 10px #ff7a1a, 0 0 26px rgba(255,122,26,0.85), 0 -18px 50px rgba(255,122,26,0.4); }
+.vn-nome { margin: 12px 0 0; text-align: center; font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.45); letter-spacing: .3px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .4s; }
 
-.vn-sombra { position: absolute; inset: 0; pointer-events: none; transition: background .8s ease;
-  background: linear-gradient(180deg, rgba(0,0,0,0.35) 0%, transparent 20%, transparent 70%, rgba(0,0,0,0.6) 100%); }
-.vn-focado .vn-sombra { background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, transparent 18%, transparent 46%, rgba(10,9,12,0.92) 72%, #0b0a0d 100%); }
-.vn-largo.vn-focado .vn-sombra { background: linear-gradient(90deg, rgba(11,10,13,0.94) 0%, rgba(11,10,13,0.8) 34%, transparent 52%), linear-gradient(180deg, rgba(0,0,0,0.3) 0%, transparent 16%); }
-.vn-topo { position: absolute; left: 0; right: 0; top: 20px; text-align: center; color: #fff; transition: opacity .5s ease; pointer-events: none; }
-.vn-topo span { font-size: 11px; letter-spacing: 5px; font-weight: 700; color: #ffb27a; }
-.vn-topo h2 { margin: 6px 0 0; font-size: clamp(22px, 5.6vw, 36px); font-weight: 800; letter-spacing: -0.6px; color: #fff; }
-.vn .vn-fechar { position: absolute; top: 14px; left: 14px; width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.18); cursor: pointer;
-  color: #fff; font-size: 16px; font-family: inherit; background: rgba(0,0,0,0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; }
+/* no meio da tela (deslizando): cresce e acende laranja */
+.vn-coluna.ativo .vn-foto, .vn-coluna.escolhido .vn-foto { transform: translateX(-50%) scale(1.07); }
+.vn-coluna.ativo .vn-laranja, .vn-coluna.escolhido .vn-laranja { opacity: 1; }
+.vn-coluna.ativo .vn-esq, .vn-coluna.escolhido .vn-esq { background: linear-gradient(180deg, transparent, #ffb27a 25%, #fff 55%, #ff7a1a 85%, transparent); box-shadow: 0 0 12px 2px rgba(255,122,26,0.8), 10px 0 40px 6px rgba(255,122,26,0.3); }
+.vn-coluna.ativo .vn-nome, .vn-coluna.escolhido .vn-nome { color: #fff; }
 
-.vn-info { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 20px 22px; color: #fff; transition: opacity .55s ease .35s, transform .55s ease .35s; }
-.vn-info-lado { left: 6%; right: auto; top: 0; bottom: 0; width: 38%; display: flex; flex-direction: column; justify-content: center; padding: 0; }
+/* tocou: a luz dos outros apaga */
+.vn-coluna.apagado { filter: brightness(0.28) saturate(0.5); }
+.vn-coluna.apagado .vn-led, .vn-coluna.apagado .vn-cone, .vn-coluna.apagado .vn-lado { opacity: 0; }
+.vn-coluna.apagado .vn-costas, .vn-coluna.apagado .vn-tinta { opacity: .2; }
+.vn-coluna.escolhido .vn-led { box-shadow: 0 0 10px 3px #fff, 0 0 30px 10px rgba(255,245,230,0.85), 0 6px 50px 18px rgba(255,240,220,0.45); }
+
+/* especificações */
+.vn-info { position: absolute; top: 6px; bottom: 34px; left: calc(14px + 50vw + 10px); right: 0; z-index: 3; display: flex; align-items: center;
+  pointer-events: none; opacity: 0; transition: opacity .5s ease; overflow-y: auto; scrollbar-width: none;
+  background: linear-gradient(90deg, rgba(6,6,8,0.7), rgba(6,6,8,0.94) 18%); }
+.vn-largo .vn-info { left: calc(48px + 240px + 24px); }
+.vn-aberto .vn-info { opacity: 1; pointer-events: auto; }
+.vn-info-dentro { width: 100%; padding: 8px 14px 8px 8px; color: #fff; animation: vnSobe .55s ease .2s both; max-width: 440px; }
+.vn-largo .vn-info-dentro { padding: 10px 40px; }
+@keyframes vnSobe { from { opacity: 0; transform: translateX(18px) } to { opacity: 1; transform: none } }
 .vn-marca { font-size: 11px; letter-spacing: 4px; font-weight: 700; color: #ffb27a; text-transform: uppercase; }
-.vn-info h3 { margin: 4px 0 2px; font-size: clamp(28px, 7.4vw, 50px); font-weight: 800; letter-spacing: -1px; line-height: 1.05; color: #fff; }
+.vn-info h3 { margin: 4px 0 2px; font-size: clamp(22px, 6vw, 44px); font-weight: 800; letter-spacing: -1px; line-height: 1.05; color: #fff; }
 .vn-detalhe { margin: 0; font-size: 13px; color: rgba(255,255,255,0.6); }
 .vn-specs { list-style: none; margin: 14px 0 0; padding: 0; border-top: 1px solid rgba(255,255,255,0.12); }
-.vn-specs li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 14px; }
-.vn-specs span { color: rgba(255,255,255,0.55); }
-.vn-specs b { color: #fff; font-weight: 600; text-align: right; }
-.vn-preco { margin: 12px 0 0; font-size: 22px; font-weight: 800; color: #fff; }
-.vn-botoes { display: flex; gap: 8px; margin-top: 14px; }
-.vn .vn-botoes button { flex: 1; text-align: center; border: none; cursor: pointer; font-family: inherit; font-size: 15px; font-weight: 800; padding: 13px 10px; border-radius: 26px; }
+.vn-specs li { display: flex; flex-direction: column; gap: 1px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 13.5px; }
+.vn-specs span { color: rgba(255,255,255,0.5); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+.vn-specs b { color: #fff; font-weight: 600; }
+.vn-largo .vn-specs li { flex-direction: row; justify-content: space-between; gap: 12px; padding: 9px 0; font-size: 14px; }
+.vn-largo .vn-specs span { font-size: 14px; text-transform: none; letter-spacing: 0; }
+.vn-preco { margin: 12px 0 0; font-size: 20px; font-weight: 800; color: #fff; }
+.vn-botoes { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.vn-largo .vn-botoes { flex-direction: row; }
+.vn .vn-botoes button { flex: 1; text-align: center; border: none; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 800; padding: 12px 10px; border-radius: 26px; }
 .vn .vn-bt-claro { background: #fff; color: #111; }
 .vn .vn-bt-verde { background: #25D366; color: #fff; }
-@media (prefers-reduced-motion: reduce) { .vn-parede.vn-anima { transition: none; } }
 `

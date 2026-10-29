@@ -556,7 +556,7 @@ function App() {
   const celularesVitrine = useMemo(() => {
     const cel = produtos.filter(p => p.foto_url && semAcento(p.categoria || '').includes('celular'))
     const peso = (p: Produto) => (p.lancamento ? 2 : 0) + (p.destaque ? 1 : 0)
-    return [...cel].sort((a, b) => peso(b) - peso(a)).slice(0, 10)
+    return [...cel].sort((a, b) => peso(b) - peso(a)).slice(0, 8)
   }, [produtos])
   const itensVitrine = celularesVitrine.map(p => {
     const cor = p.foto_cor || coresDoProduto(p.cor)[0]?.nome || ''
@@ -1447,29 +1447,32 @@ body { color: #fff !important; }
 .mm.tema-vitrine .mm-pontos i { background: rgba(255,255,255,0.3); }
 .mm.tema-vitrine .mm-pontos i.on { background: var(--laranja); }
 
-/* categorias = nichos iluminados */
-.mm.tema-vitrine .mm-categorias { gap: 10px; padding-top: 18px; }
+/* categorias = produtos na parede em prateleiras de acrílico (igual vitrine de tênis) */
+.mm.tema-vitrine .mm-categorias { gap: 14px; padding-top: 20px; }
 .mm.tema-vitrine .mm-categoria { width: 112px; color: #fff; font-size: 14px; position: relative; }
-.mm.tema-vitrine .mm-categoria span { position: relative; width: 112px; height: 132px; margin-bottom: 8px; border-radius: 14px; padding: 18px 16px 26px; align-items: flex-end;
-  background: linear-gradient(180deg, #2a2730, #19171c); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), inset 0 14px 30px rgba(0,0,0,0.6), 0 10px 20px rgba(0,0,0,0.25); }
-.mm.tema-vitrine .mm-categoria span::before { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0;
-  background: radial-gradient(70% 16% at 50% 0%, rgba(255,240,225,0.6), transparent), linear-gradient(180deg, rgba(255,240,225,0.2), transparent 70%);
-  clip-path: polygon(35% 0, 65% 0, 100% 100%, 0 100%); }
-.mm.tema-vitrine .mm-categoria span::after { content: ''; position: absolute; left: 14%; right: 14%; bottom: 18px; height: 3px; border-radius: 2px;
-  background: rgba(255,255,255,0.14); box-shadow: none; transition: background .3s, box-shadow .3s; }
-/* Ao tocar: a luz "liga" piscando como lâmpada e a prateleira acende em laranja */
+.mm.tema-vitrine .mm-categoria span { position: relative; width: 112px; height: 124px; margin-bottom: 12px; border-radius: 0; padding: 6px 8px 0; overflow: visible;
+  align-items: flex-end; background: none; box-shadow: none; }
+/* prateleira de acrílico */
+.mm.tema-vitrine .mm-categoria span::after { content: ''; position: absolute; left: 2%; right: 2%; bottom: -8px; height: 7px; border-radius: 3px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.14));
+  box-shadow: 0 1px 0 rgba(255,255,255,0.4) inset, 0 8px 14px rgba(0,0,0,0.35); transition: background .3s, box-shadow .3s; }
+/* brilho laranja embaixo da prateleira (só quando acende) */
+.mm.tema-vitrine .mm-categoria span::before { content: ''; position: absolute; left: -22%; right: -22%; top: calc(100% + 2px); height: 70px; pointer-events: none; opacity: 0;
+  background: radial-gradient(50% 60% at 50% 0%, rgba(255,110,30,0.75), rgba(255,90,20,0.25) 45%, transparent 75%); filter: blur(4px); }
+.mm.tema-vitrine .mm-categoria img { position: relative; z-index: 1; mix-blend-mode: multiply !important; transform-origin: 50% 100%;
+  transition: transform .22s ease; }
+.mm.tema-vitrine .mm-categoria:active img { transform: translateY(-4px) scale(1.08); }
+/* Ao tocar: a prateleira acende em laranja e o produto sobe um pouco */
 .mm.tema-vitrine .mm-categoria.acesa span::before { animation: mmLuzLiga .7s ease-out forwards; }
 .mm.tema-vitrine .mm-categoria.acesa span::after { animation: mmLinhaLiga .7s ease-out forwards; }
 .mm.tema-vitrine .mm-categoria.acesa img { animation: mmSobeLuz .7s ease-out forwards; }
 .mm.tema-vitrine .mm-categoria.acesa { color: #ffb27a; }
 @keyframes mmLuzLiga { 0% { opacity: 0 } 12% { opacity: .9 } 20% { opacity: .15 } 32% { opacity: 1 } 40% { opacity: .4 } 55%, 100% { opacity: 1 } }
-@keyframes mmLinhaLiga { 0% { background: rgba(255,255,255,0.14); box-shadow: none }
-  30% { background: #ff6600; box-shadow: 0 0 6px #ff7a1a }
-  40% { background: rgba(255,255,255,0.2); box-shadow: none }
-  60%, 100% { background: #ff6600; box-shadow: 0 0 10px #ff7a1a, 0 0 22px rgba(255,122,26,0.8) } }
-@keyframes mmSobeLuz { 0% { transform: none; filter: drop-shadow(0 8px 8px rgba(0,0,0,0.55)) brightness(0.85) }
-  100% { transform: translateY(-4px) scale(1.04); filter: drop-shadow(0 12px 12px rgba(0,0,0,0.5)) brightness(1.08) } }
-.mm.tema-vitrine .mm-categoria img { position: relative; z-index: 1; filter: drop-shadow(0 8px 8px rgba(0,0,0,0.55)) brightness(0.85); }
+@keyframes mmLinhaLiga { 0% { background: linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.14)); box-shadow: 0 8px 14px rgba(0,0,0,0.35) }
+  30% { background: linear-gradient(180deg, #ffd2a8, #ff8a3d); box-shadow: 0 0 6px #ff7a1a }
+  40% { background: linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.14)); box-shadow: none }
+  60%, 100% { background: linear-gradient(180deg, #ffd2a8, #ff8a3d); box-shadow: 0 0 8px #ff7a1a, 0 0 22px rgba(255,122,26,0.8) } }
+@keyframes mmSobeLuz { 0% { transform: none } 100% { transform: translateY(-8px) scale(1.12) } }
 
 /* vantagens */
 .mm.tema-vitrine .mm-beneficios div { background: var(--vidro); border: 1px solid rgba(255,255,255,0.08); }
@@ -1566,7 +1569,7 @@ body { color: #fff !important; }
 @media (min-width: 760px) {
   .mm.tema-vitrine .mm-card-foto { height: 210px; }
   .mm.tema-vitrine .mm-categoria { width: 140px; }
-  .mm.tema-vitrine .mm-categoria span { width: 140px; height: 160px; }
+  .mm.tema-vitrine .mm-categoria span { width: 140px; height: 150px; }
 }
 `
 
