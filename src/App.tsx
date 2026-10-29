@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from './supabase'
+import VitrineHero from './components/VitrineHero'
 
 // ─── Tipos ─────────────────────────────────────────
 type Produto = {
@@ -544,6 +545,23 @@ function App() {
     return lista
   }, [produtos, categorias])
 
+  // Abertura "parede de vitrine": até 10 celulares (2 prateleiras) com foto (lançamentos, depois destaques, depois os mais novos)
+  const celularesVitrine = useMemo(() => {
+    const cel = produtos.filter(p => p.foto_url && semAcento(p.categoria || '').includes('celular'))
+    const peso = (p: Produto) => (p.lancamento ? 2 : 0) + (p.destaque ? 1 : 0)
+    return [...cel].sort((a, b) => peso(b) - peso(a)).slice(0, 10)
+  }, [produtos])
+  const itensVitrine = celularesVitrine.map(p => {
+    const cor = p.foto_cor || coresDoProduto(p.cor)[0]?.nome || ''
+    return {
+      id: p.id,
+      nome: [p.marca === 'Apple' ? '' : p.marca, p.modelo].filter(Boolean).join(' '),
+      foto: p.foto_url!,
+      detalhe: [p.memoria, p.lancamento ? 'Lançamento' : p.condicao].filter(Boolean).join(' · '),
+      cor: CORES_HEX[semAcento(cor)] || cor,
+    }
+  })
+
   const destaques = produtos.filter(p => p.destaque)
   const lancamentos = produtos.filter(p => p.lancamento)
   const promocoes = produtos.filter(p => p.promocao)
@@ -928,8 +946,14 @@ function App() {
         </main>
       ) : (
         <main>
-          {/* ─── Banner carrossel ─── */}
-          {carregando && !banner ? <section className="mm-hero mm-hero-fantasma" /> : (
+          {/* ─── Abertura: parede de vitrine (ou o carrossel, se ainda não tiver celulares com foto) ─── */}
+          {itensVitrine.length >= 3 ? (
+            <VitrineHero
+              itens={itensVitrine}
+              destaqueId={itensVitrine[0].id}
+              onVerProduto={id => { const p = produtos.find(x => x.id === id); if (p) abrirProduto(p) }}
+            />
+          ) : carregando && !banner ? <section className="mm-hero mm-hero-fantasma" /> : (
           <section className={banner?.arte ? 'mm-hero mm-hero-arte' : 'mm-hero'}
             onTouchStart={e => { toqueInicio.current = e.touches[0].clientX }}
             onTouchEnd={e => {
@@ -950,7 +974,7 @@ function App() {
             )}
           </section>
           )}
-          {banners.length > 1 && (
+          {itensVitrine.length < 3 && banners.length > 1 && (
             <div className="mm-pontos">
               {banners.map((b, i) => <i key={b.id} className={i === heroIndex % banners.length ? 'on' : ''} onClick={() => setHeroIndex(i)} />)}
             </div>
