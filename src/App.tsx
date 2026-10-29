@@ -564,8 +564,17 @@ function App() {
       id: p.id,
       nome: [p.marca === 'Apple' ? '' : p.marca, p.modelo].filter(Boolean).join(' '),
       foto: p.foto_url!,
-      detalhe: [p.memoria, p.lancamento ? 'Lançamento' : p.condicao].filter(Boolean).join(' · '),
+      detalhe: p.lancamento ? 'Lançamento' : p.destaque ? 'Destaque da semana' : '',
       cor: CORES_HEX[semAcento(cor)] || cor,
+      marca: p.marca,
+      specs: [
+        p.memoria && { rotulo: 'Memória', valor: p.memoria },
+        p.condicao && { rotulo: 'Condição', valor: p.condicao },
+        p.bateria_saude && { rotulo: 'Bateria', valor: p.bateria_saude },
+        p.cor && { rotulo: 'Cores', valor: coresDoProduto(p.cor).map(c => c.nome).join(', ') },
+        { rotulo: 'Pagamento', valor: `Até ${PARCELAS}x no cartão` },
+      ].filter(Boolean) as { rotulo: string; valor: string }[],
+      preco: precoVisivel(p) ? reais(precoFinal(p)) : undefined,
     }
   })
 
@@ -957,8 +966,8 @@ function App() {
           {itensVitrine.length >= 3 ? (
             <VitrineHero
               itens={itensVitrine}
-              destaqueId={itensVitrine[0].id}
               onVerProduto={id => { const p = produtos.find(x => x.id === id); if (p) abrirProduto(p) }}
+              onInteresse={id => { const p = produtos.find(x => x.id === id); if (p) abrirWhatsApp(textoInteresse(p)) }}
             />
           ) : carregando && !banner ? <section className="mm-hero mm-hero-fantasma" /> : (
           <section className={banner?.arte ? 'mm-hero mm-hero-arte' : 'mm-hero'}
