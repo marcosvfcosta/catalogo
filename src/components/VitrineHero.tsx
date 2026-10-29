@@ -111,7 +111,9 @@ export default function VitrineHero({ itens, destaqueId, onVerProduto, onInteres
   useEffect(() => {
     const t = trilhoRef.current
     if (!t || !lista.length) return
-    const alvo = (destaqueId && t.querySelector(`[data-id="${destaqueId}"]`)) || t.querySelector('.vn-coluna')
+    const colunas = t.querySelectorAll('.vn-coluna')
+    // começa com o 2º no meio, assim já aparecem 3 celulares lado a lado
+    const alvo = (destaqueId && t.querySelector(`[data-id="${destaqueId}"]`)) || colunas[Math.min(1, colunas.length - 1)]
     if (alvo) centralizar(alvo as HTMLElement, false)
     medirMeio()
   }, [lista.length])
@@ -229,26 +231,28 @@ const CSS = `
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; }
 
 /* trilho que desliza para o lado */
-.vn-trilho { position: relative; display: flex; gap: 18px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
-  padding: 6px calc(50% - 37vw) 4px; -webkit-overflow-scrolling: touch; }
+.vn-trilho { position: relative; display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+  padding: 6px calc(50% - 14.5vw) 4px; -webkit-overflow-scrolling: touch; }
 .vn-trilho::-webkit-scrollbar { display: none; }
-.vn-coluna { flex: 0 0 74vw; scroll-snap-align: center; cursor: pointer; transition: opacity .7s ease, filter .7s ease, flex-basis .55s ease; }
+.vn-coluna { flex: 0 0 29vw; scroll-snap-align: center; cursor: pointer; transition: opacity .7s ease, filter .7s ease, flex-basis .55s ease; }
 .vn-palco { position: relative; }
 /* aberto: nicho encosta à esquerda e as especificações ficam do lado */
 .vn-aberto .vn-trilho { padding-left: 14px; padding-right: 60vw; scroll-padding-left: 14px; }
-.vn-aberto .vn-coluna { flex-basis: 50vw; scroll-snap-align: start; }
+.vn-aberto .vn-coluna { flex-basis: 44vw; scroll-snap-align: start; }
 .vn-largo.vn-aberto .vn-trilho { padding-left: 48px; scroll-padding-left: 48px; }
 .vn-largo.vn-aberto .vn-coluna { flex-basis: 240px; }
-.vn-largo .vn-trilho { padding: 6px 48px 4px; gap: 24px; }
+.vn-largo .vn-trilho { padding: 6px 48px 4px; gap: 18px; }
 .vn-largo .vn-trilho::after { content: ''; flex: 0 0 24px; }
-.vn-largo .vn-coluna { flex-basis: 240px; }
+.vn-largo .vn-coluna { flex-basis: 200px; }
 
 /* o nicho cavado na rocha */
-.vn-nicho { position: relative; height: min(66svh, 580px); min-height: 430px; overflow: hidden; background: #040405;
+.vn-nicho { position: relative; height: 64vw; max-height: 300px; transition: height .55s ease; overflow: hidden; background: #040405;
   box-shadow: inset 0 0 0 1px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.04), 0 30px 60px rgba(0,0,0,0.75); }
-.vn-largo .vn-nicho { height: 520px; }
+.vn-largo .vn-nicho { height: 420px; max-height: none; }
+.vn-aberto .vn-nicho { height: 122vw; max-height: 520px; }
+.vn-largo.vn-aberto .vn-nicho { height: 470px; }
 /* parede de pedra do fundo: só aparece onde a luz bate (cone que abre de cima para baixo) */
-.vn-costas { position: absolute; inset: 0; background-image: ${PEDRA_CLARA}; background-size: 260px 260px; background-position: center top;
+.vn-costas { position: absolute; inset: 0; background-image: ${PEDRA_CLARA}; background-size: 180px 180px; background-position: center top;
   -webkit-mask-image: radial-gradient(85% 110% at 50% -4%, #000 0%, rgba(0,0,0,0.92) 35%, rgba(0,0,0,0.6) 65%, rgba(0,0,0,0.25) 88%, rgba(0,0,0,0.1) 100%);
   mask-image: radial-gradient(85% 110% at 50% -4%, #000 0%, rgba(0,0,0,0.92) 35%, rgba(0,0,0,0.6) 65%, rgba(0,0,0,0.25) 88%, rgba(0,0,0,0.1) 100%);
   transition: opacity .8s ease; }
@@ -259,7 +263,7 @@ const CSS = `
 .vn-teto { position: absolute; inset: 0; pointer-events: none;
   box-shadow: inset 0 26px 30px -10px #000, inset 18px 0 26px -8px rgba(0,0,0,0.85), inset -26px 0 30px -8px #000, inset 0 -10px 20px -6px #000; }
 /* filete de luz na lateral de dentro, como no vídeo */
-.vn-lado { position: absolute; top: 3%; bottom: 7%; width: 5px; transition: opacity .8s ease, background .4s; pointer-events: none; }
+.vn-lado { position: absolute; top: 3%; bottom: 7%; width: 3px; transition: opacity .8s ease, background .4s; pointer-events: none; }
 .vn-esq { left: 3.5%; border-radius: 3px; opacity: .95;
   background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--cor) 55%, #fff) 25%, #fff 55%, color-mix(in srgb, var(--cor) 60%, #fff) 85%, transparent);
   box-shadow: 0 0 12px 2px color-mix(in srgb, var(--cor) 70%, transparent), 10px 0 40px 6px color-mix(in srgb, var(--cor) 25%, transparent); }
@@ -268,7 +272,7 @@ const CSS = `
 .vn-cone { position: absolute; left: 50%; top: 2.5%; width: 64%; height: 82%; transform: translateX(-50%); pointer-events: none;
   background: linear-gradient(180deg, rgba(255,253,248,1), rgba(255,250,242,0.45) 35%, rgba(255,250,242,0.14) 75%, rgba(255,250,242,0.04));
   clip-path: polygon(45% 0, 55% 0, 100% 100%, 0 100%); filter: blur(16px); mix-blend-mode: screen; transition: opacity .8s ease; }
-.vn-led { position: absolute; left: 50%; top: 2.2%; width: 34px; height: 6px; transform: translateX(-50%); border-radius: 50%;
+.vn-led { position: absolute; left: 50%; top: 2.2%; width: 28%; height: 5px; transform: translateX(-50%); border-radius: 50%;
   background: #fff; box-shadow: 0 0 8px 3px #fff, 0 0 28px 10px rgba(255,245,230,0.9), 0 10px 60px 24px rgba(255,240,220,0.45); transition: opacity .6s ease; }
 /* prateleira: borda de vidro acesa + reflexo */
 .vn-chao { position: absolute; left: 0; right: 0; bottom: 0; height: 9%; overflow: hidden;
@@ -281,7 +285,7 @@ const CSS = `
   filter: drop-shadow(0 14px 14px rgba(0,0,0,0.6)) brightness(1.12); }
 .vn-laranja { position: absolute; left: 3%; right: 3%; bottom: 9%; height: 3px; border-radius: 2px; opacity: 0; transition: opacity .35s ease;
   background: #ff7a1a; box-shadow: 0 0 10px #ff7a1a, 0 0 26px rgba(255,122,26,0.85), 0 -18px 50px rgba(255,122,26,0.4); }
-.vn-nome { margin: 12px 0 0; text-align: center; font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.45); letter-spacing: .3px;
+.vn-nome { margin: 8px 0 0; text-align: center; font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.45); letter-spacing: .3px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .4s; }
 
 /* no meio da tela (deslizando): cresce e acende laranja */
@@ -297,12 +301,12 @@ const CSS = `
 .vn-coluna.escolhido .vn-led { box-shadow: 0 0 10px 3px #fff, 0 0 30px 10px rgba(255,245,230,0.85), 0 6px 50px 18px rgba(255,240,220,0.45); }
 
 /* especificações */
-.vn-info { position: absolute; top: 6px; bottom: 34px; left: calc(14px + 50vw + 10px); right: 0; z-index: 3; display: flex; align-items: center;
+.vn-info { position: absolute; top: 6px; bottom: 34px; left: calc(14px + 44vw + 8px); right: 0; z-index: 3; display: flex; align-items: flex-start;
   pointer-events: none; opacity: 0; transition: opacity .5s ease; overflow-y: auto; scrollbar-width: none;
   background: linear-gradient(90deg, rgba(6,6,8,0.7), rgba(6,6,8,0.94) 18%); }
 .vn-largo .vn-info { left: calc(48px + 240px + 24px); }
 .vn-aberto .vn-info { opacity: 1; pointer-events: auto; }
-.vn-info-dentro { width: 100%; padding: 8px 14px 8px 8px; color: #fff; animation: vnSobe .55s ease .2s both; max-width: 440px; }
+.vn-info-dentro { width: 100%; padding: 8px 14px 8px 8px; color: #fff; animation: vnSobe .55s ease .2s both; max-width: 440px; margin: auto 0; }
 .vn-largo .vn-info-dentro { padding: 10px 40px; }
 @keyframes vnSobe { from { opacity: 0; transform: translateX(18px) } to { opacity: 1; transform: none } }
 .vn-marca { font-size: 11px; letter-spacing: 4px; font-weight: 700; color: #ffb27a; text-transform: uppercase; }
