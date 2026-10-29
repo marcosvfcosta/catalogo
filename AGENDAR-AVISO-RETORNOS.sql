@@ -19,7 +19,7 @@ select cron.schedule(
   $$
   select net.http_post(
     url := 'https://bahcoajavayvdfavdhpg.supabase.co/functions/v1/push',
-    headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer COLE_AQUI_A_ANON_KEY'),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer CeyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhaGNvYWphdmF5dmRmYXZkaHBnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxODA4NjQsImV4cCI6MjA5NTc1Njg2NH0.M-GEPcreB0koTpam8jVIRHem88QyMGnYZE5eTgUq_iI'),
     body := '{"acao":"retornos"}'::jsonb
   );
   $$

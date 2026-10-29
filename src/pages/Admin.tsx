@@ -56,6 +56,7 @@ type Aparelho = {
   memoria?: string | null
   custo?: number | null
   preco?: number | null
+  precos_cor?: Record<string, number> | null
   chave?: string | null
   disponivel?: boolean | null
 }
@@ -68,6 +69,7 @@ type ItemLista = {
   rede: string | null
   cores: string[]
   custo: number
+  custos_cor?: Record<string, number> // quando cada cor tem um preço (ex: Branco mais caro)
 }
 
 type ItemPreparado = ItemLista & {
@@ -188,6 +190,10 @@ export default function Admin() {
     try { return localStorage.getItem('ajusteAutoFotos') !== 'nao' } catch { return true }
   })
   const [fotosEdicao, setFotosEdicao] = useState<ProdutoFoto[]>([])
+  // Fundo com IA: url nova → url de antes (para o botão "voltar")
+  const [antesIA, setAntesIA] = useState<Record<string, string>>({})
+  const [iaTrabalhando, setIaTrabalhando] = useState<string | null>(null)
+  const [apPrecosCor, setApPrecosCor] = useState<Record<string, string>>({})
 
   const [aparelhos, setAparelhos] = useState<Aparelho[]>([])
   const [novoModelo, setNovoModelo] = useState('')
@@ -305,6 +311,74 @@ export default function Admin() {
     const { error } = await supabase.storage.from('fotos').upload(nomeArquivo, arquivo, { upsert: true, contentType: arquivo.type || 'image/jpeg' })
     if (error) throw error
     return supabase.storage.from('fotos').getPublicUrl(nomeArquivo).data.publicUrl
+  }
+
+  // ─── Tirar fundo com IA (Gemini) ───
+  async function fundoComIA(url: string, proporcao: '1:1' | '3:4') {
+    const { data, error } = await supabase.functions.invoke('gerar-banner', { body: { acao: 'tirar_fundo', foto_url: url, proporcao } })
+    if (error || !data?.imagem) {
+      let msg = data?.error || ''
+      try { msg = msg || (await (error as unknown as { context?: Response })?.context?.json())?.error || '' } catch { /* ok */ }
+      throw new Error(msg || error?.message || 'A IA não respondeu')
+    }
+    const bytes = Uint8Array.from(atob(data.imagem), c => c.charCodeAt(0))
+    let arquivo = new File([bytes], 'ia.png', { type: data.mime || 'image/png' })
+    // Produto: fundo branco vira transparente e centraliza no quadrado padrão
+    if (proporcao === '1:1') arquivo = (await ajustarFoto(arquivo)).arquivo
+    return enviarOriginal(arquivo, 'ia')
+  }
+
+  const AVISO_IA = 'Tirar o fundo com IA (Gemini)?\n\nUsa seus créditos do Gemini (cerca de R$ 0,20 por foto). Confira se a capa/aparelho ficou igual — dá pra voltar para a foto de antes.'
+
+  async function iaCapinha(f: CapaFoto) {
+    if (!confirm(AVISO_IA)) return
+    setIaTrabalhando(f.url)
+    try {
+      const nova = await fundoComIA(f.url, '3:4')
+      await supabase.from('capas_fotos').update({ url: nova }).eq('id', f.id)
+      setAntesIA(prev => ({ ...prev, [nova]: f.url }))
+      await carregarCapas()
+    } catch (e) { alert('Não deu certo: ' + (e instanceof Error ? e.message : e)) }
+    setIaTrabalhando(null)
+  }
+
+  async function voltarCapinha(f: CapaFoto) {
+    const antes = antesIA[f.url]
+    if (!antes) return
+    await supabase.from('capas_fotos').update({ url: antes }).eq('id', f.id)
+    setAntesIA(prev => { const n = { ...prev }; delete n[f.url]; return n })
+    carregarCapas()
+  }
+
+  async function iaFotoEdicao(url: string, fotoId?: string) {
+    if (!editando || !confirm(AVISO_IA)) return
+    setIaTrabalhando(url)
+    try {
+      const nova = await fundoComIA(url, '1:1')
+      if (fotoId) await supabase.from('produto_fotos').update({ url: nova }).eq('id', fotoId)
+      else {
+        await supabase.from('produtos_catalogo').update({ foto_url: nova }).eq('id', editando.id)
+        setEditando({ ...editando, foto_url: nova })
+        setProdutos(prev => prev.map(p => p.id === editando.id ? { ...p, foto_url: nova } : p))
+      }
+      setAntesIA(prev => ({ ...prev, [nova]: url }))
+      carregarFotosEdicao(editando.id)
+    } catch (e) { alert('Não deu certo: ' + (e instanceof Error ? e.message : e)) }
+    setIaTrabalhando(null)
+  }
+
+  async function voltarFotoEdicao(url: string, fotoId?: string) {
+    if (!editando) return
+    const antes = antesIA[url]
+    if (!antes) return
+    if (fotoId) await supabase.from('produto_fotos').update({ url: antes }).eq('id', fotoId)
+    else {
+      await supabase.from('produtos_catalogo').update({ foto_url: antes }).eq('id', editando.id)
+      setEditando({ ...editando, foto_url: antes })
+      setProdutos(prev => prev.map(p => p.id === editando.id ? { ...p, foto_url: antes } : p))
+    }
+    setAntesIA(prev => { const n = { ...prev }; delete n[url]; return n })
+    carregarFotosEdicao(editando.id)
   }
 
   // Envia várias fotos em sequência, com contador
@@ -718,8 +792,20 @@ export default function Admin() {
         if (!item.modelo || !item.custo) continue
         const nome = montarNome(item)
         const chave = normalizar(nome)
-        if (vistos.has(chave)) continue
+        // Mesmo aparelho em outra linha com outro preço (ex: Branco mais caro): junta as cores e guarda o preço de cada cor
+        if (vistos.has(chave)) {
+          const ja = preparados.find(x => x.chave === chave)
+          if (ja) {
+            const porCor = { ...(ja.custos_cor || {}) }
+            for (const c of item.cores) porCor[c] = porCor[c] != null ? Math.min(porCor[c], item.custo) : item.custo
+            ja.custos_cor = porCor
+            ja.cores = Array.from(new Set([...ja.cores, ...item.cores]))
+            ja.custo = Math.min(ja.custo, item.custo)
+          }
+          continue
+        }
         vistos.add(chave)
+        item.custos_cor = Object.fromEntries(item.cores.map(c => [c, item.custo]))
         const ap = listaAparelhos.find(a => (a.chave || normalizar(a.modelo)) === chave)
         const existeProduto = listaProdutos.some(p => (p.chave || normalizar(p.modelo)) === chave)
         const custoAntigo = ap?.custo != null ? Number(ap.custo) : null
@@ -749,10 +835,10 @@ export default function Admin() {
 
     const [{ data: prods }, { data: aps }] = await Promise.all([
       supabase.from('produtos_catalogo').select('id, modelo, chave, cor, ultima_lista'),
-      supabase.from('aparelhos').select('id, modelo, chave, cores, fotos, custo, ultima_lista'),
+      supabase.from('aparelhos').select('*'),
     ])
     const listaProdutos = (prods || []) as { id: string; modelo: string; chave?: string; cor?: string; ultima_lista?: string }[]
-    const listaAparelhos = (aps || []) as { id: string; modelo: string; chave?: string; cores?: string[]; fotos?: Record<string, string[]>; custo?: number; ultima_lista?: string }[]
+    const listaAparelhos = (aps || []) as { id: string; modelo: string; chave?: string; cores?: string[]; fotos?: Record<string, string[]>; custo?: number; ultima_lista?: string; precos_cor?: Record<string, number> | null }[]
 
     let feitos = 0
     let falhas = 0
@@ -776,13 +862,25 @@ export default function Admin() {
         const ap = listaAparelhos.find(a => (a.chave || normalizar(a.modelo)) === i.chave)
         const mesmoDia = !!ap && vistoHoje(ap.ultima_lista)
         const custo = mesmoDia && ap?.custo != null ? Math.min(Number(ap.custo), i.custo) : i.custo
-        const preco = custo + lucroPorMemoria(i.memoria)
+        const lucro = lucroPorMemoria(i.memoria)
+        const preco = custo + lucro
         const cores = mesmoDia ? Array.from(new Set([...(ap?.cores || []), ...i.cores])) : i.cores
-        const dadosAp = { modelo: i.nome, marca: i.marca, memoria: i.memoria, cores, custo, preco, chave: i.chave, disponivel: true, ultima_lista: agora }
-        if (ap) {
-          await supabase.from('aparelhos').update(dadosAp).eq('id', ap.id)
-        } else {
-          await supabase.from('aparelhos').insert([{ ...dadosAp, fotos: {} }])
+        // Preço de venda de cada cor (mesmo dia: fica o menor de cada cor)
+        const precosCor: Record<string, number> = mesmoDia ? { ...(ap?.precos_cor || {}) } : {}
+        for (const [c, v] of Object.entries(i.custos_cor || {})) {
+          const p = v + lucro
+          precosCor[c] = precosCor[c] != null ? Math.min(precosCor[c], p) : p
+        }
+        const dadosAp = { modelo: i.nome, marca: i.marca, memoria: i.memoria, cores, custo, preco, precos_cor: precosCor, chave: i.chave, disponivel: true, ultima_lista: agora }
+        const r = ap
+          ? await supabase.from('aparelhos').update(dadosAp).eq('id', ap.id)
+          : await supabase.from('aparelhos').insert([{ ...dadosAp, fotos: {} }])
+        if (r.error?.message?.includes('precos_cor')) {
+          // SQL novo ainda não rodado: salva sem o preço por cor
+          const { precos_cor: _semColuna, ...semPrecoCor } = dadosAp
+          void _semColuna
+          if (ap) await supabase.from('aparelhos').update(semPrecoCor).eq('id', ap.id)
+          else await supabase.from('aparelhos').insert([{ ...semPrecoCor, fotos: {} }])
         }
       } catch (e) {
         falhas++
@@ -879,7 +977,9 @@ export default function Admin() {
     if (cores.length === 0) { alert('Selecione ao menos uma cor'); return }
     setSalvandoAparelho(true)
     const num = (t: string) => t.trim() ? (parseFloat(t.replace(/\./g, '').replace(',', '.')) || null) : null
-    const extras = { memoria: apMemoria || null, custo: num(apCusto), preco: num(apPreco), disponivel: true }
+    const precosCor = Object.fromEntries(Object.entries(apPrecosCor)
+      .filter(([c, v]) => cores.includes(c) && num(v) != null).map(([c, v]) => [c, num(v) as number]))
+    const extras = { memoria: apMemoria || null, custo: num(apCusto), preco: num(apPreco), precos_cor: precosCor, disponivel: true }
     if (editandoAparelho) {
       await supabase.from('aparelhos').update({ modelo, cores, fotos, ...extras }).eq('id', editandoAparelho.id)
       setEditandoAparelho(null)
@@ -889,7 +989,7 @@ export default function Admin() {
       setCoresSelecionadas([])
       setFotosAparelho({})
     }
-    setApMemoria(''); setApCusto(''); setApPreco('')
+    setApMemoria(''); setApCusto(''); setApPreco(''); setApPrecosCor({})
     setSalvandoAparelho(false)
     carregarAparelhos()
   }
@@ -902,6 +1002,16 @@ export default function Admin() {
 
   const coresAtivas = editandoAparelho ? editandoAparelho.cores : coresSelecionadas
   const fotosAtivas = editandoAparelho ? editandoAparelho.fotos : fotosAparelho
+
+  // Botões "✨ Tirar fundo (IA)" e "↺ Voltar" embaixo de cada foto
+  const botoesIA = (url: string, aoUsar: () => void, aoVoltar: () => void) => (
+    <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+      <button onClick={aoUsar} disabled={!!iaTrabalhando} style={{ ...btnIA, opacity: iaTrabalhando && iaTrabalhando !== url ? 0.4 : 1 }}>
+        {iaTrabalhando === url ? '⏳ IA...' : '✨ Tirar fundo'}
+      </button>
+      {antesIA[url] && <button onClick={aoVoltar} style={{ ...btnIA, flex: '0 0 auto', background: '#1a1a1a', color: '#ccc', borderColor: '#333' }} title="Voltar para a foto de antes">↺</button>}
+    </div>
+  )
 
   const seletorAjuste = (
     <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: ajusteAuto ? '#25D366' : '#888', margin: '0 0 8px', cursor: 'pointer' }}>
@@ -980,6 +1090,7 @@ export default function Admin() {
                     <button onClick={excluirCapaEdicao} style={btnRemoverFoto}>✕</button>
                     {originais[editando.foto_url] && <button onClick={() => usarOriginalEdicao(editando.foto_url!)} style={btnOriginal}>↺ original</button>}
                   </div>
+                  {botoesIA(editando.foto_url, () => iaFotoEdicao(editando.foto_url!), () => voltarFotoEdicao(editando.foto_url!))}
                   <select style={seletorCor} value={editando.foto_cor || ''} onChange={e => definirCorFoto(null, e.target.value)}>
                     <option value="">Cor?</option>
                     {Array.from(new Set([...coresDoProduto(editando), editando.foto_cor || ''].filter(Boolean))).map(c => <option key={c}>{c}</option>)}
@@ -994,6 +1105,7 @@ export default function Admin() {
                     <button onClick={() => excluirFotoExtra(foto.id, editando.id)} style={btnRemoverFoto}>✕</button>
                     {originais[foto.url] && <button onClick={() => usarOriginalEdicao(foto.url, foto.id)} style={btnOriginal}>↺ original</button>}
                   </div>
+                  {botoesIA(foto.url, () => iaFotoEdicao(foto.url, foto.id), () => voltarFotoEdicao(foto.url, foto.id))}
                   <select style={seletorCor} value={foto.cor || ''} onChange={e => definirCorFoto(foto, e.target.value)}>
                     <option value="">Cor?</option>
                     {Array.from(new Set([...coresDoProduto(editando), foto.cor || ''].filter(Boolean))).map(c => <option key={c}>{c}</option>)}
@@ -1138,7 +1250,9 @@ export default function Admin() {
                             </span>
                           ))}
                         </div>
-                        <p style={{ color: '#888', fontSize: 12, margin: 0 }}>Custo {fmtReal(i.custo)}</p>
+                        {i.custos_cor && new Set(Object.values(i.custos_cor)).size > 1
+                          ? <p style={{ color: '#888', fontSize: 12, margin: 0 }}>Custo por cor: {Object.entries(i.custos_cor).map(([c, v]) => `${c} ${fmtReal(v)}`).join(' · ')}</p>
+                          : <p style={{ color: '#888', fontSize: 12, margin: 0 }}>Custo {fmtReal(i.custo)}</p>}
                       </div>
                     </label>
                   ))}
@@ -1404,6 +1518,7 @@ export default function Admin() {
                     <img src={f.url} alt="capinha" style={{ width: '100%', aspectRatio: '3 / 4', objectFit: 'cover', borderRadius: 10, border: '1px solid #333', display: 'block' }} />
                     <button onClick={() => excluirCapinha(f)}
                       style={{ position: 'absolute', top: 4, right: 4, background: '#7a1111', border: 'none', color: 'white', borderRadius: '50%', width: 26, height: 26, cursor: 'pointer', fontSize: 12 }}>✕</button>
+                    {botoesIA(f.url, () => iaCapinha(f), () => voltarCapinha(f))}
                   </div>
                 ))}
               </div>
@@ -1486,12 +1601,28 @@ export default function Admin() {
             <label style={labelStyle}>💰 Preço de venda {apMemoria && apCusto ? <span style={{ color: '#25D366', textTransform: 'none', letterSpacing: 0 }}>(custo + R$ {lucroPorMemoria(apMemoria)})</span> : null}</label>
             <input style={{ ...inputStyle, borderColor: '#1f5c37', fontWeight: 700, color: '#25D366' }} inputMode="decimal" placeholder="Calculado automaticamente"
               value={apPreco} onChange={e => setApPreco(e.target.value)} />
+            {coresAtivas.length > 1 && (
+              <div style={{ ...tagsBox, marginBottom: 10 }}>
+                <p style={tagsTitle}>🎨 Preço por cor (opcional — se uma cor for mais cara)</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {coresAtivas.map(c => (
+                    <div key={c}>
+                      <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: CORES_HEX[c] || '#777', display: 'inline-block' }} />{c}
+                      </label>
+                      <input style={inputStyle} inputMode="decimal" placeholder={apPreco || 'Igual ao preço'} value={apPrecosCor[c] || ''}
+                        onChange={e => setApPrecosCor(prev => ({ ...prev, [c]: e.target.value }))} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 8 }}>
               <button style={btnSalvar} onClick={salvarAparelho} disabled={salvandoAparelho}>
                 {salvandoAparelho ? '⏳ Salvando...' : '✅ Salvar aparelho'}
               </button>
               {editandoAparelho && (
-                <button style={{ ...btnSecundario, padding: '14px 16px' }} onClick={() => { setEditandoAparelho(null); setApMemoria(''); setApCusto(''); setApPreco('') }}>Cancelar</button>
+                <button style={{ ...btnSecundario, padding: '14px 16px' }} onClick={() => { setEditandoAparelho(null); setApMemoria(''); setApCusto(''); setApPreco(''); setApPrecosCor({}) }}>Cancelar</button>
               )}
             </div>
           </div>
@@ -1511,7 +1642,9 @@ export default function Admin() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontWeight: 700, fontSize: 15, color: '#fff', marginBottom: 4 }}>{ap.modelo}</p>
                   <p style={{ fontSize: 12, marginBottom: 6, color: '#888' }}>
-                    {ap.preco != null && <span style={{ color: '#25D366', fontWeight: 700 }}>{fmtReal(ap.preco)}</span>}
+                    {ap.precos_cor && new Set(Object.values(ap.precos_cor)).size > 1
+                      ? <span style={{ color: '#25D366', fontWeight: 700 }}>{Object.entries(ap.precos_cor).map(([c, v]) => `${c} ${fmtReal(v)}`).join(' · ')}</span>
+                      : ap.preco != null && <span style={{ color: '#25D366', fontWeight: 700 }}>{fmtReal(ap.preco)}</span>}
                     {ap.custo != null && <span> · custo {fmtReal(ap.custo)}</span>}
                     {ap.disponivel === false && <span style={{ color: '#ff4444', fontWeight: 700 }}> · Indisponível</span>}
                     {Object.values(ap.fotos || {}).flat().length === 0 && <span style={{ color: '#ffc800' }}> · sem foto</span>}
@@ -1528,6 +1661,7 @@ export default function Admin() {
                     setApMemoria(ap.memoria || '')
                     setApCusto(ap.custo != null ? String(ap.custo).replace('.', ',') : '')
                     setApPreco(ap.preco != null ? String(ap.preco).replace('.', ',') : '')
+                    setApPrecosCor(Object.fromEntries(Object.entries(ap.precos_cor || {}).map(([c, v]) => [c, String(v).replace('.', ',')])))
                     window.scrollTo(0, 0)
                   }}>✏️</button>
                   <button style={btnExcluir} onClick={() => excluirAparelho(ap.id)}>🗑</button>
@@ -1601,6 +1735,7 @@ const seloCapa: React.CSSProperties = { position: 'absolute', top: 4, left: 4, b
 const btnTornarCapa: React.CSSProperties = { position: 'absolute', top: 3, left: 3, background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: 6, padding: '2px 5px', cursor: 'pointer', fontSize: 12 }
 const btnRemoverFoto: React.CSSProperties = { position: 'absolute', top: 3, right: 3, background: '#7a1111', border: 'none', color: 'white', borderRadius: 6, width: 22, height: 22, cursor: 'pointer', fontSize: 11 }
 const seletorCor: React.CSSProperties = { width: '100%', marginTop: 4, padding: '5px 4px', borderRadius: 6, border: '1px solid #2a2a2a', background: '#111', color: '#ddd', fontSize: 11 }
+const btnIA: React.CSSProperties = { flex: 1, background: '#1b1230', border: '1px solid #5b3fa8', color: '#cbb6ff', borderRadius: 8, padding: '6px 4px', cursor: 'pointer', fontSize: 11, fontWeight: 700 }
 const btnOriginal: React.CSSProperties = { position: 'absolute', bottom: 4, left: 4, right: 4, background: 'rgba(0,0,0,0.7)', border: '1px solid #444', color: '#ddd', borderRadius: 6, padding: '3px 0', cursor: 'pointer', fontSize: 10 }
 const modoAtivo: React.CSSProperties = { flex: 1, padding: '11px 8px', borderRadius: 10, border: '1px solid #ff6600', background: 'rgba(255,102,0,0.15)', color: '#ff6600', fontWeight: 800, fontSize: 14, cursor: 'pointer' }
 const modoInativo: React.CSSProperties = { flex: 1, padding: '11px 8px', borderRadius: 10, border: '1px solid #2a2a2a', background: '#0f0f0f', color: '#888', fontWeight: 600, fontSize: 14, cursor: 'pointer' }

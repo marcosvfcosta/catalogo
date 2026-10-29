@@ -8,11 +8,14 @@ type Negociacao = {
   observacoes: string; status: string; vendedor: string; created_at: string
   forma_pagamento?: string | null
   lucro?: number | null
+  retorno_em?: string | null      // dia que o cliente pediu para ser chamado
+  retorno_nota?: string | null
 }
 
 type Aparelho = {
   id: string; modelo: string; cores: string[]; fotos: Record<string, string[]>
   preco?: number | null; disponivel?: boolean | null
+  precos_cor?: Record<string, number> | null
   doCatalogo?: boolean
 }
 
@@ -279,6 +282,28 @@ function chaveParaBytes(base64: string) {
 export default function Negociacao() {
   const celular = useCelular()
   const s = estilos(celular)
+  // Tema claro/escuro (chavinha no topo). O claro inverte as cores da tela e "desinverte" fotos e bolinhas de cor
+  const [claro, setClaro] = useState(() => { try { return localStorage.getItem('neg-tema') === 'claro' } catch { return false } })
+  useEffect(() => {
+    const raiz = document.documentElement
+    raiz.classList.toggle('neg-claro', claro)
+    try { localStorage.setItem('neg-tema', claro ? 'claro' : 'escuro') } catch { /* ok */ }
+    return () => raiz.classList.remove('neg-claro')
+  }, [claro])
+  const chaveTema = (
+    <button onClick={() => setClaro(!claro)} title={claro ? 'Tela escura' : 'Tela clara'} aria-label="Trocar tema"
+      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px', borderRadius: 20, border: '1px solid #333', background: '#111', cursor: 'pointer', flexShrink: 0 }}>
+      <span style={{ width: 26, height: 26, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, background: !claro ? '#ff6600' : 'transparent' }}>🌙</span>
+      <span style={{ width: 26, height: 26, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, background: claro ? '#ff6600' : 'transparent' }}>☀️</span>
+    </button>
+  )
+  const estiloTema = <style>{`
+    html.neg-claro { filter: invert(1) hue-rotate(180deg); background: #050505; }
+    html.neg-claro img, html.neg-claro video, html.neg-claro .sem-inverter,
+    html.neg-claro [style*="background: rgb(255, 102, 0)"],
+    html.neg-claro [style*="background: rgb(37, 211, 102)"],
+    html.neg-claro [style*="background: rgb(255, 200, 0)"] { filter: invert(1) hue-rotate(180deg); }
+  `}</style>
   const [aba, setAba] = useState<'negociacao' | 'clientes' | 'relatorios' | 'entradas' | 'retornos' | 'tabela' | 'admin'>('negociacao')
   const [tabelaTroca, setTabelaTroca] = useState<LinhaTroca[]>([])
   const [buscaTroca, setBuscaTroca] = useState('')
@@ -303,6 +328,8 @@ export default function Negociacao() {
   const [buscaModelo, setBuscaModelo] = useState('')
   const [modeloSugestoes, setModeloSugestoes] = useState<Aparelho[]>([])
   const [filtro, setFiltro] = useState('Todos')
+  const [dataRetornoCli, setDataRetornoCli] = useState('')
+  const [notaRetornoCli, setNotaRetornoCli] = useState('')
   const [buscaCliente, setBuscaCliente] = useState('')
   const [periodo, setPeriodo] = useState<Periodo>('todos')
   const [relAberto, setRelAberto] = useState<string | null>(null)
@@ -318,7 +345,7 @@ export default function Negociacao() {
   useEffect(() => {
     try {
       const qAba = new URLSearchParams(window.location.search).get('aba')
-      if (qAba === 'entradas' || qAba === 'retornos' || qAba === 'tabela') setAba(qAba)
+      if (qAba === 'entradas' || qAba === 'retornos' || qAba === 'tabela' || qAba === 'clientes') setAba(qAba)
     } catch { /* ok */ }
     verificarAvisos()
   }, [])
@@ -394,7 +421,7 @@ export default function Negociacao() {
   const [aparelhoEditandoId, setAparelhoEditandoId] = useState<string | null>(null)
 
   useEffect(() => {
-    if (aba === 'clientes' || aba === 'relatorios') carregarClientes()
+    carregarClientes() // sempre: mostra quantos clientes têm retorno hoje
     if (aba === 'negociacao' || aba === 'admin') carregarAparelhos()
     carregarEntradas()
     carregarRetornos()
@@ -795,6 +822,37 @@ export default function Negociacao() {
     carregarClientes()
   }
 
+  // ─── Retorno combinado com o cliente (ex: "me chama dia 05/11") ───
+  function abrirCliente(c: Negociacao) {
+    setClienteSelecionado(c)
+    setDataRetornoCli(c.retorno_em || '')
+    setNotaRetornoCli(c.retorno_nota || '')
+  }
+
+  async function salvarRetornoCliente(c: Negociacao) {
+    if (!dataRetornoCli) { alert('Escolha o dia do retorno'); return }
+    const dados = { retorno_em: dataRetornoCli, retorno_nota: notaRetornoCli.trim() || null }
+    const { error } = await supabase.from('negociacoes').update(dados).eq('id', c.id)
+    if (error) { alert('Erro ao salvar. Rode o SQL novo no Supabase.'); return }
+    const novo = { ...c, ...dados }
+    setClienteSelecionado(novo)
+    setClientes(prev => prev.map(x => x.id === c.id ? novo : x))
+    alert(`Lembrete criado! No dia ${dataCurta(dataRetornoCli)} você recebe o aviso de hora em hora até tocar em "Concluí o contato".`)
+  }
+
+  async function concluirContatoCliente(c: Negociacao) {
+    const dados = { retorno_em: null, retorno_nota: null }
+    await supabase.from('negociacoes').update({ ...dados, retorno_concluido_em: new Date().toISOString() }).eq('id', c.id)
+    const novo = { ...c, ...dados }
+    setClientes(prev => prev.map(x => x.id === c.id ? novo : x))
+    if (clienteSelecionado?.id === c.id) { setClienteSelecionado(novo); setDataRetornoCli(''); setNotaRetornoCli('') }
+  }
+
+  function whatsAppRetornoCliente(c: Negociacao) {
+    const msg = `Olá ${c.nome.trim().split(' ')[0]}! Tudo bem? ✨\n\nAqui é da Marcos Magazine, conforme combinamos estou retornando sobre o *${c.modelo}*.`
+    window.open(linkWhatsApp(c.telefone, msg), '_blank')
+  }
+
   async function alterarStatus(id: string, status: string) {
     await supabase.from('negociacoes').update({ status }).eq('id', id)
     carregarClientes(); setClienteSelecionado(null)
@@ -871,10 +929,21 @@ export default function Negociacao() {
   const aparelhoSelecionado = todosAparelhos.find(a => a.modelo === form.modelo)
   const coresDisponiveis = aparelhoSelecionado?.cores || []
   const fotoAtual = form.cor && aparelhoSelecionado?.fotos?.[form.cor]?.[0] || null
+  // Cores com preços diferentes (ex: iPhone 17 Pro Max Laranja x Prata)
+  const temPrecoPorCor = !!aparelhoSelecionado?.precos_cor && new Set(Object.values(aparelhoSelecionado.precos_cor)).size > 1
+
+  function escolherCorNegociacao(cor: string) {
+    const precoCor = aparelhoSelecionado?.precos_cor?.[cor]
+    if (precoCor != null) {
+      setForm({ ...form, cor, valor_aparelho: String(precoCor).replace('.', ',') })
+      setErros({ ...erros, valor_aparelho: '' })
+    } else setForm({ ...form, cor })
+  }
 
   const entradasNovas = entradas.filter(e => e.status === 'Nova').length
   const hoje = hojeBR()
   const retornosHoje = retornos.filter(r => r.aceita && r.proximo_contato <= hoje)
+  const clientesRetornoHoje = clientes.filter(c => c.retorno_em && c.retorno_em <= hoje)
   // Buscando (ex: cliente chegou na loja) → procura em todos, inclusive os de hoje
   const termoRet = semAc(buscaRet.trim())
   const digitosRet = buscaRet.replace(/\D/g, '')
@@ -910,7 +979,7 @@ export default function Negociacao() {
 
   function miniCard(c: Negociacao) {
     return (
-      <div key={c.id} style={{ ...s.clienteCard, cursor: 'pointer' }} onClick={() => setClienteSelecionado(c)}>
+      <div key={c.id} style={{ ...s.clienteCard, cursor: 'pointer' }} onClick={() => abrirCliente(c)}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <p style={s.clienteNome}>{c.nome}</p>
@@ -928,12 +997,14 @@ export default function Negociacao() {
   }
 
   if (clienteSelecionado) return (
-    <div style={s.page}>
+    <div style={{ ...s.page, flexDirection: 'column' }}>
       {celular && <style>{AJUSTE_CELULAR}</style>}
       <header style={s.header}>
         <button style={s.btnBack} onClick={() => setClienteSelecionado(null)}>← Voltar</button>
         <div style={s.logo}><span style={s.logoM}>Marcos</span><span style={s.logoMag}>Magazine</span></div>
+        {chaveTema}
       </header>
+      {estiloTema}
       <div style={s.detalheContainer}>
         <h2 style={s.detalheTitle}>Detalhes da Negociação</h2>
         <div style={s.detalheGrid}>
@@ -954,6 +1025,38 @@ export default function Negociacao() {
           <div style={s.detalheCard}><p style={s.detalheLabel}>Data</p><p style={s.detalheValor}>{new Date(clienteSelecionado.created_at).toLocaleDateString('pt-BR')}</p></div>
         </div>
         {clienteSelecionado.observacoes && <div style={{ ...s.detalheCard, marginTop: 12 }}><p style={s.detalheLabel}>Obs</p><p style={s.detalheValor}>{clienteSelecionado.observacoes}</p></div>}
+        <div style={{ ...s.detalheCard, marginTop: 12, border: '1px solid ' + (clienteSelecionado.retorno_em ? '#ff6600' : '#1e1e1e') }}>
+          <p style={{ ...s.detalheLabel, color: '#ff8a3d' }}>📅 Retornar contato</p>
+          {clienteSelecionado.retorno_em ? (
+            <>
+              <p style={{ ...s.detalheValor, color: '#fff' }}>
+                Agendado para <b style={{ color: '#ff8a3d' }}>{dataCurta(clienteSelecionado.retorno_em)}</b>
+                {clienteSelecionado.retorno_em < hojeBR() ? <span style={{ color: '#ff4444' }}> · atrasado</span> : clienteSelecionado.retorno_em === hojeBR() ? <span style={{ color: '#ffc800' }}> · é hoje!</span> : ''}
+              </p>
+              {clienteSelecionado.retorno_nota && <p style={{ color: '#aaa', fontSize: 14, margin: '4px 0 0' }}>📝 {clienteSelecionado.retorno_nota}</p>}
+              <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                <button style={{ ...s.btnFechar, flex: 1, padding: '12px 10px' }} onClick={() => whatsAppRetornoCliente(clienteSelecionado)}>💬 Abrir WhatsApp</button>
+                <button style={{ ...s.btnFechar, flex: 1, padding: '12px 10px', background: '#ff6600' }} onClick={() => concluirContatoCliente(clienteSelecionado)}>✓ Concluí o contato</button>
+              </div>
+              <p style={{ color: '#666', fontSize: 12, margin: '10px 0 4px' }}>Mudar o dia:</p>
+            </>
+          ) : (
+            <p style={{ color: '#888', fontSize: 13, margin: '4px 0 10px' }}>O cliente pediu para chamar outro dia? Escolha a data e no dia você recebe o aviso de hora em hora até concluir o contato.</p>
+          )}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+            {[3, 7, 15, 30].map(d => (
+              <button key={d} style={dataRetornoCli === somarDias(hojeBR(), d) ? s.filtroBtnAtivo : s.filtroBtn}
+                onClick={() => setDataRetornoCli(somarDias(hojeBR(), d))}>+{d} dias</button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input type="date" style={{ ...s.input, width: 'auto', flex: '1 1 160px', colorScheme: 'dark' }} min={hojeBR()} value={dataRetornoCli} onChange={e => setDataRetornoCli(e.target.value)} />
+            <input style={{ ...s.input, flex: '2 1 220px' }} value={notaRetornoCli} onChange={e => setNotaRetornoCli(e.target.value)} placeholder="Anotação (ex: vai receber o salário)" />
+          </div>
+          <button style={{ ...s.btnFechar, width: '100%', marginTop: 10, background: '#ff6600' }} onClick={() => salvarRetornoCliente(clienteSelecionado)}>
+            🔔 {clienteSelecionado.retorno_em ? 'Salvar nova data' : 'Criar lembrete'}{dataRetornoCli ? ` para ${dataCurta(dataRetornoCli)}` : ''}
+          </button>
+        </div>
         <div style={{ display: 'flex', gap: 12, marginTop: 24, flexWrap: 'wrap' }}>
           <button onClick={() => enviarWhatsApp(clienteSelecionado)} style={{ ...s.btnFechar, flex: 1, background: '#25D366' }}>📲 WhatsApp</button>
           <button onClick={() => editarNegociacao(clienteSelecionado)} style={{ ...s.btnAlterar, flex: 1 }}>✏️ Alterar</button>
@@ -999,7 +1102,9 @@ export default function Negociacao() {
         <div style={s.sidebarLogo}><span style={s.logoM}>Marcos</span><span style={s.logoMag}>Magazine</span></div>
         <nav>
           <p style={{ ...s.navItem, ...(aba === 'negociacao' ? s.navAtivo : {}) }} onClick={() => { setAba('negociacao'); setMenuAberto(false) }}>Negociação</p>
-          <p style={{ ...s.navItem, ...(aba === 'clientes' ? s.navAtivo : {}) }} onClick={() => { setAba('clientes'); setMenuAberto(false) }}>Clientes</p>
+          <p style={{ ...s.navItem, ...(aba === 'clientes' ? s.navAtivo : {}) }} onClick={() => { setAba('clientes'); setMenuAberto(false) }}>
+            Clientes {clientesRetornoHoje.length > 0 && <span style={s.badgeNovas}>{clientesRetornoHoje.length}</span>}
+          </p>
           <p style={{ ...s.navItem, ...(aba === 'relatorios' ? s.navAtivo : {}) }} onClick={() => { setAba('relatorios'); setMenuAberto(false) }}>Relatórios</p>
           <p style={{ ...s.navItem, ...(aba === 'entradas' ? s.navAtivo : {}) }} onClick={() => { setAba('entradas'); setMenuAberto(false) }}>
             Entradas {entradasNovas > 0 && <span style={s.badgeNovas}>{entradasNovas}</span>}
@@ -1014,9 +1119,13 @@ export default function Negociacao() {
         <header style={s.header}>
           <button style={s.hamburger} onClick={() => setMenuAberto(!menuAberto)}>☰</button>
           <div style={s.logo}><span style={s.logoM}>Marcos</span><span style={s.logoMag}>Magazine</span></div>
+          {chaveTema}
+          {estiloTema}
           <div style={s.abas}>
             <button style={aba === 'negociacao' ? s.abaAtiva : s.abaInativa} onClick={() => setAba('negociacao')}>{editandoId ? '✏️' : 'Negociação'}</button>
-            <button style={aba === 'clientes' ? s.abaAtiva : s.abaInativa} onClick={() => setAba('clientes')}>Clientes</button>
+            <button style={aba === 'clientes' ? s.abaAtiva : s.abaInativa} onClick={() => setAba('clientes')}>
+              Clientes{clientesRetornoHoje.length > 0 && <span style={{ ...s.badgeNovas, background: aba === 'clientes' ? 'white' : '#ff6600', color: aba === 'clientes' ? '#ff6600' : 'white' }}>{clientesRetornoHoje.length}</span>}
+            </button>
             <button style={aba === 'relatorios' ? s.abaAtiva : s.abaInativa} onClick={() => setAba('relatorios')}>Relatórios</button>
             <button style={aba === 'entradas' ? s.abaAtiva : s.abaInativa} onClick={() => setAba('entradas')}>
               Entradas{entradasNovas > 0 && <span style={{ ...s.badgeNovas, background: aba === 'entradas' ? 'white' : '#ff6600', color: aba === 'entradas' ? '#ff6600' : 'white' }}>{entradasNovas}</span>}
@@ -1087,9 +1196,12 @@ export default function Negociacao() {
                   <label style={{ ...s.label, textAlign: 'center', display: 'block' }}>Cor</label>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8, justifyContent: 'center' }}>
                     {coresDisponiveis.map(cor => (
-                      <div key={cor} onClick={() => setForm({ ...form, cor })} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: CORES_HEX[cor] || '#888', border: form.cor === cor ? '3px solid #ff6600' : '3px solid transparent', boxShadow: form.cor === cor ? '0 0 0 2px rgba(255,102,0,0.4)' : 'none', outline: cor === 'Branco' ? '1px solid #444' : 'none', transition: 'all 0.2s' }} />
+                      <div key={cor} onClick={() => escolherCorNegociacao(cor)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                        <div className="sem-inverter" style={{ width: 36, height: 36, borderRadius: '50%', background: CORES_HEX[cor] || '#888', border: form.cor === cor ? '3px solid #ff6600' : '3px solid transparent', boxShadow: form.cor === cor ? '0 0 0 2px rgba(255,102,0,0.4)' : 'none', outline: cor === 'Branco' ? '1px solid #444' : 'none', transition: 'all 0.2s' }} />
                         <span style={{ fontSize: 10, color: form.cor === cor ? '#ff6600' : '#666', textAlign: 'center', maxWidth: 60 }}>{cor}</span>
+                        {temPrecoPorCor && aparelhoSelecionado?.precos_cor?.[cor] != null && (
+                          <span style={{ fontSize: 10, color: '#25D366', fontWeight: 700, whiteSpace: 'nowrap' }}>{fmt(Number(aparelhoSelecionado.precos_cor[cor]))}</span>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1201,18 +1313,42 @@ export default function Negociacao() {
         {aba === 'clientes' && (
           <div style={s.content}>
             <h1 style={s.pageTitle}>Clientes</h1>
+            {clientesRetornoHoje.length > 0 && (
+              <div style={{ ...s.section, borderColor: '#ff6600' }}>
+                <h3 style={s.sectionTitle}>🔔 Retornar contato hoje ({clientesRetornoHoje.length})</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {clientesRetornoHoje.map(c => (
+                    <div key={c.id} style={{ background: '#151515', border: '1px solid #2a2a2a', borderRadius: 14, padding: 14 }}>
+                      <div onClick={() => abrirCliente(c)} style={{ cursor: 'pointer' }}>
+                        <p style={{ margin: 0, color: '#fff', fontWeight: 800, fontSize: 16 }}>{c.nome}</p>
+                        <p style={{ margin: '2px 0 0', color: '#ff8a3d', fontSize: 14 }}>📱 {c.modelo || '-'} · {fmt(c.valor_aparelho)}</p>
+                        <p style={{ margin: '2px 0 0', color: '#777', fontSize: 12 }}>
+                          Combinado para {dataCurta(c.retorno_em!)}{c.retorno_em! < hojeBR() ? ' · atrasado' : ''}
+                        </p>
+                        {c.retorno_nota && <p style={{ margin: '4px 0 0', color: '#aaa', fontSize: 13 }}>📝 {c.retorno_nota}</p>}
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                        <button style={{ ...s.btnFechar, flex: 2, padding: '12px 10px' }} onClick={() => whatsAppRetornoCliente(c)}>💬 Abrir WhatsApp</button>
+                        <button style={{ ...s.btnFechar, flex: 1, padding: '12px 10px', background: '#ff6600' }} onClick={() => concluirContatoCliente(c)}>✓ Concluí o contato</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div style={{ position: 'relative', marginBottom: 16 }}>
               <span style={s.buscaIcone}>🔍</span>
               <input style={{ ...s.input, paddingLeft: 42, paddingRight: 42 }} value={buscaCliente} onChange={e => setBuscaCliente(e.target.value)} placeholder="Buscar por nome ou telefone..." />
               {buscaCliente && <button style={s.buscaLimpar} onClick={() => setBuscaCliente('')}>×</button>}
             </div>
             <div style={s.filtrosRow}>
-              {['Todos', 'Em Andamento', 'Venda Fechada', 'Desistiram'].map(f => (
+              {['Todos', 'Em Andamento', 'Venda Fechada', 'Desistiram', 'Agendados'].map(f => (
                 <button key={f} style={filtro === f ? s.filtroBtnAtivo : s.filtroBtn} onClick={() => setFiltro(f)}>{f}</button>
               ))}
             </div>
             {(() => {
               const porStatus = filtro === 'Todos' ? clientes
+                : filtro === 'Agendados' ? clientes.filter(c => c.retorno_em).sort((a, b) => a.retorno_em!.localeCompare(b.retorno_em!))
                 : filtro === 'Em Andamento' ? clientes.filter(c => c.status === 'Venda Pendente')
                 : clientes.filter(c => c.status === filtro)
               const termo = norm(buscaCliente)
@@ -1229,7 +1365,7 @@ export default function Negociacao() {
                   ) : (
                     <div style={s.clientesGrid}>
                       {lista.map(c => (
-                        <div key={c.id} style={s.clienteCard} onClick={() => setClienteSelecionado(c)}>
+                        <div key={c.id} style={{ ...s.clienteCard, ...(c.retorno_em && c.retorno_em <= hojeBR() ? { border: '1px solid #ff6600' } : {}) }} onClick={() => abrirCliente(c)}>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                             <div>
                               <p style={s.clienteNome}>{c.nome}</p>
@@ -1243,7 +1379,10 @@ export default function Negociacao() {
                               <p style={{ color: '#888', fontSize: 12 }}>{textoPagamento(c)}</p>
                             </div>
                           </div>
-                          <p style={{ color: '#555', fontSize: 11, marginTop: 8 }}>{new Date(c.created_at).toLocaleDateString('pt-BR')}</p>
+                          <p style={{ color: '#555', fontSize: 11, marginTop: 8 }}>
+                            {new Date(c.created_at).toLocaleDateString('pt-BR')}
+                            {c.retorno_em && <span style={{ color: c.retorno_em <= hojeBR() ? '#ff6600' : '#ff8a3d', fontWeight: 700, marginLeft: 8 }}>📅 retornar {dataCurta(c.retorno_em)}</span>}
+                          </p>
                         </div>
                       ))}
                     </div>
@@ -1772,7 +1911,7 @@ export default function Negociacao() {
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         {a.cores.map((cor: string) => (
                           <div key={cor} style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#1a1a1a', borderRadius: 20, padding: '4px 10px' }}>
-                            <div style={{ width: 14, height: 14, borderRadius: '50%', background: CORES_HEX[cor] || '#888', border: cor === 'Branco' ? '1px solid #555' : 'none', flexShrink: 0 }} />
+                            <div className="sem-inverter" style={{ width: 14, height: 14, borderRadius: '50%', background: CORES_HEX[cor] || '#888', border: cor === 'Branco' ? '1px solid #555' : 'none', flexShrink: 0 }} />
                             <span style={{ color: '#aaa', fontSize: 12 }}>{cor}</span>
                           </div>
                         ))}

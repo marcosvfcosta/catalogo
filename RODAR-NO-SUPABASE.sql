@@ -167,3 +167,11 @@ as $$
 $$;
 revoke all on function public.validar_cupom(text) from public;
 grant execute on function public.validar_cupom(text) to anon, authenticated;
+
+-- 13) Preço de cada cor do aparelho (ex: iPhone 17 Pro Max Laranja x Prata)
+alter table public.aparelhos add column if not exists precos_cor jsonb;
+
+-- 14) Clientes da Negociação: dia combinado para retornar o contato (aviso de hora em hora)
+alter table public.negociacoes add column if not exists retorno_em date;
+alter table public.negociacoes add column if not exists retorno_nota text;
+alter table public.negociacoes add column if not exists retorno_concluido_em timestamptz;

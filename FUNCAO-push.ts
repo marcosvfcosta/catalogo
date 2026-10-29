@@ -68,14 +68,20 @@ serve(async (req) => {
       const aberto = (dia >= 1 && dia <= 5 && hora >= 9 && hora <= 18) || (dia === 6 && hora >= 9 && hora <= 12)
       if (!aberto) return json({ ok: true, motivo: 'fora do horário' })
       const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
-      const { data: lista } = await db.from('catalogo_retornos').select('nome, modelo')
+      // 1) Retornos (capinhas/acessórios) e 2) clientes da negociação que pediram para ser chamados
+      const { data: r1 } = await db.from('catalogo_retornos').select('nome, modelo')
         .eq('ativo', true).eq('aceita', true).lte('proximo_contato', hoje).order('proximo_contato')
-      if (!lista || lista.length === 0) return json({ ok: true, motivo: 'ninguém hoje' })
+      const { data: r2, error: e2 } = await db.from('negociacoes').select('nome, modelo')
+        .not('retorno_em', 'is', null).lte('retorno_em', hoje).order('retorno_em')
+      const retornos = r1 || []
+      const clientes = e2 ? [] : (r2 || [])
+      const lista = [...clientes, ...retornos]
+      if (lista.length === 0) return json({ ok: true, motivo: 'ninguém hoje' })
       const nomes = lista.slice(0, 3).map(r => `${String(r.nome).split(' ')[0]} (${r.modelo})`).join(', ')
       mensagem = {
         titulo: `🔔 ${lista.length} ${lista.length === 1 ? 'cliente' : 'clientes'} para chamar hoje`,
-        corpo: `${nomes}${lista.length > 3 ? ` e mais ${lista.length - 3}` : ''}. Toque em "Mandei" depois de enviar.`,
-        url: '/negociacao?aba=retornos',
+        corpo: `${nomes}${lista.length > 3 ? ` e mais ${lista.length - 3}` : ''}. ${clientes.length ? 'Toque em "Concluí o contato" depois de falar.' : 'Toque em "Mandei" depois de enviar.'}`,
+        url: clientes.length ? '/negociacao?aba=clientes' : '/negociacao?aba=retornos',
         tag: 'retornos',
       }
     } else {
