@@ -48,6 +48,12 @@ type FiltroEspecial = 'destaques' | 'lancamentos' | 'promocoes' | 'mais_procurad
 // ─── Dados fixos da loja ───────────────────────────
 const WHATSAPP = '5564993374281'
 const PARCELAS = 18
+
+// ─── Visual do catálogo ───
+// true  = visual "Vitrine" (parede cinza, prateleiras de acrílico)
+// false = visual antigo (branco, estilo iPlace). Para voltar, é só trocar para false e publicar.
+const TEMA_VITRINE = true
+const CLASSE_TEMA = TEMA_VITRINE ? ' tema-vitrine' : ''
 const STORAGE = 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public'
 const CHAVE_SACOLA = 'mm-sacola'
 const DESCONTO_KIT = 0.1 // 10% de desconto no kit
@@ -671,8 +677,8 @@ function App() {
       p.bateria_saude && { icone: '🔋', nome: 'Bateria', valor: p.bateria_saude },
     ].filter(Boolean) as { icone: string; nome: string; valor: string }[]
     return (
-      <div className="mm">
-        <style>{CSS}</style>
+      <div className={'mm' + CLASSE_TEMA}>
+        <style>{TEMA_VITRINE ? CSS + CSS_VITRINE : CSS}</style>
         <header className="mm-topo mm-topo-detalhe">
           <button className="mm-voltar" onClick={fecharProduto}>‹ Voltar</button>
           <Logo onClick={irParaInicio} />
@@ -750,8 +756,8 @@ function App() {
   }
 
   return (
-    <div className={sacola.length > 0 ? 'mm mm-com-barra' : 'mm'}>
-      <style>{CSS}</style>
+    <div className={(sacola.length > 0 ? 'mm mm-com-barra' : 'mm') + CLASSE_TEMA}>
+      <style>{TEMA_VITRINE ? CSS + CSS_VITRINE : CSS}</style>
 
       {/* Menu lateral */}
       {menuAberto && <div className="mm-fundo-menu" onClick={() => setMenuAberto(false)} />}
@@ -1383,6 +1389,158 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
   .mm .mm-secao-topo h2 { font-size: 30px; }
 }
 @media (prefers-reduced-motion: reduce) { .mm *, .mm *::after { animation: none !important; transition: none !important; } }
+`
+
+// ─── Visual "Vitrine": parede cinza fosca, prateleiras de acrílico e etiquetas escuras ───
+const PAREDE = `url("data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.45  0 0 0 0 0.42  0 0 0 0 0.46  0 0 0 0.22 0'/></filter><rect width='100%' height='100%' filter='url(#n)'/></svg>`,
+)}")`
+
+const CSS_VITRINE = `
+html, body { background: #4e4953 !important; }
+body { color: #fff !important; }
+.mm.tema-vitrine { --tinta: #ffffff; --cinza: rgba(255,255,255,0.08); --borda: rgba(255,255,255,0.12); --vidro: rgba(26,24,29,0.55);
+  color: #fff; background-color: #5f5964;
+  background-image: ${PAREDE}, linear-gradient(180deg, #7a747e 0%, #6a646e 25%, #5d5762 65%, #4e4953 100%);
+  background-size: 220px 220px, 100% 100%; background-attachment: scroll, fixed; }
+.mm.tema-vitrine img { mix-blend-mode: normal !important; }
+
+/* faixa e topo */
+.mm.tema-vitrine .mm-aviso { background: #1c1a1f; }
+.mm.tema-vitrine .mm-aviso-cupom { background: linear-gradient(90deg, #ff6600, #ff8a3d); }
+.mm.tema-vitrine .mm-topo { background: rgba(38,35,42,0.78); border-bottom-color: rgba(255,255,255,0.08); }
+.mm.tema-vitrine .mm-icone { color: #fff; }
+.mm.tema-vitrine .mm-icone:active { background: rgba(255,255,255,0.1); }
+.mm.tema-vitrine .mm-contagem { border-color: #2a272e; }
+
+/* busca e "qual é o seu celular" */
+.mm.tema-vitrine .mm-busca, .mm.tema-vitrine .mm-qual-caixa { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.18); box-shadow: none; color: #ffb27a; }
+.mm.tema-vitrine .mm-busca input, .mm.tema-vitrine .mm-qual-caixa input, .mm.tema-vitrine .mm-cupom-campo input { color: #fff; }
+.mm.tema-vitrine input::placeholder { color: rgba(255,255,255,0.6); }
+.mm.tema-vitrine .mm-qual-caixa.aberta { border-color: var(--laranja); }
+.mm.tema-vitrine .mm-qual-lista { background: #2a272e; border-color: var(--laranja); }
+.mm.tema-vitrine .mm-qual-lista small, .mm.tema-vitrine .mm-qual-ultimo { color: rgba(255,255,255,0.6); }
+.mm.tema-vitrine .mm-qual-foto, .mm.tema-vitrine .mm-celular-foto { background: rgba(255,255,255,0.08); }
+.mm.tema-vitrine .mm-usado-faixa { background: linear-gradient(110deg, #1c1a1f 0%, #2a2630 55%, #ff6600 150%); box-shadow: 0 10px 24px rgba(0,0,0,0.25); }
+
+/* banner antigo (quando não há vitrine) */
+.mm.tema-vitrine .mm-hero { background: transparent; }
+.mm.tema-vitrine .mm-hero h1 { color: #fff; }
+.mm.tema-vitrine .mm-hero p { color: rgba(255,255,255,0.7); }
+.mm.tema-vitrine .mm-hero-arte { background: transparent; }
+.mm.tema-vitrine .mm-hero-fantasma { background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.05) 75%); background-size: 200% 100%; }
+.mm.tema-vitrine .mm-pontos i { background: rgba(255,255,255,0.3); }
+.mm.tema-vitrine .mm-pontos i.on { background: var(--laranja); }
+
+/* categorias = nichos iluminados */
+.mm.tema-vitrine .mm-categorias { gap: 10px; padding-top: 18px; }
+.mm.tema-vitrine .mm-categoria { width: 112px; color: #fff; font-size: 14px; position: relative; }
+.mm.tema-vitrine .mm-categoria span { position: relative; width: 112px; height: 132px; margin-bottom: 8px; border-radius: 14px; padding: 18px 16px 26px; align-items: flex-end;
+  background: linear-gradient(180deg, #2a2730, #19171c); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), inset 0 14px 30px rgba(0,0,0,0.6), 0 10px 20px rgba(0,0,0,0.25); }
+.mm.tema-vitrine .mm-categoria span::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(70% 16% at 50% 0%, rgba(255,240,225,0.6), transparent), linear-gradient(180deg, rgba(255,240,225,0.2), transparent 70%);
+  clip-path: polygon(35% 0, 65% 0, 100% 100%, 0 100%); }
+.mm.tema-vitrine .mm-categoria span::after { content: ''; position: absolute; left: 14%; right: 14%; bottom: 18px; height: 3px; border-radius: 2px;
+  background: var(--laranja); box-shadow: 0 0 10px #ff7a1a, 0 0 20px rgba(255,122,26,0.7); }
+.mm.tema-vitrine .mm-categoria img { position: relative; z-index: 1; filter: drop-shadow(0 8px 8px rgba(0,0,0,0.55)); }
+
+/* vantagens */
+.mm.tema-vitrine .mm-beneficios div { background: var(--vidro); border: 1px solid rgba(255,255,255,0.08); }
+.mm.tema-vitrine .mm-beneficios p { color: rgba(255,255,255,0.65); }
+.mm.tema-vitrine .mm-beneficios b { color: #fff; }
+
+/* seções */
+.mm.tema-vitrine .mm-secao-topo h2 { color: #fff; }
+.mm.tema-vitrine .mm-secao-topo h2::before { display: none; }
+.mm.tema-vitrine .mm-link { color: #ffb27a; }
+.mm.tema-vitrine .mm-contador { color: rgba(255,255,255,0.6); }
+
+/* produto em pé na prateleira de acrílico + etiqueta escura */
+.mm.tema-vitrine .mm-card { background: transparent; border: none; padding: 0 2px; border-radius: 0; }
+.mm.tema-vitrine .mm-card-foto { height: 170px; background: transparent; border-radius: 0; overflow: visible; align-items: flex-end; padding-bottom: 9px; }
+.mm.tema-vitrine .mm-card-foto img { width: 86%; height: 100%; object-position: bottom; filter: drop-shadow(0 10px 10px rgba(0,0,0,0.4)); }
+.mm.tema-vitrine .mm-card-foto::after { content: ''; position: absolute; left: -4px; right: -4px; bottom: 0; height: 7px; border-radius: 3px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0.12)); box-shadow: 0 6px 10px rgba(0,0,0,0.35); }
+.mm.tema-vitrine .mm-card:hover .mm-card-foto::after, .mm.tema-vitrine .mm-card:active .mm-card-foto::after {
+  background: linear-gradient(180deg, #ffd2a8, #ff8a3d); box-shadow: 0 0 10px #ff7a1a, 0 0 24px rgba(255,122,26,0.8); }
+.mm.tema-vitrine .mm-card-nome, .mm.tema-vitrine .mm-card-info, .mm.tema-vitrine .mm-card .mm-preco, .mm.tema-vitrine .mm-card .mm-cores { background: var(--vidro); margin: 0; padding-left: 12px; padding-right: 12px; }
+.mm.tema-vitrine .mm-card-nome { margin-top: 12px; padding-top: 10px; border-radius: 12px 12px 0 0; color: #fff; font-size: 15px; }
+.mm.tema-vitrine .mm-card-info { color: rgba(255,255,255,0.6); font-size: 12.5px; padding-top: 2px; }
+.mm.tema-vitrine .mm-card .mm-preco { padding-top: 6px; }
+.mm.tema-vitrine .mm-card .mm-cores { padding-top: 8px; padding-bottom: 10px; margin-bottom: 10px; border-radius: 0 0 12px 12px; min-height: 0; }
+.mm.tema-vitrine .mm-cores i { border-color: rgba(255,255,255,0.35); }
+.mm.tema-vitrine .mm-btn-sacola { background: #fff; color: #111; }
+.mm.tema-vitrine .mm-btn-sacola.dentro { background: rgba(255,102,0,0.2); color: #ffb27a; }
+.mm.tema-vitrine .mm-selo { top: 0; }
+.mm.tema-vitrine .mm-sem-foto { color: rgba(255,255,255,0.5); }
+.mm.tema-vitrine .mm-card-fantasma { background: linear-gradient(90deg, rgba(255,255,255,0.05), rgba(255,255,255,0.12), rgba(255,255,255,0.05)); background-size: 200% 100%; }
+.mm.tema-vitrine .mm-grade { gap: 22px 14px; }
+
+/* preço */
+.mm.tema-vitrine .mm-preco b { color: #fff; }
+.mm.tema-vitrine .mm-preco-de { color: rgba(255,255,255,0.5); }
+.mm.tema-vitrine .mm-preco b.mm-preco-cupom { color: #ffb27a; }
+
+/* filtros, marcas, vazio */
+.mm.tema-vitrine .mm-chips button { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.14); color: #fff; }
+.mm.tema-vitrine .mm-chips button.on { background: #fff; color: #111; }
+.mm.tema-vitrine .mm-escolha-marca p { color: rgba(255,255,255,0.7); }
+.mm.tema-vitrine .mm-marcas button, .mm.tema-vitrine .mm-marcas-linha button { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.12); }
+.mm.tema-vitrine .mm-marcas-linha button.on { background: rgba(255,102,0,0.15); border-color: var(--laranja); }
+.mm.tema-vitrine .mm-marcas img, .mm.tema-vitrine .mm-marcas-linha img { filter: grayscale(1) brightness(0) invert(1); }
+.mm.tema-vitrine .mm-marcas img.padrao, .mm.tema-vitrine .mm-marcas-linha img.padrao { filter: brightness(0) invert(1); }
+.mm.tema-vitrine .mm-marca-texto, .mm.tema-vitrine .mm-todas { color: #fff; }
+.mm.tema-vitrine .mm-vazio { color: rgba(255,255,255,0.7); }
+.mm.tema-vitrine .mm-btn-contorno { border-color: rgba(255,255,255,0.22); color: #fff; }
+
+/* rodapé */
+.mm.tema-vitrine .mm-rodape { background: rgba(22,20,25,0.7); border-top-color: rgba(255,255,255,0.08); color: rgba(255,255,255,0.75); }
+.mm.tema-vitrine .mm-rodape-links, .mm.tema-vitrine .mm-copy { color: rgba(255,255,255,0.5); }
+.mm.tema-vitrine .mm-rodape-links button { color: rgba(255,255,255,0.85); text-decoration-color: rgba(255,255,255,0.3); }
+.mm.tema-vitrine .mm-copy { border-top-color: rgba(255,255,255,0.08); }
+
+/* menu e sacola */
+.mm.tema-vitrine .mm-menu, .mm.tema-vitrine .mm-gaveta { background: #252229; color: #fff; }
+.mm.tema-vitrine .mm-menu nav button { color: #fff; }
+.mm.tema-vitrine .mm-menu nav button:active, .mm.tema-vitrine .mm-gaveta-remover { background: rgba(255,255,255,0.08); }
+.mm.tema-vitrine .mm-gaveta-item small, .mm.tema-vitrine .mm-limpar { color: rgba(255,255,255,0.6); }
+.mm.tema-vitrine .mm-gaveta-foto { background: rgba(255,255,255,0.06); }
+.mm.tema-vitrine .mm-barra-sacola { background: #1c1a1f; }
+.mm.tema-vitrine .mm-cupom-campo button { background: #fff; color: #111; }
+.mm.tema-vitrine .mm-cupom-ativo { background: rgba(255,102,0,0.15); color: #ffb27a; }
+.mm.tema-vitrine .mm-aviso-flutuante { background: #fff; color: #111; }
+
+/* acessórios por celular */
+.mm.tema-vitrine .mm-celular-escolhido { background: var(--vidro); border: 1px solid rgba(255,255,255,0.08); }
+.mm.tema-vitrine .mm-celular-escolhido small { color: rgba(255,255,255,0.6); }
+.mm.tema-vitrine .mm-kit { background: #1c1a1f; }
+
+/* página do produto: aparelho em pé na prateleira acesa */
+.mm.tema-vitrine .mm-galeria { background: transparent; }
+.mm.tema-vitrine .mm-galeria-item { position: relative; height: 400px; padding: 24px 24px 44px; align-items: flex-end; }
+.mm.tema-vitrine .mm-galeria-item img { filter: drop-shadow(0 22px 24px rgba(0,0,0,0.5)); }
+.mm.tema-vitrine .mm-galeria-item::after { content: ''; position: absolute; left: 18%; right: 18%; bottom: 34px; height: 9px; border-radius: 4px;
+  background: linear-gradient(180deg, #ffd2a8, #ff8a3d); box-shadow: 0 0 10px #ff7a1a, 0 0 26px rgba(255,122,26,0.8), 0 16px 40px 10px rgba(255,110,30,0.28); }
+.mm.tema-vitrine .mm-pontos i { background: rgba(255,255,255,0.3); }
+.mm.tema-vitrine .mm-pontos i.on { background: #fff; }
+.mm.tema-vitrine .mm-detalhe-marca { color: #ffb27a; }
+.mm.tema-vitrine .mm-detalhe-nome { color: #fff; }
+.mm.tema-vitrine .mm-compartilhar { background: rgba(255,255,255,0.1); color: #fff; }
+.mm.tema-vitrine .mm-cor { background: rgba(0,0,0,0.18); border-color: rgba(255,255,255,0.18); color: #fff; }
+.mm.tema-vitrine .mm-cor i { border-color: rgba(255,255,255,0.4); }
+.mm.tema-vitrine .mm-cor.on { border-color: var(--laranja); background: rgba(255,102,0,0.15); color: #fff; }
+.mm.tema-vitrine .mm-spec { background: var(--vidro); border: 1px solid rgba(255,255,255,0.08); }
+.mm.tema-vitrine .mm-spec small { color: rgba(255,255,255,0.55); }
+.mm.tema-vitrine .mm-descricao { color: rgba(255,255,255,0.75); }
+.mm.tema-vitrine .mm-voltar { color: #ffb27a; }
+.mm.tema-vitrine .mm-barra-fixa { background: rgba(28,26,31,0.9); border-top-color: rgba(255,255,255,0.08); }
+.mm.tema-vitrine .mm-btn-sacola-grande { color: #fff; border-color: rgba(255,255,255,0.25); }
+.mm.tema-vitrine .mm-btn-sacola-grande.dentro { background: rgba(255,102,0,0.18); color: #ffb27a; }
+@media (min-width: 760px) {
+  .mm.tema-vitrine .mm-card-foto { height: 210px; }
+  .mm.tema-vitrine .mm-categoria { width: 140px; }
+  .mm.tema-vitrine .mm-categoria span { width: 140px; height: 160px; }
+}
 `
 
 export default App
