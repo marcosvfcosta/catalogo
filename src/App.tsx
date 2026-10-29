@@ -243,6 +243,7 @@ function App() {
   const [sugestoesAbertas, setSugestoesAbertas] = useState(false)
   const [grupoAcessorio, setGrupoAcessorio] = useState('')
   const campoCelularRef = useRef<HTMLInputElement>(null)
+  const [categoriaAcesa, setCategoriaAcesa] = useState<string | null>(null)
   const toqueInicio = useRef<number | null>(null)
   const topoRef = useRef<HTMLDivElement>(null)
 
@@ -989,8 +990,13 @@ function App() {
           {/* ─── Categorias ─── */}
           <div className="mm-categorias">
             {categorias.map(c => (
-              <button key={c.nome} className="mm-categoria"
-                onClick={() => c.capas ? navigate('/capas') : aplicarFiltro({ categoria: c.nome })}>
+              <button key={c.nome} className={categoriaAcesa === c.nome ? 'mm-categoria acesa' : 'mm-categoria'}
+                onClick={() => {
+                  const ir = () => { setCategoriaAcesa(null); if (c.capas) navigate('/capas'); else aplicarFiltro({ categoria: c.nome }) }
+                  if (!TEMA_VITRINE) { ir(); return }
+                  setCategoriaAcesa(c.nome) // acende a luz do nicho e depois abre
+                  setTimeout(ir, 750)
+                }}>
                 <span>{c.img ? <img src={c.img} alt="" /> : <b className="mm-marca-texto">{c.nome.charAt(0)}</b>}</span>
                 {c.nome}
               </button>
@@ -1437,12 +1443,24 @@ body { color: #fff !important; }
 .mm.tema-vitrine .mm-categoria { width: 112px; color: #fff; font-size: 14px; position: relative; }
 .mm.tema-vitrine .mm-categoria span { position: relative; width: 112px; height: 132px; margin-bottom: 8px; border-radius: 14px; padding: 18px 16px 26px; align-items: flex-end;
   background: linear-gradient(180deg, #2a2730, #19171c); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), inset 0 14px 30px rgba(0,0,0,0.6), 0 10px 20px rgba(0,0,0,0.25); }
-.mm.tema-vitrine .mm-categoria span::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+.mm.tema-vitrine .mm-categoria span::before { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0;
   background: radial-gradient(70% 16% at 50% 0%, rgba(255,240,225,0.6), transparent), linear-gradient(180deg, rgba(255,240,225,0.2), transparent 70%);
   clip-path: polygon(35% 0, 65% 0, 100% 100%, 0 100%); }
 .mm.tema-vitrine .mm-categoria span::after { content: ''; position: absolute; left: 14%; right: 14%; bottom: 18px; height: 3px; border-radius: 2px;
-  background: var(--laranja); box-shadow: 0 0 10px #ff7a1a, 0 0 20px rgba(255,122,26,0.7); }
-.mm.tema-vitrine .mm-categoria img { position: relative; z-index: 1; filter: drop-shadow(0 8px 8px rgba(0,0,0,0.55)); }
+  background: rgba(255,255,255,0.14); box-shadow: none; transition: background .3s, box-shadow .3s; }
+/* Ao tocar: a luz "liga" piscando como lâmpada e a prateleira acende em laranja */
+.mm.tema-vitrine .mm-categoria.acesa span::before { animation: mmLuzLiga .7s ease-out forwards; }
+.mm.tema-vitrine .mm-categoria.acesa span::after { animation: mmLinhaLiga .7s ease-out forwards; }
+.mm.tema-vitrine .mm-categoria.acesa img { animation: mmSobeLuz .7s ease-out forwards; }
+.mm.tema-vitrine .mm-categoria.acesa { color: #ffb27a; }
+@keyframes mmLuzLiga { 0% { opacity: 0 } 12% { opacity: .9 } 20% { opacity: .15 } 32% { opacity: 1 } 40% { opacity: .4 } 55%, 100% { opacity: 1 } }
+@keyframes mmLinhaLiga { 0% { background: rgba(255,255,255,0.14); box-shadow: none }
+  30% { background: #ff6600; box-shadow: 0 0 6px #ff7a1a }
+  40% { background: rgba(255,255,255,0.2); box-shadow: none }
+  60%, 100% { background: #ff6600; box-shadow: 0 0 10px #ff7a1a, 0 0 22px rgba(255,122,26,0.8) } }
+@keyframes mmSobeLuz { 0% { transform: none; filter: drop-shadow(0 8px 8px rgba(0,0,0,0.55)) brightness(0.85) }
+  100% { transform: translateY(-4px) scale(1.04); filter: drop-shadow(0 12px 12px rgba(0,0,0,0.5)) brightness(1.08) } }
+.mm.tema-vitrine .mm-categoria img { position: relative; z-index: 1; filter: drop-shadow(0 8px 8px rgba(0,0,0,0.55)) brightness(0.85); }
 
 /* vantagens */
 .mm.tema-vitrine .mm-beneficios div { background: var(--vidro); border: 1px solid rgba(255,255,255,0.08); }

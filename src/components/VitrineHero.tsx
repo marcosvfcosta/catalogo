@@ -143,6 +143,8 @@ export default function VitrineHero({ itens, destaqueId, onVerProduto, titulo = 
     if (!animar && iniciou) setTimeout(() => setAnimar(true), 80)
   }, [foco, tam.w, tam.h, lista.length, iniciou])
 
+  const toque = useRef<{ x: number; y: number } | null>(null)
+  const ultimaRoda = useRef(0)
   if (lista.length === 0) return null
   const atual = lista.find(i => i.id === foco) || null
 
@@ -152,10 +154,31 @@ export default function VitrineHero({ itens, destaqueId, onVerProduto, titulo = 
     else setFoco(id)
   }
 
+  // Deslizar para o lado passa para o próximo/anterior celular (como rolar fotos)
+  function passar(direcao: 1 | -1) {
+    setMexeu(true)
+    const i = foco ? lista.findIndex(x => x.id === foco) : -1
+    const prox = i < 0 ? (direcao === 1 ? 0 : lista.length - 1) : (i + direcao + lista.length) % lista.length
+    setFoco(lista[prox].id)
+  }
+
   return (
     <section className="vt">
       <style>{CSS}</style>
-      <div ref={palcoRef} className="vt-palco" style={{ backgroundImage: `${TEXTURA}, radial-gradient(90% 70% at 50% 18%, #8d8791 0%, #6f6973 55%, #4f4a54 100%)` }}>
+      <div ref={palcoRef} className="vt-palco"
+        onTouchStart={e => { toque.current = { x: e.touches[0].clientX, y: e.touches[0].clientY } }}
+        onTouchEnd={e => {
+          const t = toque.current; toque.current = null
+          if (!t) return
+          const dx = e.changedTouches[0].clientX - t.x, dy = e.changedTouches[0].clientY - t.y
+          if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.3) passar(dx < 0 ? 1 : -1)
+        }}
+        onWheel={e => {
+          if (Math.abs(e.deltaX) < 30 || Math.abs(e.deltaX) < Math.abs(e.deltaY)) return
+          const agora = Date.now(); if (agora - ultimaRoda.current < 700) return
+          ultimaRoda.current = agora; passar(e.deltaX > 0 ? 1 : -1)
+        }}
+        style={{ backgroundImage: `${TEXTURA}, radial-gradient(90% 70% at 50% 18%, #8d8791 0%, #6f6973 55%, #4f4a54 100%)` }}>
         <div ref={paredeRef} className={animar ? 'vt-parede vt-anima' : 'vt-parede'}
           style={{ left: camera.left, top: camera.top, width: camera.largura || 400, fontSize: (camera.largura || 400) / 100, visibility: camera.largura ? 'visible' : 'hidden' }}>
           {prateleiras.map((linha, li) => (
@@ -184,6 +207,12 @@ export default function VitrineHero({ itens, destaqueId, onVerProduto, titulo = 
         {foco && mexeu && (
           <button className="vt-voltar" onClick={() => { setMexeu(true); setFoco(null) }}>✕ Ver vitrine</button>
         )}
+        {foco && lista.length > 1 && (
+          <>
+            <button className="vt-seta vt-seta-esq" aria-label="Anterior" onClick={() => passar(-1)}>‹</button>
+            <button className="vt-seta vt-seta-dir" aria-label="Próximo" onClick={() => passar(1)}>›</button>
+          </>
+        )}
 
         <div className="vt-info" style={{ opacity: atual ? 1 : 0, transform: `translateY(${atual ? 0 : 16}px)`, pointerEvents: atual ? 'auto' : 'none' }}>
           {atual?.detalhe && <span className="vt-etiqueta">{atual.detalhe}</span>}
@@ -191,7 +220,7 @@ export default function VitrineHero({ itens, destaqueId, onVerProduto, titulo = 
           <button onClick={() => atual && onVerProduto(atual.id)}>Ver no catálogo <b>›</b></button>
         </div>
 
-        <p className="vt-dica" style={{ opacity: foco ? 0 : 1 }}>Toque em um celular</p>
+        <p className="vt-dica" style={{ opacity: foco ? 0 : 1 }}>Toque em um celular ou deslize para o lado</p>
       </div>
     </section>
   )
@@ -222,6 +251,12 @@ const CSS = `
 .vt-topo span { font-size: 11px; letter-spacing: 4px; font-weight: 700; color: #ffb27a; }
 .vt-topo h2 { margin: 4px 0 0; font-size: clamp(20px, 5vw, 32px); font-weight: 800; letter-spacing: -0.5px; color: #fff; text-shadow: 0 2px 12px rgba(0,0,0,0.3); }
 .vt-dica { position: absolute; left: 0; right: 0; bottom: 18px; margin: 0; text-align: center; color: rgba(255,255,255,0.85); font-size: 14px; transition: opacity .5s ease; pointer-events: none; }
+.vt-palco { touch-action: pan-y; }
+.vt .vt-seta { position: absolute; top: 42%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 50%; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; font-size: 26px; line-height: 1; color: #fff; font-family: inherit;
+  background: rgba(0,0,0,0.28); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); animation: vtSeta .5s ease .6s both; }
+.vt .vt-seta-esq { left: 10px; } .vt .vt-seta-dir { right: 10px; }
+@keyframes vtSeta { from { opacity: 0 } to { opacity: 1 } }
 .vt .vt-voltar { position: absolute; top: 14px; left: 14px; border: none; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 700;
   color: #fff; background: rgba(0,0,0,0.35); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); padding: 8px 14px; border-radius: 20px; }
 .vt-info { position: absolute; left: 0; right: 0; bottom: 22px; text-align: center; color: #fff; padding: 0 16px; transition: opacity .5s ease .25s, transform .5s ease .25s; }
