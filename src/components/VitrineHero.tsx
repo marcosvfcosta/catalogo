@@ -292,8 +292,8 @@ const CSS = `
   background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.03) 45%, rgba(0,0,0,0.7)); }
 .vn-chao::before { content: ''; position: absolute; left: 3%; right: 3%; top: 0; height: 2px; background: rgba(255,255,255,0.75);
   box-shadow: 0 0 10px rgba(255,255,255,0.55); }
-.vn-chao img { position: absolute; left: 50%; top: 3px; width: 62%; transform: translateX(-50%) scaleY(-1); opacity: .2; filter: blur(2px); }
-.vn-foto { position: absolute; left: 50%; bottom: 9%; width: 62%; height: 54%; object-fit: contain; object-position: bottom;
+.vn-chao img { position: absolute; left: 50%; top: 3px; width: 90%; transform: translateX(-50%) scaleY(-1); opacity: .2; filter: blur(2px); }
+.vn-foto { position: absolute; left: 50%; bottom: 9%; width: 90%; height: 64%; object-fit: contain; object-position: bottom;
   transform: translateX(-50%); transform-origin: 50% 100%; transition: transform .45s cubic-bezier(.2,.8,.2,1), filter .8s ease;
   filter: drop-shadow(0 14px 14px rgba(0,0,0,0.6)) brightness(1.12); }
 .vn-laranja { position: absolute; left: 3%; right: 3%; bottom: 9%; height: 3px; border-radius: 2px; opacity: 0; transition: opacity .35s ease;
