@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type TouchEvent as ToqueEvento } from 'react'
 
 // ─── Abertura "parede de nichos" (estilo loja de perfumes) ───────────────────
 // Nichos cavados numa parede de rocha escura. Dentro de cada nicho: fundo de pedra
@@ -107,6 +107,8 @@ export default function VitrineHero({ itens, destaqueId, onVerProduto, onInteres
   const [largo, setLargo] = useState(false)
   const fimRolagem = useRef(0)
   const travado = useRef(0)
+  const [dedo, setDedo] = useState<string | null>(null)          // nicho embaixo do dedo/mouse: a luz acende
+  const ponto = useRef<{ x: number; y: number } | null>(null)    // onde o dedo está na tela
 
   // Começa com o destaque (ou o 1º) no meio
   useEffect(() => {
@@ -169,7 +171,25 @@ export default function VitrineHero({ itens, destaqueId, onVerProduto, onInteres
     return melhor
   }
 
+  // Descobre qual nicho está embaixo do dedo (ou do mouse)
+  function nichoNoPonto(x: number, y: number) {
+    const el = document.elementFromPoint(x, y)?.closest('.vn-coluna') as HTMLElement | null
+    const id = el && trilhoRef.current?.contains(el) ? el.dataset.id || null : null
+    setDedo(atual => (atual === id ? atual : id))
+  }
+  function dedoDesceu(e: ToqueEvento) {
+    if (escolhido) return
+    const t = e.touches[0]; ponto.current = { x: t.clientX, y: t.clientY }; nichoNoPonto(t.clientX, t.clientY)
+  }
+  function dedoMexeu(e: ToqueEvento) {
+    if (escolhido || !ponto.current) return
+    const t = e.touches[0]; ponto.current = { x: t.clientX, y: t.clientY }; nichoNoPonto(t.clientX, t.clientY)
+  }
+  function dedoSaiu() { ponto.current = null; setDedo(null) }
+
   function aoRolar() {
+    // dedo parado enquanto a vitrine passa embaixo dele: a luz vai acendendo em cada celular que passa
+    if (ponto.current && !escolhido) nichoNoPonto(ponto.current.x, ponto.current.y)
     const id = medirMeio()
     if (Date.now() < travado.current) return
     // Com um celular aberto, deslizar para o lado passa para o próximo (já com as especificações)
@@ -199,9 +219,14 @@ export default function VitrineHero({ itens, destaqueId, onVerProduto, onInteres
       {escolhido && <button className="vn-fechar" onClick={() => setEscolhido(null)} aria-label="Voltar">✕</button>}
 
       <div className="vn-palco">
-      <div ref={trilhoRef} className="vn-trilho" onScroll={aoRolar}>
-        {lista.map(it => {
-          const estado = escolhido ? (escolhido === it.id ? 'escolhido' : 'apagado') : ativo === it.id ? 'ativo' : ''
+      <div ref={trilhoRef} className="vn-trilho" onScroll={aoRolar}
+        onTouchStart={dedoDesceu} onTouchMove={dedoMexeu} onTouchEnd={dedoSaiu} onTouchCancel={dedoSaiu}
+        onPointerMove={e => { if (!escolhido && e.pointerType === 'mouse') nichoNoPonto(e.clientX, e.clientY) }}
+        onPointerLeave={e => { if (e.pointerType === 'mouse') dedoSaiu() }}>
+        {lista.map((it, i) => {
+          const iDedo = dedo ? lista.findIndex(x => x.id === dedo) : -99
+          const estado = escolhido ? (escolhido === it.id ? 'escolhido' : 'apagado')
+            : i === iDedo ? 'luz' : Math.abs(i - iDedo) === 1 ? 'meia' : 'fraca'
           return <Nicho key={it.id} it={it} estado={estado}
             onToque={() => tocar(it.id, trilhoRef.current?.querySelector(`[data-id="${it.id}"]`) as HTMLElement | null)} />
         })}
@@ -301,11 +326,28 @@ const CSS = `
 .vn-nome { margin: 8px 0 0; text-align: center; font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.45); letter-spacing: .3px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .4s; }
 
-/* no meio da tela (deslizando): cresce e acende laranja */
-.vn-coluna.ativo .vn-foto, .vn-coluna.escolhido .vn-foto { transform: translateX(-50%) scale(1.07); }
-.vn-coluna.ativo .vn-laranja, .vn-coluna.escolhido .vn-laranja { opacity: 1; }
-.vn-coluna.ativo .vn-esq, .vn-coluna.escolhido .vn-esq { background: linear-gradient(180deg, transparent, #ffb27a 25%, #fff 55%, #ff7a1a 85%, transparent); box-shadow: 0 0 12px 2px rgba(255,122,26,0.8), 10px 0 40px 6px rgba(255,122,26,0.3); }
-.vn-coluna.ativo .vn-nome, .vn-coluna.escolhido .vn-nome { color: #fff; }
+/* Luz fraca em todos; o dedo passando acende o nicho (e um pouco os vizinhos), igual ao vídeo */
+.vn-coluna .vn-led, .vn-coluna .vn-cone, .vn-coluna .vn-costas, .vn-coluna .vn-tinta, .vn-coluna .vn-lado { transition: opacity .9s ease; }
+.vn-coluna .vn-foto { transition: transform .45s cubic-bezier(.2,.8,.2,1), filter .9s ease; }
+.vn-coluna.fraca .vn-led { opacity: .3; }
+.vn-coluna.fraca .vn-cone { opacity: .18; }
+.vn-coluna.fraca .vn-costas { opacity: .3; }
+.vn-coluna.fraca .vn-tinta, .vn-coluna.fraca .vn-lado { opacity: .2; }
+.vn-coluna.fraca .vn-foto { filter: drop-shadow(0 14px 14px rgba(0,0,0,0.6)) brightness(0.62); }
+.vn-coluna.meia .vn-led { opacity: .65; }
+.vn-coluna.meia .vn-cone { opacity: .5; }
+.vn-coluna.meia .vn-costas { opacity: .6; }
+.vn-coluna.meia .vn-tinta, .vn-coluna.meia .vn-lado { opacity: .45; }
+.vn-coluna.meia .vn-foto { filter: drop-shadow(0 14px 14px rgba(0,0,0,0.6)) brightness(0.85); }
+/* acendendo: mais rápido para subir do que para apagar */
+.vn-coluna.luz .vn-led, .vn-coluna.luz .vn-cone, .vn-coluna.luz .vn-costas, .vn-coluna.luz .vn-tinta, .vn-coluna.luz .vn-lado { transition: opacity .4s ease; }
+.vn-coluna.luz .vn-foto { transition: transform .35s cubic-bezier(.2,.8,.2,1), filter .4s ease; }
+
+/* embaixo do dedo (ou escolhido): cresce e acende laranja */
+.vn-coluna.luz .vn-foto, .vn-coluna.escolhido .vn-foto { transform: translateX(-50%) scale(1.07); }
+.vn-coluna.luz .vn-laranja, .vn-coluna.escolhido .vn-laranja { opacity: 1; }
+.vn-coluna.luz .vn-esq, .vn-coluna.escolhido .vn-esq { background: linear-gradient(180deg, transparent, #ffb27a 25%, #fff 55%, #ff7a1a 85%, transparent); box-shadow: 0 0 12px 2px rgba(255,122,26,0.8), 10px 0 40px 6px rgba(255,122,26,0.3); }
+.vn-coluna.luz .vn-nome, .vn-coluna.escolhido .vn-nome { color: #fff; }
 
 /* tocou: a luz dos outros apaga */
 .vn-coluna.apagado { filter: brightness(0.28) saturate(0.5); }
