@@ -108,6 +108,65 @@ const ehIpad = typeof navigator !== 'undefined' && (
 const semAcento = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 const mesmaMarca = (a?: string | null, b?: string | null) => !!a && !!b && semAcento(a) === semAcento(b)
 
+// Tira o fundo branco (e as bordinhas brancas) das fotos das categorias na parede cinza.
+// Apaga só o branco que encosta na borda da foto, então partes brancas do produto ficam.
+const cacheSemBranco: Record<string, string> = {}
+function FotoSemFundoBranco({ src }: { src: string }) {
+  const [url, setUrl] = useState(cacheSemBranco[src] || '')
+  useEffect(() => {
+    if (cacheSemBranco[src]) { setUrl(cacheSemBranco[src]); return }
+    let vivo = true
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      try {
+        const esc = Math.min(1, 500 / Math.max(img.naturalWidth, img.naturalHeight))
+        const w = Math.max(1, Math.round(img.naturalWidth * esc)), h = Math.max(1, Math.round(img.naturalHeight * esc))
+        const c = document.createElement('canvas'); c.width = w; c.height = h
+        const ctx = c.getContext('2d', { willReadFrequently: true })
+        if (!ctx) throw 0
+        ctx.drawImage(img, 0, 0, w, h)
+        const d = ctx.getImageData(0, 0, w, h), px = d.data
+        const claro = (i: number) => px[i + 3] < 30 || (px[i] > 222 && px[i + 1] > 222 && px[i + 2] > 222)
+        const visto = new Uint8Array(w * h), fila: number[] = []
+        for (let x = 0; x < w; x++) { fila.push(x, (h - 1) * w + x) }
+        for (let y = 0; y < h; y++) { fila.push(y * w, y * w + w - 1) }
+        while (fila.length) {
+          const k = fila.pop()!
+          if (visto[k]) continue
+          visto[k] = 1
+          if (!claro(k * 4)) continue
+          px[k * 4 + 3] = 0
+          const x = k % w, y = (k - x) / w
+          if (x > 0) fila.push(k - 1); if (x < w - 1) fila.push(k + 1)
+          if (y > 0) fila.push(k - w); if (y < h - 1) fila.push(k + w)
+        }
+        // suaviza a borda: pixel claro vizinho de transparente fica meio transparente
+        for (let k = 0; k < w * h; k++) {
+          if (px[k * 4 + 3] === 0) continue
+          const x = k % w
+          const viz = [k - 1, k + 1, k - w, k + w].some(n => n >= 0 && n < w * h && Math.abs((n % w) - x) <= 1 && px[n * 4 + 3] === 0)
+          if (viz && px[k * 4] > 190 && px[k * 4 + 1] > 190 && px[k * 4 + 2] > 190) px[k * 4 + 3] = 90
+        }
+        ctx.putImageData(d, 0, 0)
+        // recorta a sobra transparente, assim o produto encosta na prateleira
+        let x0 = w, y0 = h, x1 = -1, y1 = -1
+        for (let k = 0; k < w * h; k++) if (px[k * 4 + 3] > 20) { const x = k % w, y = (k - x) / w; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y }
+        let saida = c
+        if (x1 > x0 && y1 > y0) {
+          saida = document.createElement('canvas'); saida.width = x1 - x0 + 1; saida.height = y1 - y0 + 1
+          saida.getContext('2d')?.drawImage(c, x0, y0, saida.width, saida.height, 0, 0, saida.width, saida.height)
+        }
+        saida.toBlob(b => { if (!b || !vivo) return; cacheSemBranco[src] = URL.createObjectURL(b); setUrl(cacheSemBranco[src]) }, 'image/png')
+      } catch { if (vivo) { cacheSemBranco[src] = src; setUrl(src) } }
+    }
+    img.onerror = () => { if (vivo) setUrl(src) }
+    img.src = src
+    return () => { vivo = false }
+  }, [src])
+  return url ? <img src={url} alt="" /> : <img src={src} alt="" style={{ opacity: 0 }} />
+}
+
 function coresDoProduto(cor?: string) {
   if (!cor) return []
   return cor.split(/[,/;]| e /).map(c => c.trim()).filter(Boolean).slice(0, 5)
@@ -1006,7 +1065,7 @@ function App() {
                   setCategoriaAcesa(c.nome) // acende a luz do nicho e depois abre
                   setTimeout(ir, 750)
                 }}>
-                <span>{c.img ? <img src={c.img} alt="" /> : <b className="mm-marca-texto">{c.nome.charAt(0)}</b>}</span>
+                <span>{c.img ? (TEMA_VITRINE ? <FotoSemFundoBranco src={c.img} /> : <img src={c.img} alt="" />) : <b className="mm-marca-texto">{c.nome.charAt(0)}</b>}</span>
                 {c.nome}
               </button>
             ))}
@@ -1450,7 +1509,7 @@ body { color: #fff !important; }
 /* categorias = produtos na parede em prateleiras de acrílico (igual vitrine de tênis) */
 .mm.tema-vitrine .mm-categorias { gap: 14px; padding-top: 20px; }
 .mm.tema-vitrine .mm-categoria { width: 112px; color: #fff; font-size: 14px; position: relative; }
-.mm.tema-vitrine .mm-categoria span { position: relative; width: 112px; height: 124px; margin-bottom: 12px; border-radius: 0; padding: 6px 8px 0; overflow: visible;
+.mm.tema-vitrine .mm-categoria span { position: relative; width: 112px; height: 124px; margin-bottom: 12px; border-radius: 0; padding: 18px 20px 0; overflow: visible;
   align-items: flex-end; background: none; box-shadow: none; }
 /* prateleira de acrílico */
 .mm.tema-vitrine .mm-categoria span::after { content: ''; position: absolute; left: 2%; right: 2%; bottom: -8px; height: 7px; border-radius: 3px;
@@ -1459,7 +1518,8 @@ body { color: #fff !important; }
 /* brilho laranja embaixo da prateleira (só quando acende) */
 .mm.tema-vitrine .mm-categoria span::before { content: ''; position: absolute; left: -22%; right: -22%; top: calc(100% + 2px); height: 70px; pointer-events: none; opacity: 0;
   background: radial-gradient(50% 60% at 50% 0%, rgba(255,110,30,0.75), rgba(255,90,20,0.25) 45%, transparent 75%); filter: blur(4px); }
-.mm.tema-vitrine .mm-categoria img { position: relative; z-index: 1; mix-blend-mode: multiply !important; transform-origin: 50% 100%;
+.mm.tema-vitrine .mm-categoria img { position: relative; z-index: 1; object-position: 50% 100%; transform-origin: 50% 100%;
+  filter: drop-shadow(0 6px 6px rgba(0,0,0,0.35));
   transition: transform .22s ease; }
 .mm.tema-vitrine .mm-categoria:active img { transform: translateY(-4px) scale(1.08); }
 /* Ao tocar: a prateleira acende em laranja e o produto sobe um pouco */
