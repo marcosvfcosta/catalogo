@@ -167,25 +167,35 @@ export async function ajustarFoto(original: File): Promise<FotoAjustada> {
       // ── 3. Mantém só os blocos grandes (aparelho), descarta textos e logos soltos
       const rotulo = new Int32Array(w * h)
       const tamanhos: number[] = [0]
+      const caixas: number[][] = [[0, 0, 0, 0]] // minX, minY, maxX, maxY de cada bloco
       for (let p0 = 0; p0 < w * h; p0++) {
         if (fundo[p0] || rotulo[p0]) continue
         const id = tamanhos.length
         let qtd = 0
         let a = 0, z = 0
+        let bx0 = w, by0 = h, bx1 = 0, by1 = 0
         fila[z++] = p0; rotulo[p0] = id
         while (a < z) {
           const p = fila[a++]; qtd++
           const x = p % w, y = (p - x) / w
+          if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y
           const viz = [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, y > 0 ? p - w : -1, y < h - 1 ? p + w : -1]
           for (const q of viz) {
             if (q >= 0 && !fundo[q] && !rotulo[q]) { rotulo[q] = id; fila[z++] = q }
           }
         }
         tamanhos.push(qtd)
+        caixas.push([bx0, by0, bx1, by1])
       }
       const maior = Math.max(0, ...tamanhos)
       if (maior > 0) {
-        const manter = tamanhos.map(t => t >= maior * 0.15)
+        // Mantém o produto e as peças dele (cabo, segundo conector, fone...): blocos médios ou compridos.
+        // Some só o que é miudinho e baixo (letras, preço, logo de site).
+        const manter = tamanhos.map((t, i) => {
+          const [x0, y0, x1, y1] = caixas[i]
+          const comprido = (y1 - y0) > h * 0.18 || (x1 - x0) > w * 0.18
+          return t >= maior * 0.04 || (comprido && t >= maior * 0.01)
+        })
         for (let p = 0; p < w * h; p++) {
           if (!fundo[p] && !manter[rotulo[p]]) fundo[p] = 1
         }
