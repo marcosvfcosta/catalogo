@@ -350,11 +350,21 @@ export default function Admin() {
     carregarCapas()
   }
 
-  async function iaFotoEdicao(url: string, fotoId?: string) {
-    if (!editando || !confirm(AVISO_IA)) return
-    setIaTrabalhando(url)
+  // 🪄 Ajuste grátis (no próprio navegador): tira o fundo liso/as pontas brancas e centraliza
+  async function ajusteGratis(url: string) {
+    const r = await fetch(url, { cache: 'no-store' })
+    if (!r.ok) throw new Error('Não consegui abrir a foto')
+    const blob = await r.blob()
+    const aj = await ajustarFoto(new File([blob], 'foto.' + ((blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg')), { type: blob.type || 'image/png' }))
+    if (!aj.ajustou || !aj.semFundo) throw new Error('Não achei fundo branco/pontas pra tirar nessa foto (fundo com cenário ou já está limpa). Se precisar, use o ✨ Tirar fundo.')
+    return enviarOriginal(aj.arquivo, 'aj')
+  }
+
+  async function iaFotoEdicao(url: string, fotoId?: string, modo: 'ia' | 'ajuste' = 'ia') {
+    if (!editando || (modo === 'ia' && !confirm(AVISO_IA))) return
+    setIaTrabalhando(url + (modo === 'ajuste' ? '#aj' : ''))
     try {
-      const nova = await fundoComIA(url, '1:1')
+      const nova = modo === 'ajuste' ? await ajusteGratis(url) : await fundoComIA(url, '1:1')
       if (fotoId) await supabase.from('produto_fotos').update({ url: nova }).eq('id', fotoId)
       else {
         await supabase.from('produtos_catalogo').update({ foto_url: nova }).eq('id', editando.id)
@@ -1004,8 +1014,14 @@ export default function Admin() {
   const fotosAtivas = editandoAparelho ? editandoAparelho.fotos : fotosAparelho
 
   // Botões "✨ Tirar fundo (IA)" e "↺ Voltar" embaixo de cada foto
-  const botoesIA = (url: string, aoUsar: () => void, aoVoltar: () => void) => (
+  const botoesIA = (url: string, aoUsar: () => void, aoVoltar: () => void, aoAjustar?: () => void) => (
     <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+      {aoAjustar && (
+        <button onClick={aoAjustar} disabled={!!iaTrabalhando} title="Grátis: tira as pontas/fundo branco e centraliza"
+          style={{ ...btnIA, background: '#0f2417', borderColor: '#25D366', color: '#7dffb0', opacity: iaTrabalhando && iaTrabalhando !== url + '#aj' ? 0.4 : 1 }}>
+          {iaTrabalhando === url + '#aj' ? '⏳...' : '🪄 Ajustar'}
+        </button>
+      )}
       <button onClick={aoUsar} disabled={!!iaTrabalhando} style={{ ...btnIA, opacity: iaTrabalhando && iaTrabalhando !== url ? 0.4 : 1 }}>
         {iaTrabalhando === url ? '⏳ IA...' : '✨ Tirar fundo'}
       </button>
@@ -1090,7 +1106,7 @@ export default function Admin() {
                     <button onClick={excluirCapaEdicao} style={btnRemoverFoto}>✕</button>
                     {originais[editando.foto_url] && <button onClick={() => usarOriginalEdicao(editando.foto_url!)} style={btnOriginal}>↺ original</button>}
                   </div>
-                  {botoesIA(editando.foto_url, () => iaFotoEdicao(editando.foto_url!), () => voltarFotoEdicao(editando.foto_url!))}
+                  {botoesIA(editando.foto_url, () => iaFotoEdicao(editando.foto_url!), () => voltarFotoEdicao(editando.foto_url!), () => iaFotoEdicao(editando.foto_url!, undefined, 'ajuste'))}
                   <select style={seletorCor} value={editando.foto_cor || ''} onChange={e => definirCorFoto(null, e.target.value)}>
                     <option value="">Cor?</option>
                     {Array.from(new Set([...coresDoProduto(editando), editando.foto_cor || ''].filter(Boolean))).map(c => <option key={c}>{c}</option>)}
@@ -1105,7 +1121,7 @@ export default function Admin() {
                     <button onClick={() => excluirFotoExtra(foto.id, editando.id)} style={btnRemoverFoto}>✕</button>
                     {originais[foto.url] && <button onClick={() => usarOriginalEdicao(foto.url, foto.id)} style={btnOriginal}>↺ original</button>}
                   </div>
-                  {botoesIA(foto.url, () => iaFotoEdicao(foto.url, foto.id), () => voltarFotoEdicao(foto.url, foto.id))}
+                  {botoesIA(foto.url, () => iaFotoEdicao(foto.url, foto.id), () => voltarFotoEdicao(foto.url, foto.id), () => iaFotoEdicao(foto.url, foto.id, 'ajuste'))}
                   <select style={seletorCor} value={foto.cor || ''} onChange={e => definirCorFoto(foto, e.target.value)}>
                     <option value="">Cor?</option>
                     {Array.from(new Set([...coresDoProduto(editando), foto.cor || ''].filter(Boolean))).map(c => <option key={c}>{c}</option>)}

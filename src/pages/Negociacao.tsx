@@ -428,6 +428,47 @@ export default function Negociacao() {
     if (aba === 'negociacao' || aba === 'tabela') carregarTabela()
   }, [aba])
 
+  // Venda fechada → cliente vai sozinho para "Retornos" com aviso em 30 dias
+  // (se o mesmo WhatsApp já estiver lá, só atualiza a última compra e marca o próximo contato para daqui 30 dias)
+  async function enviarParaRetornos(c: { nome: string; telefone: string; modelo?: string | null; cor?: string | null }) {
+    const digitos = (c.telefone || '').replace(/\D/g, '')
+    if (!c.nome?.trim() || digitos.length < 10) return 'sem-telefone'
+    const comprou = [c.modelo, c.cor].filter(Boolean).join(' ').trim() || null
+    const proximo = somarDias(hojeBR(), 30)
+    const { data: ativos } = await supabase.from('catalogo_retornos').select('id, telefone').eq('ativo', true)
+    const existente = (ativos || []).find((x: { telefone: string }) => (x.telefone || '').replace(/\D/g, '').slice(-11) === digitos.slice(-11))
+    let lista = modelosCel
+    if (!lista.length) {
+      const { data: m } = await supabase.from('capas_modelos').select('id, marca, modelo').order('modelo')
+      lista = (m || []) as ModeloCel[]; setModelosCel(lista)
+    }
+    const nomeModelo = (c.modelo || '').trim().toLowerCase()
+    const modeloCapa = nomeModelo ? lista.find(m => m.modelo.toLowerCase() === nomeModelo || `${m.marca} ${m.modelo}`.toLowerCase() === nomeModelo) : undefined
+    let erro
+    if (existente) {
+      ({ error: erro } = await supabase.from('catalogo_retornos').update({
+        ultima_compra: comprou, ultima_compra_em: hojeBR(), intervalo_dias: 30, proximo_contato: proximo,
+        ...(c.modelo ? { modelo: c.modelo.trim(), modelo_id: modeloCapa?.id || null } : {}),
+      }).eq('id', (existente as { id: string }).id))
+    } else {
+      ({ error: erro } = await supabase.from('catalogo_retornos').insert([{
+        nome: c.nome.trim(), telefone: c.telefone.trim(), modelo: (c.modelo || 'Não informado').trim(), modelo_id: modeloCapa?.id || null,
+        intervalo_dias: 30, proximo_contato: proximo, aceita: true, observacao: 'Entrou automático ao fechar a venda',
+        ultima_compra: comprou, ultima_compra_em: comprou ? hojeBR() : null,
+      }]))
+    }
+    if (erro) { console.error('Retornos:', erro); return 'erro' }
+    carregarRetornos()
+    return existente ? 'atualizado' : 'novo'
+  }
+
+  function avisoRetorno(res: string) {
+    return res === 'novo' ? '\n\n✅ Cliente foi para Retornos. Aviso em 30 dias.'
+      : res === 'atualizado' ? '\n\n✅ Cliente já estava em Retornos: atualizei a última compra e o aviso para daqui 30 dias.'
+      : res === 'sem-telefone' ? '\n\n⚠️ Sem WhatsApp válido: não foi para Retornos.'
+      : '\n\n⚠️ Não consegui colocar em Retornos.'
+  }
+
   // ─── Retornos ───
   async function carregarRetornos() {
     const { data } = await supabase.from('catalogo_retornos').select('*').eq('ativo', true).order('proximo_contato')
@@ -769,9 +810,13 @@ export default function Negociacao() {
       await supabase.from('entradas').update({ status: 'Usada' }).eq('id', entradaVinculada.id)
       carregarEntradas()
     }
+    // Fechou a venda (e antes não estava fechada): vai para Retornos com aviso em 30 dias
+    const jaEraFechada = !!editandoId && clientes.some(c => c.id === editandoId && c.status === 'Venda Fechada')
+    const resRetorno = !error && status === 'Venda Fechada' && !jaEraFechada
+      ? await enviarParaRetornos({ nome: form.nome, telefone: form.telefone, modelo: form.modelo, cor: form.cor }) : ''
     setSalvando(false)
     if (error) { alert('Erro: ' + JSON.stringify(error)); return }
-    alert(editandoId ? 'Negociação atualizada!' : 'Negociação salva!')
+    alert((editandoId ? 'Negociação atualizada!' : 'Negociação salva!') + (resRetorno ? avisoRetorno(resRetorno) : ''))
     limpar()
   }
 
@@ -854,7 +899,12 @@ export default function Negociacao() {
   }
 
   async function alterarStatus(id: string, status: string) {
-    await supabase.from('negociacoes').update({ status }).eq('id', id)
+    const c = clientes.find(x => x.id === id)
+    const { error } = await supabase.from('negociacoes').update({ status }).eq('id', id)
+    if (!error && status === 'Venda Fechada' && c && c.status !== 'Venda Fechada') {
+      const res = await enviarParaRetornos(c)
+      alert('Venda fechada!' + avisoRetorno(res))
+    }
     carregarClientes(); setClienteSelecionado(null)
   }
 

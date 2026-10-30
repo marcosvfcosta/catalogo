@@ -66,14 +66,27 @@ export async function ajustarFoto(original: File): Promise<FotoAjustada> {
       Math.min(c.r, c.g, c.b) > 170 && Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b) < 40
     const principal = ordenados[0]
     const principalOk = !!principal && (claroNeutro(principal) ? principal.parte >= 0.35 : principal.parte >= 0.85)
-    const coresFundo = principalOk
+    const brancoPuro = (c: { r: number; g: number; b: number }) =>
+      Math.min(c.r, c.g, c.b) > 228 && Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b) < 25
+    const distDe = (cores: number[][], i: number) => Math.min(...cores.map(([r, g, b]) =>
+      Math.abs(px[i] - r) + Math.abs(px[i + 1] - g) + Math.abs(px[i + 2] - b)))
+    const fracaoBorda = (cores: number[][], tol: number) => cores.length ? amostras.filter(i => distDe(cores, i) < tol).length / amostras.length : 0
+
+    // Jeito normal: fundo liso cobrindo boa parte da borda
+    const coresNormais = principalOk
       ? [principal, ...ordenados.slice(1, 3).filter(c => c.parte >= 0.08 && claroNeutro(c))].map(c => [c.r, c.g, c.b])
       : []
-    const dist = (i: number) => Math.min(...coresFundo.map(([r, g, b]) =>
-      Math.abs(px[i] - r) + Math.abs(px[i + 1] - g) + Math.abs(px[i + 2] - b)))
     // Fundo claro: basta 40% da borda (o aparelho pode encostar nas laterais). Fundo colorido: precisa de 75%.
     const minimoBorda = principal && claroNeutro(principal) ? 0.4 : 0.75
-    const bordasLisas = coresFundo.length > 0 && amostras.filter(i => dist(i) < TOLERANCIA).length / amostras.length > minimoBorda
+    const normalOk = fracaoBorda(coresNormais, TOLERANCIA) > minimoBorda
+    // Aparelho ocupando quase a foto toda (encosta nas bordas) e só sobram pontas/faixas brancas:
+    // apaga só o branco bem puro que encosta na borda (as "pontas")
+    const coresPontas = ordenados.filter(c => brancoPuro(c) && c.parte >= 0.02).slice(0, 3).map(c => [c.r, c.g, c.b])
+    const soPontas = !normalOk && fracaoBorda(coresPontas, 26) > 0.02
+    const coresFundo = normalOk ? coresNormais : soPontas ? coresPontas : []
+    const TOL = soPontas ? 26 : TOLERANCIA
+    const dist = (i: number) => distDe(coresFundo, i)
+    const bordasLisas = normalOk || soPontas
 
     const fundo = new Uint8Array(w * h) // 1 = fundo
     if (bordasLisas) {
@@ -82,7 +95,7 @@ export async function ajustarFoto(original: File): Promise<FotoAjustada> {
       let ini = 0, fim = 0
       const tentar = (p: number) => {
         if (fundo[p]) return
-        if (dist(p * 4) < TOLERANCIA) { fundo[p] = 1; fila[fim++] = p }
+        if (dist(p * 4) < TOL) { fundo[p] = 1; fila[fim++] = p }
       }
       for (let x = 0; x < w; x++) { tentar(x); tentar((h - 1) * w + x) }
       for (let y = 0; y < h; y++) { tentar(y * w); tentar(y * w + w - 1) }
@@ -93,6 +106,13 @@ export async function ajustarFoto(original: File): Promise<FotoAjustada> {
         if (x < w - 1) tentar(p + 1)
         if (y > 0) tentar(p - w)
         if (y < h - 1) tentar(p + w)
+      }
+
+      // Só pontas: se apagou demais (ex: aparelho branco encostando na borda), desiste e usa a original
+      if (soPontas) {
+        let apagados = 0
+        for (let p = 0; p < w * h; p++) apagados += fundo[p]
+        if (apagados > w * h * 0.35) return { arquivo: original, ajustou: false, semFundo: false }
       }
 
       // ── 3. Mantém só os blocos grandes (aparelho), descarta textos e logos soltos
