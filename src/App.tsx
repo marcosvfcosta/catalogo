@@ -1463,12 +1463,12 @@ const PAREDE = `url("data:image/svg+xml,${encodeURIComponent(
 )}")`
 
 const CSS_VITRINE = `
-html, body { background: #4e4953 !important; }
+html, body { background: #0b0b0d !important; }
 body { color: #fff !important; }
 .mm.tema-vitrine { --tinta: #ffffff; --cinza: rgba(255,255,255,0.08); --borda: rgba(255,255,255,0.12); --vidro: rgba(26,24,29,0.55);
-  color: #fff; background-color: #5f5964;
-  background-image: ${PAREDE}, linear-gradient(180deg, #7a747e 0%, #6a646e 25%, #5d5762 65%, #4e4953 100%);
-  background-size: 220px 220px, 100% 100%; background-attachment: scroll, fixed; }
+  color: #fff; background-color: #0e0e10;
+  background-image: linear-gradient(180deg, rgba(0,0,0,0.25), rgba(0,0,0,0.55)), url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='420' height='420'><filter id='f' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='0.02' numOctaves='5' seed='7' stitchTiles='stitch' result='n'/><feDiffuseLighting in='n' surfaceScale='7' lighting-color='rgb(48,48,54)'><feDistantLight azimuth='235' elevation='38'/></feDiffuseLighting></filter><rect width='100%' height='100%' filter='url(#f)'/></svg>`)}"); background-size: 100% 100%, 420px 420px !important;
+  background-attachment: scroll !important; }
 .mm.tema-vitrine img { mix-blend-mode: normal !important; }
 
 /* faixa e topo */
@@ -1511,7 +1511,7 @@ body { color: #fff !important; }
 /* brilho laranja embaixo da prateleira (só quando acende) */
 .mm.tema-vitrine .mm-categoria span::before { content: ''; position: absolute; left: -22%; right: -22%; top: calc(100% + 2px); height: 34px; pointer-events: none; opacity: 0;
   background: radial-gradient(50% 60% at 50% 0%, rgba(255,110,30,0.75), rgba(255,90,20,0.25) 45%, transparent 75%); filter: blur(4px); }
-.mm.tema-vitrine .mm-categoria img { position: relative; z-index: 1; mix-blend-mode: multiply !important; transform-origin: 50% 100%;
+.mm.tema-vitrine .mm-categoria img { position: relative; z-index: 1; mix-blend-mode: normal !important; transform-origin: 50% 100%;
   transition: transform .22s ease; }
 .mm.tema-vitrine .mm-categoria:active img { transform: translateY(-4px) scale(1.08); }
 /* Ao tocar: a prateleira acende em laranja e o produto sobe um pouco */

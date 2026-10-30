@@ -253,8 +253,8 @@ const CSS = `
 .vn-largo.vn-aberto .vn-nicho { height: 470px; }
 /* parede de pedra do fundo: só aparece onde a luz bate (cone que abre de cima para baixo) */
 .vn-costas { position: absolute; inset: 0; background-image: ${PEDRA_CLARA}; background-size: 180px 180px; background-position: center top;
-  -webkit-mask-image: radial-gradient(85% 110% at 50% -4%, #000 0%, rgba(0,0,0,0.92) 35%, rgba(0,0,0,0.6) 65%, rgba(0,0,0,0.25) 88%, rgba(0,0,0,0.1) 100%);
-  mask-image: radial-gradient(85% 110% at 50% -4%, #000 0%, rgba(0,0,0,0.92) 35%, rgba(0,0,0,0.6) 65%, rgba(0,0,0,0.25) 88%, rgba(0,0,0,0.1) 100%);
+  -webkit-mask-image: radial-gradient(46% 80% at 50% 0%, #000 0%, rgba(0,0,0,0.85) 30%, rgba(0,0,0,0.4) 62%, rgba(0,0,0,0.14) 85%, rgba(0,0,0,0.06) 100%);
+  mask-image: radial-gradient(46% 80% at 50% 0%, #000 0%, rgba(0,0,0,0.85) 30%, rgba(0,0,0,0.4) 62%, rgba(0,0,0,0.14) 85%, rgba(0,0,0,0.06) 100%);
   transition: opacity .8s ease; }
 /* cor da luz (tom do aparelho) */
 .vn-tinta { position: absolute; inset: 0; mix-blend-mode: color; opacity: .5;
