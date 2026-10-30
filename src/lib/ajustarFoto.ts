@@ -74,7 +74,9 @@ export async function ajustarFoto(original: File): Promise<FotoAjustada> {
 
     // Jeito normal: fundo liso cobrindo boa parte da borda
     const coresNormais = principalOk
-      ? [principal, ...ordenados.slice(1, 3).filter(c => c.parte >= 0.08 && claroNeutro(c))].map(c => [c.r, c.g, c.b])
+      // cores extras de fundo (ex: barra cinza de print). Se o fundo é branco puro, só aceita outras quase brancas,
+      // senão um produto cinza/branco encostando na borda (cabo, fone) seria apagado como se fosse fundo
+      ? [principal, ...ordenados.slice(1, 3).filter(c => c.parte >= 0.08 && claroNeutro(c) && (!brancoPuro(principal) || Math.min(c.r, c.g, c.b) > 240))].map(c => [c.r, c.g, c.b])
       : []
     // Fundo claro: basta 40% da borda (o aparelho pode encostar nas laterais). Fundo colorido: precisa de 75%.
     const minimoBorda = principal && claroNeutro(principal) ? 0.4 : 0.75
@@ -84,7 +86,9 @@ export async function ajustarFoto(original: File): Promise<FotoAjustada> {
     const coresPontas = ordenados.filter(c => brancoPuro(c) && c.parte >= 0.02).slice(0, 3).map(c => [c.r, c.g, c.b])
     const soPontas = !normalOk && fracaoBorda(coresPontas, 26) > 0.02
     const coresFundo = normalOk ? coresNormais : soPontas ? coresPontas : []
-    const TOL = soPontas ? 26 : TOLERANCIA
+    // Fundo bem branco: tolerância menor, pra não "comer" produto branco (cabo, carregador, fone)
+    const fundoBranco = coresFundo.length > 0 && Math.min(...coresFundo[0]) > 236
+    const TOL = soPontas ? 22 : fundoBranco ? 22 : TOLERANCIA
     const dist = (i: number) => distDe(coresFundo, i)
     const bordasLisas = normalOk || soPontas
 
@@ -93,19 +97,64 @@ export async function ajustarFoto(original: File): Promise<FotoAjustada> {
       // ── 2. Pinta o fundo a partir das bordas (só o que encosta na borda some)
       const fila = new Int32Array(w * h)
       let ini = 0, fim = 0
-      const tentar = (p: number) => {
+      // Em fundo branco o "pintar" só avança por degraus suaves: na borda do produto (contorno/sombra) ele para
+      const lum = (p: number) => px[p * 4] * 0.3 + px[p * 4 + 1] * 0.59 + px[p * 4 + 2] * 0.11
+      const tentar = (p: number, de = -1) => {
         if (fundo[p]) return
-        if (dist(p * 4) < TOL) { fundo[p] = 1; fila[fim++] = p }
+        if (dist(p * 4) >= TOL) return
+        if (fundoBranco && de >= 0 && Math.abs(lum(p) - lum(de)) > 5) return
+        fundo[p] = 1; fila[fim++] = p
       }
       for (let x = 0; x < w; x++) { tentar(x); tentar((h - 1) * w + x) }
       for (let y = 0; y < h; y++) { tentar(y * w); tentar(y * w + w - 1) }
       while (ini < fim) {
         const p = fila[ini++]
         const x = p % w, y = (p - x) / w
-        if (x > 0) tentar(p - 1)
-        if (x < w - 1) tentar(p + 1)
-        if (y > 0) tentar(p - w)
-        if (y < h - 1) tentar(p + w)
+        if (x > 0) tentar(p - 1, p)
+        if (x < w - 1) tentar(p + 1, p)
+        if (y > 0) tentar(p - w, p)
+        if (y < h - 1) tentar(p + w, p)
+      }
+
+      // Fecha "rasgos" finos: o fundo que entrou por frestas estreitas dentro do produto volta a ser produto
+      // (abertura morfológica: encolhe o fundo e cresce de novo; o que era fino demais some)
+      {
+        const R = Math.max(2, Math.round(Math.min(w, h) / 220))
+        const tmp = new Uint8Array(w * h), enc = new Uint8Array(w * h)
+        // encolhe (erosão) em x depois em y
+        for (let y = 0; y < h; y++) {
+          let cont = 0
+          for (let x = 0; x < w; x++) { cont = fundo[y * w + x] ? cont + 1 : 0; tmp[y * w + x] = cont }
+          for (let x = w - 1, run = 0; x >= 0; x--) { run = fundo[y * w + x] ? run + 1 : 0; tmp[y * w + x] = Math.min(tmp[y * w + x], run) > R ? 1 : 0 }
+        }
+        for (let x = 0; x < w; x++) {
+          let cont = 0
+          const col = new Uint16Array(h)
+          for (let y = 0; y < h; y++) { cont = tmp[y * w + x] ? cont + 1 : 0; col[y] = cont }
+          for (let y = h - 1, run = 0; y >= 0; y--) { run = tmp[y * w + x] ? run + 1 : 0; enc[y * w + x] = Math.min(col[y], run) > R ? 1 : 0 }
+        }
+        // cresce de volta (dilatação), só dentro do que já era fundo
+        const cres = new Uint8Array(w * h)
+        for (let y = 0; y < h; y++) {
+          let ult = -1e9
+          for (let x = 0; x < w; x++) { if (enc[y * w + x]) ult = x; if (x - ult <= R) cres[y * w + x] = 1 }
+          ult = 1e9
+          for (let x = w - 1; x >= 0; x--) { if (enc[y * w + x]) ult = x; if (ult - x <= R) cres[y * w + x] = 1 }
+        }
+        const cres2 = new Uint8Array(w * h)
+        for (let x = 0; x < w; x++) {
+          let ult = -1e9
+          for (let y = 0; y < h; y++) { if (cres[y * w + x]) ult = y; if (y - ult <= R) cres2[y * w + x] = 1 }
+          ult = 1e9
+          for (let y = h - 1; y >= 0; y--) { if (cres[y * w + x]) ult = y; if (ult - y <= R) cres2[y * w + x] = 1 }
+        }
+        // bordas da foto continuam fundo (a erosão não alcança a margem)
+        for (let p = 0; p < w * h; p++) {
+          if (!fundo[p]) continue
+          const x = p % w, y = (p - x) / w
+          const margem = x <= R || y <= R || x >= w - 1 - R || y >= h - 1 - R
+          if (!cres2[p] && !margem) fundo[p] = 0
+        }
       }
 
       // Só pontas: se apagou demais (ex: aparelho branco encostando na borda), desiste e usa a original
@@ -140,6 +189,13 @@ export async function ajustarFoto(original: File): Promise<FotoAjustada> {
         for (let p = 0; p < w * h; p++) {
           if (!fundo[p] && !manter[rotulo[p]]) fundo[p] = 1
         }
+      }
+
+      // Se quase nada do produto sobrou, o "fundo" era o próprio produto (ex: aparelho branco ocupando a foto): não mexe
+      {
+        let resto = 0
+        for (let p = 0; p < w * h; p++) resto += fundo[p] ? 0 : 1
+        if (resto < w * h * 0.06) return { arquivo: original, ajustou: false, semFundo: false }
       }
 
       // Aplica transparência, com borda suave para não ficar serrilhado
