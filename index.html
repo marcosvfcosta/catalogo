@@ -9,15 +9,19 @@
     <link rel="icon" type="image/png" href="/favicon.png?v=3" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=3" />
     <script>
-      // Ícone na Tela de Início: na Negociação abre a Negociação; no resto abre o catálogo
+      // Ícone na Tela de Início: cada tela abre nela mesma (Negociação, Admin); no resto abre o catálogo
       (function () {
-        var neg = location.pathname.indexOf('/negociacao') === 0
+        var caminho = location.pathname
+        var neg = caminho.indexOf('/negociacao') === 0
+        var adm = caminho.indexOf('/admin') === 0
+        var manifesto = neg ? '/manifest-negociacao.webmanifest' : adm ? '/manifest-admin.webmanifest' : '/manifest.webmanifest'
+        var nome = neg ? 'Negociação' : adm ? 'Admin' : 'Marcos Magazine'
         document.write(
-          (location.pathname === '/' ? '' : '<meta name="theme-color" content="#050505" />') +
-          '<link rel="manifest" href="' + (neg ? '/manifest-negociacao.webmanifest' : '/manifest.webmanifest') + '" />' +
-          '<meta name="apple-mobile-web-app-title" content="' + (neg ? 'Negociação' : 'Marcos Magazine') + '" />' +
+          (caminho === '/' ? '' : '<meta name="theme-color" content="#050505" />') +
+          '<link rel="manifest" href="' + manifesto + '" />' +
+          '<meta name="apple-mobile-web-app-title" content="' + nome + '" />' +
           // Catálogo abre já com fundo branco (sem piscar a tela escura)
-          (location.pathname === '/' ?
+          (caminho === '/' ?
             '<meta name="theme-color" content="#ffffff" /><style>html,body{background:#fff!important;margin:0}</style>' : '')
         )
       })()
