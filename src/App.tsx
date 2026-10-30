@@ -1458,9 +1458,6 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 `
 
 // ─── Visual "Vitrine": parede cinza fosca, prateleiras de acrílico e etiquetas escuras ───
-const PAREDE = `url("data:image/svg+xml,${encodeURIComponent(
-  `<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.45  0 0 0 0 0.42  0 0 0 0 0.46  0 0 0 0.22 0'/></filter><rect width='100%' height='100%' filter='url(#n)'/></svg>`,
-)}")`
 
 const CSS_VITRINE = `
 html, body { background: #0b0b0d !important; }
