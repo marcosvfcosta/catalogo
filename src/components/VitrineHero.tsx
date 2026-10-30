@@ -23,7 +23,7 @@ type Props = {
   destaqueId?: string                   // (opcional) começa centralizado nele
   onVerProduto: (id: string) => void
   onInteresse?: (id: string) => void
-  titulo?: string
+  titulo?: string                       // (não é mais mostrado)
 }
 
 // Rocha com relevo (gerada pelo navegador, sem imagem externa)
@@ -99,7 +99,7 @@ function Nicho({ it, estado, onToque }: { it: ItemVitrine; estado: string; onToq
   )
 }
 
-export default function VitrineHero({ itens, destaqueId, onVerProduto, onInteresse, titulo = 'A coleção Marcos Magazine' }: Props) {
+export default function VitrineHero({ itens, destaqueId, onVerProduto, onInteresse }: Props) {
   const lista = useMemo(() => itens.filter(i => i.foto).slice(0, 8), [itens])
   const trilhoRef = useRef<HTMLDivElement>(null)
   const [ativo, setAtivo] = useState<string | null>(null)        // nicho no meio da tela (aceso em laranja)
@@ -212,10 +212,6 @@ export default function VitrineHero({ itens, destaqueId, onVerProduto, onInteres
   return (
     <section className={'vn' + (escolhido ? ' vn-aberto' : '') + (largo ? ' vn-largo' : '')} style={{ backgroundImage: `${ROCHA_ESCURA}` }}>
       <style>{CSS}</style>
-      <div className="vn-cabeca">
-        <span>VITRINE</span>
-        <h2>{titulo}</h2>
-      </div>
       {escolhido && <button className="vn-fechar" onClick={() => setEscolhido(null)} aria-label="Voltar">✕</button>}
 
       <div className="vn-palco">
@@ -257,22 +253,22 @@ export default function VitrineHero({ itens, destaqueId, onVerProduto, onInteres
 }
 
 const CSS = `
-.vn { position: relative; background-color: #0e0d10; background-size: 420px 420px; padding: 22px 0 26px; overflow: hidden; }
+.vn { position: relative; background-color: #0e0d10; background-size: 420px 420px; padding: 16px 0 22px; overflow: hidden; }
 .vn::before { content: ''; position: absolute; inset: 0; pointer-events: none;
   background: radial-gradient(120% 70% at 50% 40%, transparent 30%, rgba(0,0,0,0.75) 100%), linear-gradient(180deg, rgba(0,0,0,0.45), transparent 18%, transparent 80%, rgba(0,0,0,0.6)); }
 .vn-cabeca { position: relative; text-align: center; color: #fff; padding: 0 20px 14px; transition: opacity .5s; }
 .vn-aberto .vn-cabeca { opacity: 0.25; }
 .vn-cabeca span { font-size: 11px; letter-spacing: 5px; font-weight: 700; color: #ffb27a; }
 .vn-cabeca h2 { margin: 4px 0 0; font-size: clamp(22px, 5.6vw, 34px); font-weight: 800; letter-spacing: -0.6px; color: #fff; }
-.vn .vn-fechar { position: absolute; top: 16px; left: 14px; z-index: 5; width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
+.vn .vn-fechar { position: absolute; top: 26px; right: 12px; z-index: 6; width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
   border: 1px solid rgba(255,255,255,0.2); color: #fff; font-size: 16px; font-family: inherit; background: rgba(0,0,0,0.45);
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; }
 
 /* trilho que desliza para o lado */
-.vn-trilho { position: relative; display: flex; gap: 7px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
-  padding: 6px calc(50% - 15.5vw) 4px; -webkit-overflow-scrolling: touch; }
+.vn-trilho { position: relative; display: flex; gap: 5px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+  padding: 6px calc(50% - 16vw) 4px; -webkit-overflow-scrolling: touch; }
 .vn-trilho::-webkit-scrollbar { display: none; }
-.vn-coluna { flex: 0 0 31vw; min-width: 0; max-width: none; overflow: hidden; scroll-snap-align: center; cursor: pointer; transition: opacity .7s ease, filter .7s ease; }
+.vn-coluna { flex: 0 0 32vw; min-width: 0; max-width: none; overflow: hidden; scroll-snap-align: center; cursor: pointer; transition: opacity .7s ease, filter .7s ease; }
 .vn-palco { position: relative; }
 /* aberto: nicho encosta à esquerda e as especificações ficam do lado */
 .vn-aberto .vn-trilho { padding-left: 14px; padding-right: 60vw; scroll-padding-left: 14px; }
@@ -281,12 +277,12 @@ const CSS = `
 .vn-largo.vn-aberto .vn-coluna { flex-basis: 240px; }
 .vn-largo .vn-trilho { padding: 6px 48px 4px; gap: 18px; }
 .vn-largo .vn-trilho::after { content: ''; flex: 0 0 24px; }
-.vn-largo .vn-coluna { flex-basis: 200px; }
+.vn-largo .vn-coluna { flex-basis: 220px; }
 
 /* o nicho cavado na rocha */
-.vn-nicho { position: relative; height: 64vw; max-height: 300px; transition: height .55s ease; overflow: hidden; background: #040405;
+.vn-nicho { position: relative; height: 76vw; max-height: 360px; transition: height .55s ease; overflow: hidden; background: #040405;
   box-shadow: inset 0 0 0 1px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.04), 0 30px 60px rgba(0,0,0,0.75); }
-.vn-largo .vn-nicho { height: 420px; max-height: none; }
+.vn-largo .vn-nicho { height: 480px; max-height: none; }
 .vn-aberto .vn-nicho { height: 122vw; max-height: 520px; }
 .vn-largo.vn-aberto .vn-nicho { height: 470px; }
 /* parede de pedra do fundo: só aparece onde a luz bate (cone que abre de cima para baixo) */
@@ -318,7 +314,7 @@ const CSS = `
 .vn-chao::before { content: ''; position: absolute; left: 3%; right: 3%; top: 0; height: 2px; background: rgba(255,255,255,0.75);
   box-shadow: 0 0 10px rgba(255,255,255,0.55); }
 .vn-chao img { position: absolute; left: 50%; top: 3px; width: 100%; transform: translateX(-50%) scaleY(-1); opacity: .2; filter: blur(2px); }
-.vn-foto { position: absolute; left: 50%; bottom: 9%; height: 49%; width: auto; max-width: 100%; object-fit: contain; object-position: bottom;
+.vn-foto { position: absolute; left: 50%; bottom: 9%; height: 42%; width: auto; max-width: 100%; object-fit: contain; object-position: bottom;
   transform: translateX(-50%); transform-origin: 50% 100%; transition: transform .45s cubic-bezier(.2,.8,.2,1), filter .8s ease;
   filter: drop-shadow(0 14px 14px rgba(0,0,0,0.6)) brightness(1.12); }
 .vn-laranja { position: absolute; left: 3%; right: 3%; bottom: 9%; height: 3px; border-radius: 2px; opacity: 0; transition: opacity .35s ease;
