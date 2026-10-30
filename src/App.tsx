@@ -1507,7 +1507,8 @@ body { color: #fff !important; }
 .mm.tema-vitrine .mm-pontos i.on { background: var(--laranja); }
 
 /* categorias = produtos na parede em prateleiras de acrílico (igual vitrine de tênis) */
-.mm.tema-vitrine .mm-categorias { gap: 14px; padding-top: 20px; }
+.mm.tema-vitrine .mm-categorias { gap: 14px; padding-top: 20px; padding-bottom: 20px;
+  overflow-y: hidden; overscroll-behavior-x: contain; }
 .mm.tema-vitrine .mm-categoria { width: 112px; color: #fff; font-size: 14px; position: relative; }
 .mm.tema-vitrine .mm-categoria span { position: relative; width: 112px; height: 124px; margin-bottom: 12px; border-radius: 0; padding: 18px 20px 0; overflow: visible;
   align-items: flex-end; background: none; box-shadow: none; }
@@ -1516,9 +1517,9 @@ body { color: #fff !important; }
   background: linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.14));
   box-shadow: 0 1px 0 rgba(255,255,255,0.4) inset, 0 8px 14px rgba(0,0,0,0.35); transition: background .3s, box-shadow .3s; }
 /* brilho laranja embaixo da prateleira (só quando acende) */
-.mm.tema-vitrine .mm-categoria span::before { content: ''; position: absolute; left: -22%; right: -22%; top: calc(100% + 2px); height: 70px; pointer-events: none; opacity: 0;
+.mm.tema-vitrine .mm-categoria span::before { content: ''; position: absolute; left: -22%; right: -22%; top: calc(100% + 2px); height: 34px; pointer-events: none; opacity: 0;
   background: radial-gradient(50% 60% at 50% 0%, rgba(255,110,30,0.75), rgba(255,90,20,0.25) 45%, transparent 75%); filter: blur(4px); }
-.mm.tema-vitrine .mm-categoria img { position: relative; z-index: 1; object-position: 50% 100%; transform-origin: 50% 100%;
+.mm.tema-vitrine .mm-categoria img { position: relative; z-index: 1; width: auto; height: auto; max-width: 100%; max-height: 84%; object-position: 50% 100%; transform-origin: 50% 100%;
   filter: drop-shadow(0 6px 6px rgba(0,0,0,0.35));
   transition: transform .22s ease; }
 .mm.tema-vitrine .mm-categoria:active img { transform: translateY(-4px) scale(1.08); }
