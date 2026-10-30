@@ -247,7 +247,7 @@ const CSS = `
 .vn-trilho { position: relative; display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
   padding: 6px calc(50% - 14.5vw) 4px; -webkit-overflow-scrolling: touch; }
 .vn-trilho::-webkit-scrollbar { display: none; }
-.vn-coluna { flex: 0 0 29vw; scroll-snap-align: center; cursor: pointer; transition: opacity .7s ease, filter .7s ease; }
+.vn-coluna { flex: 0 0 29vw; min-width: 0; max-width: none; overflow: hidden; scroll-snap-align: center; cursor: pointer; transition: opacity .7s ease, filter .7s ease; }
 .vn-palco { position: relative; }
 /* aberto: nicho encosta à esquerda e as especificações ficam do lado */
 .vn-aberto .vn-trilho { padding-left: 14px; padding-right: 60vw; scroll-padding-left: 14px; }
