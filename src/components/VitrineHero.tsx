@@ -269,10 +269,10 @@ const CSS = `
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; }
 
 /* trilho que desliza para o lado */
-.vn-trilho { position: relative; display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
-  padding: 6px calc(50% - 14.5vw) 4px; -webkit-overflow-scrolling: touch; }
+.vn-trilho { position: relative; display: flex; gap: 7px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+  padding: 6px calc(50% - 15.5vw) 4px; -webkit-overflow-scrolling: touch; }
 .vn-trilho::-webkit-scrollbar { display: none; }
-.vn-coluna { flex: 0 0 29vw; min-width: 0; max-width: none; overflow: hidden; scroll-snap-align: center; cursor: pointer; transition: opacity .7s ease, filter .7s ease; }
+.vn-coluna { flex: 0 0 31vw; min-width: 0; max-width: none; overflow: hidden; scroll-snap-align: center; cursor: pointer; transition: opacity .7s ease, filter .7s ease; }
 .vn-palco { position: relative; }
 /* aberto: nicho encosta à esquerda e as especificações ficam do lado */
 .vn-aberto .vn-trilho { padding-left: 14px; padding-right: 60vw; scroll-padding-left: 14px; }
@@ -317,8 +317,8 @@ const CSS = `
   background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.03) 45%, rgba(0,0,0,0.7)); }
 .vn-chao::before { content: ''; position: absolute; left: 3%; right: 3%; top: 0; height: 2px; background: rgba(255,255,255,0.75);
   box-shadow: 0 0 10px rgba(255,255,255,0.55); }
-.vn-chao img { position: absolute; left: 50%; top: 3px; width: 90%; transform: translateX(-50%) scaleY(-1); opacity: .2; filter: blur(2px); }
-.vn-foto { position: absolute; left: 50%; bottom: 9%; height: 44%; width: auto; max-width: 96%; object-fit: contain; object-position: bottom;
+.vn-chao img { position: absolute; left: 50%; top: 3px; width: 100%; transform: translateX(-50%) scaleY(-1); opacity: .2; filter: blur(2px); }
+.vn-foto { position: absolute; left: 50%; bottom: 9%; height: 49%; width: auto; max-width: 100%; object-fit: contain; object-position: bottom;
   transform: translateX(-50%); transform-origin: 50% 100%; transition: transform .45s cubic-bezier(.2,.8,.2,1), filter .8s ease;
   filter: drop-shadow(0 14px 14px rgba(0,0,0,0.6)) brightness(1.12); }
 .vn-laranja { position: absolute; left: 3%; right: 3%; bottom: 9%; height: 3px; border-radius: 2px; opacity: 0; transition: opacity .35s ease;
