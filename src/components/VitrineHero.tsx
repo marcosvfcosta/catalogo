@@ -329,16 +329,16 @@ const CSS = `
 /* Luz fraca em todos; o dedo passando acende o nicho (e um pouco os vizinhos), igual ao vídeo */
 .vn-coluna .vn-led, .vn-coluna .vn-cone, .vn-coluna .vn-costas, .vn-coluna .vn-tinta, .vn-coluna .vn-lado { transition: opacity .9s ease; }
 .vn-coluna .vn-foto { transition: transform .45s cubic-bezier(.2,.8,.2,1), filter .9s ease; }
-.vn-coluna.fraca .vn-led { opacity: .3; }
-.vn-coluna.fraca .vn-cone { opacity: .18; }
-.vn-coluna.fraca .vn-costas { opacity: .3; }
-.vn-coluna.fraca .vn-tinta, .vn-coluna.fraca .vn-lado { opacity: .2; }
-.vn-coluna.fraca .vn-foto { filter: drop-shadow(0 14px 14px rgba(0,0,0,0.6)) brightness(0.62); }
-.vn-coluna.meia .vn-led { opacity: .65; }
-.vn-coluna.meia .vn-cone { opacity: .5; }
-.vn-coluna.meia .vn-costas { opacity: .6; }
-.vn-coluna.meia .vn-tinta, .vn-coluna.meia .vn-lado { opacity: .45; }
-.vn-coluna.meia .vn-foto { filter: drop-shadow(0 14px 14px rgba(0,0,0,0.6)) brightness(0.85); }
+.vn-coluna.fraca .vn-led { opacity: .6; }
+.vn-coluna.fraca .vn-cone { opacity: .42; }
+.vn-coluna.fraca .vn-costas { opacity: .58; }
+.vn-coluna.fraca .vn-tinta, .vn-coluna.fraca .vn-lado { opacity: .4; }
+.vn-coluna.fraca .vn-foto { filter: drop-shadow(0 14px 14px rgba(0,0,0,0.6)) brightness(0.88); }
+.vn-coluna.meia .vn-led { opacity: .8; }
+.vn-coluna.meia .vn-cone { opacity: .7; }
+.vn-coluna.meia .vn-costas { opacity: .8; }
+.vn-coluna.meia .vn-tinta, .vn-coluna.meia .vn-lado { opacity: .65; }
+.vn-coluna.meia .vn-foto { filter: drop-shadow(0 14px 14px rgba(0,0,0,0.6)) brightness(1); }
 /* acendendo: mais rápido para subir do que para apagar */
 .vn-coluna.luz .vn-led, .vn-coluna.luz .vn-cone, .vn-coluna.luz .vn-costas, .vn-coluna.luz .vn-tinta, .vn-coluna.luz .vn-lado { transition: opacity .4s ease; }
 .vn-coluna.luz .vn-foto { transition: transform .35s cubic-bezier(.2,.8,.2,1), filter .4s ease; }
