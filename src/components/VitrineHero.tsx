@@ -329,20 +329,24 @@ const CSS = `
 /* Luz fraca em todos; o dedo passando acende o nicho (e um pouco os vizinhos), igual ao vídeo */
 .vn-coluna .vn-led, .vn-coluna .vn-cone, .vn-coluna .vn-costas, .vn-coluna .vn-tinta, .vn-coluna .vn-lado { transition: opacity .9s ease; }
 .vn-coluna .vn-foto { transition: transform .45s cubic-bezier(.2,.8,.2,1), filter .9s ease; }
-.vn-coluna.fraca .vn-led { opacity: .6; }
-.vn-coluna.fraca .vn-cone { opacity: .42; }
-.vn-coluna.fraca .vn-costas { opacity: .58; }
-.vn-coluna.fraca .vn-tinta, .vn-coluna.fraca .vn-lado { opacity: .4; }
-.vn-coluna.fraca .vn-foto { filter: drop-shadow(0 14px 14px rgba(0,0,0,0.6)) brightness(0.88); }
-.vn-coluna.meia .vn-led { opacity: .8; }
-.vn-coluna.meia .vn-cone { opacity: .7; }
-.vn-coluna.meia .vn-costas { opacity: .8; }
-.vn-coluna.meia .vn-tinta, .vn-coluna.meia .vn-lado { opacity: .65; }
-.vn-coluna.meia .vn-foto { filter: drop-shadow(0 14px 14px rgba(0,0,0,0.6)) brightness(1); }
+.vn-coluna.fraca .vn-led { opacity: .45; }
+.vn-coluna.fraca .vn-cone { opacity: .28; }
+.vn-coluna.fraca .vn-costas { opacity: .42; }
+.vn-coluna.fraca .vn-tinta, .vn-coluna.fraca .vn-lado { opacity: .3; }
+.vn-coluna.fraca .vn-foto { filter: drop-shadow(0 14px 14px rgba(0,0,0,0.6)) brightness(0.75); }
+.vn-coluna.meia .vn-led { opacity: .65; }
+.vn-coluna.meia .vn-cone { opacity: .5; }
+.vn-coluna.meia .vn-costas { opacity: .62; }
+.vn-coluna.meia .vn-tinta, .vn-coluna.meia .vn-lado { opacity: .5; }
+.vn-coluna.meia .vn-foto { filter: drop-shadow(0 14px 14px rgba(0,0,0,0.6)) brightness(0.9); }
 /* acendendo: mais rápido para subir do que para apagar */
 .vn-coluna.luz .vn-led, .vn-coluna.luz .vn-cone, .vn-coluna.luz .vn-costas, .vn-coluna.luz .vn-tinta, .vn-coluna.luz .vn-lado { transition: opacity .4s ease; }
 .vn-coluna.luz .vn-foto { transition: transform .35s cubic-bezier(.2,.8,.2,1), filter .4s ease; }
 
+/* luz acesa mais forte que o normal, pra destacar bem quando o dedo passa */
+.vn-coluna.luz .vn-costas { filter: brightness(1.18); transition: opacity .4s ease, filter .4s ease; }
+.vn-coluna.luz .vn-led { box-shadow: 0 0 10px 4px #fff, 0 0 34px 14px rgba(255,245,230,0.95), 0 12px 70px 30px rgba(255,240,220,0.55); }
+.vn-coluna.luz .vn-foto { filter: drop-shadow(0 14px 14px rgba(0,0,0,0.6)) brightness(1.15); }
 /* embaixo do dedo (ou escolhido): cresce e acende laranja */
 .vn-coluna.luz .vn-foto, .vn-coluna.escolhido .vn-foto { transform: translateX(-50%) scale(1.07); }
 .vn-coluna.luz .vn-laranja, .vn-coluna.escolhido .vn-laranja { opacity: 1; }
