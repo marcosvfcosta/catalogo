@@ -106,6 +106,7 @@ export default function VitrineHero({ itens, destaqueId, onVerProduto, onInteres
   const [escolhido, setEscolhido] = useState<string | null>(null) // tocado: os outros apagam
   const [largo, setLargo] = useState(false)
   const fimRolagem = useRef(0)
+  const travado = useRef(0)
 
   // Começa com o destaque (ou o 1º) no meio
   useEffect(() => {
@@ -130,7 +131,16 @@ export default function VitrineHero({ itens, destaqueId, onVerProduto, onInteres
     const t = trilhoRef.current
     if (!t) return
     const left = aberto ? el.offsetLeft - MARGEM_ABERTO : el.offsetLeft + el.offsetWidth / 2 - t.clientWidth / 2
-    t.scrollTo({ left, behavior: suave ? 'smooth' : 'auto' })
+    clearTimeout(fimRolagem.current)
+    travado.current = Date.now() + (suave ? 700 : 450) // rolagem feita pelo código não troca o celular escolhido
+    if (!suave) {
+      // ao abrir/fechar o layout muda: desliga o "encaixe" um instante para o navegador não voltar pro celular antigo
+      t.style.scrollSnapType = 'none'
+      t.scrollLeft = left
+      window.setTimeout(() => { t.style.scrollSnapType = '' }, 300)
+      return
+    }
+    t.scrollTo({ left, behavior: 'smooth' })
   }
 
   // Depois que o layout muda (abre/fecha), reposiciona o nicho escolhido
@@ -140,7 +150,7 @@ export default function VitrineHero({ itens, destaqueId, onVerProduto, onInteres
     if (!t || !id) return
     const el = t.querySelector(`[data-id="${id}"]`) as HTMLElement | null
     if (!el) return
-    const q = requestAnimationFrame(() => centralizar(el, true, !!escolhido))
+    const q = requestAnimationFrame(() => centralizar(el, false, !!escolhido))
     return () => cancelAnimationFrame(q)
   }, [!!escolhido])
 
@@ -161,14 +171,17 @@ export default function VitrineHero({ itens, destaqueId, onVerProduto, onInteres
 
   function aoRolar() {
     const id = medirMeio()
+    if (Date.now() < travado.current) return
     // Com um celular aberto, deslizar para o lado passa para o próximo (já com as especificações)
     clearTimeout(fimRolagem.current)
-    fimRolagem.current = window.setTimeout(() => { if (escolhido && id && id !== escolhido) setEscolhido(id) }, 140)
+    fimRolagem.current = window.setTimeout(() => { if (Date.now() >= travado.current && escolhido && id && id !== escolhido) setEscolhido(id) }, 140)
   }
 
   function tocar(id: string, el: HTMLElement | null) {
     if (escolhido === id) { onVerProduto(id); return }
     const jaAberto = !!escolhido
+    clearTimeout(fimRolagem.current)
+    travado.current = Date.now() + 700
     setEscolhido(id)
     if (el && jaAberto) centralizar(el, true, true)
   }
@@ -234,7 +247,7 @@ const CSS = `
 .vn-trilho { position: relative; display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
   padding: 6px calc(50% - 14.5vw) 4px; -webkit-overflow-scrolling: touch; }
 .vn-trilho::-webkit-scrollbar { display: none; }
-.vn-coluna { flex: 0 0 29vw; scroll-snap-align: center; cursor: pointer; transition: opacity .7s ease, filter .7s ease, flex-basis .55s ease; }
+.vn-coluna { flex: 0 0 29vw; scroll-snap-align: center; cursor: pointer; transition: opacity .7s ease, filter .7s ease; }
 .vn-palco { position: relative; }
 /* aberto: nicho encosta à esquerda e as especificações ficam do lado */
 .vn-aberto .vn-trilho { padding-left: 14px; padding-right: 60vw; scroll-padding-left: 14px; }
