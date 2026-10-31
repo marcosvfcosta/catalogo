@@ -852,8 +852,11 @@ export default function Admin() {
 
     let feitos = 0
     let falhas = 0
+    let semColunaCor = false
+    let comPrecoPorCor = 0
     for (const i of selecionados) {
       try {
+        if (i.custos_cor && new Set(Object.values(i.custos_cor)).size > 1) comPrecoPorCor++
         // Catálogo (sem preço). Se já veio em outra lista hoje, soma as cores
         const prod = listaProdutos.find(p => (p.chave || normalizar(p.modelo)) === i.chave)
         const coresProd = prod && vistoHoje(prod.ultima_lista)
@@ -886,7 +889,8 @@ export default function Admin() {
           ? await supabase.from('aparelhos').update(dadosAp).eq('id', ap.id)
           : await supabase.from('aparelhos').insert([{ ...dadosAp, fotos: {} }])
         if (r.error?.message?.includes('precos_cor')) {
-          // SQL novo ainda não rodado: salva sem o preço por cor
+          // SQL novo ainda não rodado: salva sem o preço por cor (e avisa no final)
+          semColunaCor = true
           const { precos_cor: _semColuna, ...semPrecoCor } = dadosAp
           void _semColuna
           if (ap) await supabase.from('aparelhos').update(semPrecoCor).eq('id', ap.id)
@@ -900,9 +904,12 @@ export default function Admin() {
       setAplicandoLista({ feitos, total })
     }
     setAplicandoLista(null)
-    alert(falhas
+    alert((falhas
       ? `Concluído com ${falhas} erro(s). Confira a lista.`
       : 'Lista salva! Pode colar a próxima lista. Quando terminar todas as listas de hoje, toque em "Finalizar o dia".')
+      + (semColunaCor
+        ? '\n\n⚠️ O PREÇO POR COR NÃO FOI SALVO: falta rodar no Supabase (SQL Editor) a linha:\nalter table public.aparelhos add column if not exists precos_cor jsonb;\nDepois cole a lista de novo.'
+        : comPrecoPorCor ? `\n\n🎨 ${comPrecoPorCor} aparelho(s) com preço diferente por cor. Na Negociação o valor muda ao tocar na cor.` : ''))
     setItensLista(null)
     setTextoLista('')
     carregarProdutos()
