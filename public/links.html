@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Marcos Magazine</title>
+<meta name="description" content="Celulares, acessórios e assistência técnica em Bom Jesus. Parcelamos em até 18x.">
+<meta property="og:title" content="Marcos Magazine">
+<meta property="og:description" content="Catálogo, WhatsApp e assistência técnica — tudo num lugar só.">
+<meta name="theme-color" content="#07060a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#07060a;--or:#f97316;--txt:#fff;--mut:rgba(255,255,255,.65);--glass:rgba(255,255,255,.06);--gl:rgba(255,255,255,.12)}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{background:var(--bg);color:var(--txt);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden}
+  /* aurora */
+  .aurora{position:fixed;inset:-40%;z-index:0;background:conic-gradient(from 0deg at 50% 50%,#f97316,#7c2d12,#0b0b0b,#ea580c,#fbbf24,#0b0b0b,#f97316);filter:blur(90px);opacity:.45;animation:rot 22s linear infinite}
+  @keyframes rot{to{transform:rotate(360deg)}}
+  .noise{position:fixed;inset:0;z-index:1;background:radial-gradient(ellipse at center,transparent 30%,var(--bg) 85%)}
+  #stars{position:fixed;inset:0;z-index:1}
+  main{position:relative;z-index:2;max-width:430px;margin:0 auto;padding:48px 18px 36px}
+  /* avatar com órbita */
+  .orbit{position:relative;width:176px;height:176px;margin:0 auto 18px}
+  .av{position:absolute;inset:24px;border-radius:50%;background:linear-gradient(145deg,#1a1a1a,#000);border:2px solid var(--or);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif;font-weight:700;font-size:24px;line-height:1;letter-spacing:-.5px;text-align:center;color:#fff;box-shadow:0 0 50px rgba(249,115,22,.45);animation:in 1s cubic-bezier(.34,1.56,.64,1) both}
+  .ring{position:absolute;inset:0;border-radius:50%;border:1px dashed rgba(249,115,22,.4);animation:rot 16s linear infinite}
+  .ring i{position:absolute;width:30px;height:30px;border-radius:50%;background:var(--glass);border:1px solid var(--gl);backdrop-filter:blur(8px);display:grid;place-items:center;font-style:normal;font-size:15px;animation:rot 16s linear infinite reverse}
+  .av span{color:var(--or);font-size:21px;margin-top:2px}
+  .ring i:nth-child(1){top:-15px;left:73px}.ring i:nth-child(2){bottom:5px;left:-5px}.ring i:nth-child(3){bottom:5px;right:-5px}
+  @keyframes in{from{opacity:0;transform:scale(.3) rotate(-90deg)}to{opacity:1;transform:none}}
+  .welcome{text-align:center}
+  .welcome small{display:inline-flex;align-items:center;gap:8px;font-size:12px;padding:6px 12px;border-radius:999px;background:var(--glass);border:1px solid var(--gl);backdrop-filter:blur(10px)}
+  .welcome small b{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 10px #22c55e}
+  .welcome small.off b{background:#ef4444;box-shadow:0 0 10px #ef4444}
+  .welcome h1{font-family:'DM Sans',sans-serif;font-weight:700;font-size:34px;letter-spacing:-1px;margin-top:14px;line-height:1;background:linear-gradient(90deg,#fff,#fdba74,#f97316,#fff);background-size:300%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:grad 6s linear infinite}
+  .welcome h1 .nome{white-space:nowrap}
+  @keyframes grad{to{background-position:300% 0}}
+  .welcome p{color:var(--mut);margin-top:8px;font-size:15px;line-height:1.45}
+  /* botões vidro */
+  .links{display:flex;flex-direction:column;gap:14px;margin-top:30px}
+  .g{position:relative;display:flex;align-items:center;gap:14px;padding:16px;border-radius:20px;background:var(--glass);border:1px solid var(--gl);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);color:var(--txt);text-decoration:none;transition:transform .5s cubic-bezier(.2,.8,.2,1),opacity .5s,background .25s;opacity:0;transform:translateY(30px) scale(.96)}
+  .g.show{opacity:1;transform:none}
+  .g:active{transform:scale(.97)}
+  .g:hover{background:rgba(255,255,255,.1)}
+  .g .ic{width:48px;height:48px;border-radius:15px;display:grid;place-items:center;flex:none}
+  .g svg{width:24px;height:24px}
+  .g strong{display:block;font-size:16px}
+  .g small{color:var(--mut);font-size:13px}
+  .g .go{margin-left:auto;opacity:.6}
+  /* borda animada no catálogo */
+  .g.main{border:none;padding:18px 16px;background:rgba(20,10,5,.6)}
+  .g.main::before{content:"";position:absolute;inset:-2px;border-radius:22px;padding:2px;background:conic-gradient(from var(--a),var(--or),transparent 40%,#fbbf24,transparent 80%,var(--or));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:border 3s linear infinite}
+  @property --a{syntax:'<angle>';initial-value:0deg;inherits:false}
+  @keyframes border{to{--a:360deg}}
+  .g.main .ic{background:var(--or);box-shadow:0 0 25px rgba(249,115,22,.6)}
+  .badge{position:absolute;top:-9px;right:14px;font-size:10px;font-weight:700;letter-spacing:1px;background:#fbbf24;color:#000;padding:3px 8px;border-radius:999px;animation:jump 2s ease-in-out infinite}
+  @keyframes jump{0%,80%,100%{transform:none}90%{transform:translateY(-5px)}}
+  .wa .ic{background:rgba(34,197,94,.15);color:#22c55e}
+  .as .ic{background:rgba(249,115,22,.15);color:var(--or)}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .row .g{justify-content:center;padding:14px;font-weight:600;font-size:14px;gap:8px}
+  .row .g svg{width:20px;height:20px}
+  footer{text-align:center;color:var(--mut);font-size:12px;margin-top:30px}
+  .confete{position:fixed;width:8px;height:12px;z-index:99;pointer-events:none;border-radius:2px}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important}.g{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div class="aurora"></div><canvas id="stars"></canvas><div class="noise"></div>
+<main>
+  <div class="orbit">
+    <div class="ring"><i>📱</i><i>🔧</i><i>🎧</i></div>
+    <div class="av">Marcos<span>Magazine</span></div>
+  </div>
+  <section class="welcome">
+    <small id="status"><b></b><span>Verificando horário…</span></small>
+    <h1>Bem-vindo à<br><span class="nome">Marcos Magazine</span></h1>
+    <p>Celulares novos e seminovos, acessórios e assistência técnica. Parcelamos em até <strong style="color:var(--or)">18x</strong>.</p>
+  </section>
+
+  <nav class="links">
+    <a class="g main" data-link="catalogo" id="cat">
+      <span class="badge">NOVO</span>
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
+      <span><strong>Catálogo Online</strong><small>Veja todos os modelos disponíveis</small></span>
+      <svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17 17 7M7 7h10v10"/></svg>
+    </a>
+    <a class="g wa" data-link="whatsapp">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></span>
+      <span><strong>WhatsApp da Loja</strong><small>Resposta rápida</small></span>
+      <svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17 17 7M7 7h10v10"/></svg>
+    </a>
+    <a class="g as" data-link="assistencia">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
+      <span><strong>Assistência Técnica</strong><small>Orçamento sem compromisso</small></span>
+      <svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17 17 7M7 7h10v10"/></svg>
+    </a>
+    <div class="row">
+      <a class="g" data-link="instagram"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/></svg>Instagram</a>
+      <a class="g" data-link="mapa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Como chegar</a>
+    </div>
+  </nav>
+  <footer>Av. Goiás, Centro · Bom Jesus<br>© Marcos Magazine</footer>
+</main>
+
+<script>
+/* ====== EDITE AQUI ====== */
+const NUMERO = "5564993374281"; // 55 + DDD + número, só dígitos
+const LINKS = {
+  catalogo:   "https://catalogo-seven-blush.vercel.app/",
+  whatsapp:   `https://wa.me/${NUMERO}?text=${encodeURIComponent("Olá! Vim pelo Instagram 😊")}`,
+  assistencia:`https://wa.me/${NUMERO}?text=${encodeURIComponent("Olá! Preciso de assistência técnica no meu aparelho.")}`,
+  instagram:  "https://instagram.com/marcosmagazinee",
+  mapa:       "https://maps.google.com/?q=Avenida+Goiás+Centro+Bom+Jesus"
+};
+// horário de funcionamento: [dia da semana 0=dom..6=sáb]: [abre, fecha]
+const HORARIO = {1:[8,18],2:[8,18],3:[8,18],4:[8,18],5:[8,18],6:[8,18]};
+/* ======================== */
+document.querySelectorAll("[data-link]").forEach(a=>{a.href=LINKS[a.dataset.link];a.target="_blank";a.rel="noopener"});
+
+// aberto / fechado
+const d=new Date(),h=d.getHours()+d.getMinutes()/60,hj=HORARIO[d.getDay()],st=document.getElementById("status");
+const aberto=hj&&h>=hj[0]&&h<hj[1];
+st.querySelector("span").textContent=aberto?`Aberto agora · até ${hj[1]}h`:"Fechado agora · chame no WhatsApp";
+if(!aberto)st.classList.add("off");
+
+// entrada dos botões em cascata
+document.querySelectorAll(".g").forEach((g,i)=>setTimeout(()=>g.classList.add("show"),500+i*120));
+
+// efeito magnético (desktop)
+document.querySelectorAll(".g").forEach(g=>{
+  g.addEventListener("mousemove",e=>{const r=g.getBoundingClientRect();g.style.transform=`translate(${(e.clientX-r.left-r.width/2)*.06}px,${(e.clientY-r.top-r.height/2)*.15}px)`});
+  g.addEventListener("mouseleave",()=>g.style.transform="")});
+
+// confete ao clicar no catálogo
+document.getElementById("cat").addEventListener("click",e=>{
+  const cores=["#f97316","#fbbf24","#fff","#ea580c"];
+  for(let i=0;i<40;i++){const c=document.createElement("div");c.className="confete";c.style.background=cores[i%4];
+    c.style.left=e.clientX+"px";c.style.top=e.clientY+"px";document.body.appendChild(c);
+    const ang=Math.random()*Math.PI*2,v=80+Math.random()*160;
+    c.animate([{transform:"translate(0,0) rotate(0)",opacity:1},{transform:`translate(${Math.cos(ang)*v}px,${Math.sin(ang)*v+200}px) rotate(${Math.random()*720}deg)`,opacity:0}],{duration:1000+Math.random()*500,easing:"cubic-bezier(.2,.8,.4,1)"}).onfinish=()=>c.remove()}
+});
+
+// estrelas piscando
+const cv=document.getElementById("stars"),cx=cv.getContext("2d");let S=[];
+function rs(){cv.width=innerWidth;cv.height=innerHeight;S=Array.from({length:70},()=>({x:Math.random()*innerWidth,y:Math.random()*innerHeight,r:Math.random()*1.2,t:Math.random()*6}))}
+rs();addEventListener("resize",rs);
+(function loop(){cx.clearRect(0,0,cv.width,cv.height);S.forEach(s=>{s.t+=.03;cx.globalAlpha=.3+Math.abs(Math.sin(s.t))*.7;cx.beginPath();cx.arc(s.x,s.y,s.r,0,7);cx.fillStyle="#fff";cx.fill()});requestAnimationFrame(loop)})();
+</script>
+</body>
+</html>
