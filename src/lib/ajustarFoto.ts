@@ -95,10 +95,24 @@ export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promis
     const bordasLisas = normalOk || soPontas
 
     // Valor da máscara da IA no pixel (x, y) da foto de trabalho
-    const ia = mascaraIA ? (x: number, y: number) => {
+    // (encolhida 1 ponto: a máscara é pequena e "vaza" um pouco pra fora do produto, o que deixava borda branca)
+    let encolhida: Float32Array | null = null
+    if (mascaraIA) {
+      const { w: mw, h: mh, dados: md } = mascaraIA
+      encolhida = new Float32Array(mw * mh)
+      for (let y = 0; y < mh; y++) for (let x = 0; x < mw; x++) {
+        let m = 1
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const xx = Math.min(mw - 1, Math.max(0, x + dx)), yy = Math.min(mh - 1, Math.max(0, y + dy))
+          m = Math.min(m, md[yy * mw + xx])
+        }
+        encolhida[y * mw + x] = m
+      }
+    }
+    const ia = mascaraIA && encolhida ? (x: number, y: number) => {
       const mx = Math.min(mascaraIA.w - 1, Math.floor(x * mascaraIA.w / w))
       const my = Math.min(mascaraIA.h - 1, Math.floor(y * mascaraIA.h / h))
-      return mascaraIA.dados[my * mascaraIA.w + mx]
+      return encolhida![my * mascaraIA.w + mx]
     } : null
 
     const fundo = new Uint8Array(w * h) // 1 = fundo
