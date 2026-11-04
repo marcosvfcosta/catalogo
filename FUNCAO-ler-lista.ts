@@ -11,7 +11,7 @@ const SISTEMA = `Você recebe listas de preços de fornecedores de celulares cop
 Extraia SOMENTE os aparelhos à venda e devolva APENAS um JSON válido, sem texto antes ou depois:
 
 { "itens": [
-  { "marca": "Xiaomi", "modelo": "Redmi 15C", "memoria": "256GB", "ram": "8GB", "rede": "4G", "cores": ["Preto", "Azul"], "custo": 965.00 }
+  { "marca": "Xiaomi", "modelo": "Redmi 15C", "memoria": "256GB", "ram": "8GB", "rede": "4G", "cores": ["Preto", "Azul"], "custo": 965.00, "cpo": false }
 ] }
 
 REGRAS:
@@ -24,6 +24,7 @@ REGRAS:
 - "custo": número em reais. Atenção ao formato brasileiro: "R$:1.150.00" = 1150, "R$:745.00" = 745, "R$ 1.234,56" = 1234.56.
 - Cada combinação diferente de modelo + memória + RAM + rede é um item separado.
 - Se o MESMO aparelho tiver preços diferentes por cor (ex: "Laranja R$ 8.000 / Branco R$ 8.200"), crie um item para cada preço, cada um só com as cores daquele preço.
+- "cpo": true se o aparelho for CPO / recondicionado / "Certified Pre-Owned" (escrito na linha, no título da seção ou no aviso do bloco); senão false. NÃO escreva "CPO" no "modelo". O mesmo aparelho novo e CPO são itens separados.
 - Ignore títulos, avisos ("atacado", "garantia"), separadores e linhas sem preço.
 - NUNCA invente aparelhos ou preços que não estão na lista.`
 

@@ -76,6 +76,7 @@ type ItemLista = {
   cores: string[]
   custo: number
   custos_cor?: Record<string, number> // quando cada cor tem um preço (ex: Branco mais caro)
+  cpo?: boolean // recondicionado (CPO)
 }
 
 type ItemPreparado = ItemLista & {
@@ -115,15 +116,20 @@ const normalizar = (t: string | null | undefined) =>
 const ehApple = (i: { marca?: string | null; modelo?: string | null }) =>
   /apple/i.test(i.marca || '') || /^(iphone|ipad)/i.test((i.modelo || '').trim())
 
-function montarNome(i: ItemLista) {
+function montarNome(i: ItemLista): string {
+  // CPO vira um aparelho separado do novo (só na Negociação aparece "CPO")
+  if (i.cpo) return montarNome({ ...i, cpo: false }) + ' CPO'
   if (ehApple(i)) return [i.modelo, i.memoria].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
   return [i.modelo, i.memoria, i.ram ? `${i.ram} RAM` : '', i.rede || ''].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
 }
 
 // Chave para achar o mesmo aparelho entre listas de fornecedores diferentes
 function chaveComparar(chaveOuNome: string | null | undefined) {
-  const k = normalizar(chaveOuNome)
-  return /^(iphone|ipad)/.test(k) ? k.replace(/\d+gbram/g, '').replace(/[45]g$/, '') : k
+  let k = normalizar(chaveOuNome)
+  const cpo = k.endsWith('cpo')
+  if (cpo) k = k.slice(0, -3)
+  if (/^(iphone|ipad)/.test(k)) k = k.replace(/\d+gbram/g, '').replace(/[45]g$/, '')
+  return k + (cpo ? 'cpo' : '')
 }
 
 function fmtReal(v: number | null | undefined) {
@@ -232,6 +238,8 @@ export default function Admin() {
   const [lendoLista, setLendoLista] = useState(false)
   // De qual fornecedor é a lista colada (fica salvo no aparelho o fornecedor do preço mais barato)
   const [fornecedorLista, setFornecedorLista] = useState('')
+  // Chave "Incluir CPO": ligada cadastra os CPO (separados do novo); desligada ignora os CPO da lista
+  const [incluirCpo, setIncluirCpo] = useState(() => { try { return localStorage.getItem('incluirCpo') === 'sim' } catch { return false } })
   const [fornecedoresSalvos, setFornecedoresSalvos] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('fornecedores') || '[]') } catch { return [] }
   })
@@ -805,6 +813,7 @@ export default function Admin() {
 
       const vistos = new Set<string>()
       const preparados: ItemPreparado[] = []
+      let ignoradosCpo = 0
       for (const bruto of dados.itens as ItemLista[]) {
         const item: ItemLista = {
           marca: (bruto.marca || '').trim(),
@@ -814,8 +823,11 @@ export default function Admin() {
           rede: bruto.rede ? String(bruto.rede).toUpperCase() : null,
           cores: Array.from(new Set((bruto.cores || []).map(c => c.trim()).filter(Boolean))),
           custo: Number(bruto.custo) || 0,
+          cpo: !!bruto.cpo || /\bcpo\b/i.test(bruto.modelo || ''),
         }
+        item.modelo = item.modelo.replace(/\s*\bcpo\b\s*/ig, ' ').trim()
         if (!item.modelo || !item.custo) continue
+        if (item.cpo && !incluirCpo) { ignoradosCpo++; continue }
         const nome = montarNome(item)
         const chave = normalizar(nome)
         // Mesmo aparelho em outra linha com outro preço (ex: Branco mais caro): junta as cores e guarda o preço de cada cor
@@ -843,6 +855,7 @@ export default function Admin() {
       }
 
       setItensLista(preparados)
+      if (ignoradosCpo) alert(`${ignoradosCpo} aparelho(s) CPO foram ignorados (chave "Incluir CPO" desligada).`)
     } catch (e) {
       alert('Erro de conexão ao ler a lista. Tente de novo.')
       console.error(e)
@@ -877,17 +890,20 @@ export default function Admin() {
       try {
         if (i.custos_cor && new Set(Object.values(i.custos_cor)).size > 1) comPrecoPorCor++
         // Catálogo (sem preço). Se já veio em outra lista hoje, soma as cores
-        const prod = listaProdutos.find(p => chaveComparar(p.chave || p.modelo) === chaveComparar(i.chave))
+        // No catálogo o CPO aparece sem "CPO" (junto do mesmo modelo)
+        const nomeCatalogo = i.cpo ? i.nome.replace(/ CPO$/, '') : i.nome
+        const chaveCatalogo = i.cpo ? normalizar(nomeCatalogo) : i.chave
+        const prod = listaProdutos.find(p => chaveComparar(p.chave || p.modelo) === chaveComparar(chaveCatalogo))
         const coresProd = prod && vistoHoje(prod.ultima_lista)
           ? Array.from(new Set([...(prod.cor || '').split(',').map(c => c.trim()).filter(Boolean), ...i.cores]))
           : i.cores
         const cor = coresProd.join(', ')
         if (prod) {
-          await supabase.from('produtos_catalogo').update({ marca: i.marca, modelo: i.nome, cor, disponivel: true, chave: i.chave, origem: 'lista', ultima_lista: agora }).eq('id', prod.id)
+          await supabase.from('produtos_catalogo').update({ marca: i.marca, modelo: nomeCatalogo, cor, disponivel: true, chave: chaveCatalogo, origem: 'lista', ultima_lista: agora }).eq('id', prod.id)
         } else {
           await supabase.from('produtos_catalogo').insert([{
-            categoria: 'Celulares', marca: i.marca, modelo: i.nome, memoria: '', cor,
-            disponivel: true, chave: i.chave, origem: 'lista', ultima_lista: agora,
+            categoria: 'Celulares', marca: i.marca, modelo: nomeCatalogo, memoria: '', cor,
+            disponivel: true, chave: chaveCatalogo, origem: 'lista', ultima_lista: agora,
           }])
         }
         // Negociação (custo e preço de venda). Mesmo dia: fica o menor custo e soma as cores
@@ -1265,6 +1281,11 @@ export default function Admin() {
                   ))}
                 </div>
               )}
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 12px', fontSize: 14, color: incluirCpo ? '#ffc800' : '#888', cursor: 'pointer' }}>
+                <input type="checkbox" checked={incluirCpo} style={{ accentColor: '#ffc800', width: 20, height: 20 }}
+                  onChange={e => { setIncluirCpo(e.target.checked); try { localStorage.setItem('incluirCpo', e.target.checked ? 'sim' : 'nao') } catch { /* ok */ } }} />
+                ♻️ Incluir CPO {incluirCpo ? '(os CPO entram separados do novo)' : '(os CPO da lista são ignorados)'}
+              </label>
               <label style={labelStyle}>Cole a lista do fornecedor (do WhatsApp)</label>
               <textarea style={{ ...inputStyle, height: 220, fontFamily: 'monospace', fontSize: 13 }} value={textoLista}
                 onChange={e => setTextoLista(e.target.value)} placeholder={'📲*Redmi 15C 256GB 8Ram*\n*R$:965.00*\n*Preto*\n*Azul*'} />
@@ -1310,6 +1331,7 @@ export default function Admin() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, alignItems: 'flex-start' }}>
                           <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>{i.nome}</p>
+                          {i.cpo && <span style={{ ...tagLista, color: '#ffc800', borderColor: '#ffc800' }}>CPO</span>}
                           {i.status === 'novo' && <span style={{ ...tagLista, color: '#4fc3f7', borderColor: '#4fc3f7' }}>NOVO</span>}
                           {i.status === 'alterado' && <span style={{ ...tagLista, color: '#ffc800', borderColor: '#ffc800' }}>{fmtReal(i.custoAntigo)}{i.fornecedorAntigo ? ` (${i.fornecedorAntigo})` : ''} → {fmtReal(i.custo)}</span>}
                           {i.status === 'igual' && <span style={{ ...tagLista, color: '#888', borderColor: '#333' }}>IGUAL</span>}
