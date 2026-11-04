@@ -325,6 +325,18 @@ export default function Admin() {
     try { localStorage.setItem('ajusteAutoFotos', v ? 'sim' : 'nao') } catch { /* sem armazenamento */ }
   }
 
+  // Envia para o Storage tentando até 3 vezes (o Supabase às vezes responde 504 / internet do 4G oscila)
+  async function subirComRetentativa(nome: string, arquivo: File) {
+    let ultimo: { error: unknown } = { error: null }
+    for (let t = 0; t < 3; t++) {
+      if (t) await new Promise(r => setTimeout(r, 1500 * t))
+      const r = await supabase.storage.from('fotos').upload(nome, arquivo, { upsert: true, contentType: arquivo.type || 'image/jpeg' })
+      if (!r.error) return r
+      ultimo = r
+    }
+    return ultimo
+  }
+
   // Ajusta (se ligado) e envia para o Storage. Devolve a url e, se ajustou, a original
   async function enviarFoto(arquivo: File, prefixo: string, pasta = ''): Promise<{ url: string; original?: File }> {
     // Recorte com IA grátis (no aparelho). Se der errado, envia a foto original sem mexer
@@ -337,7 +349,7 @@ export default function Admin() {
     const final = aj.arquivo
     const ext = (final.name.split('.').pop() || 'jpg').toLowerCase()
     const nomeArquivo = `${pasta}${prefixo}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`
-    const { error } = await supabase.storage.from('fotos').upload(nomeArquivo, final, { upsert: true, contentType: final.type || 'image/jpeg' })
+    const { error } = await subirComRetentativa(nomeArquivo, final)
     if (error) throw error
     const url = supabase.storage.from('fotos').getPublicUrl(nomeArquivo).data.publicUrl
     return { url, original: aj.ajustou ? arquivo : undefined }
@@ -347,7 +359,7 @@ export default function Admin() {
   async function enviarOriginal(arquivo: File, prefixo: string) {
     const ext = (arquivo.name.split('.').pop() || 'jpg').toLowerCase()
     const nomeArquivo = `${prefixo}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`
-    const { error } = await supabase.storage.from('fotos').upload(nomeArquivo, arquivo, { upsert: true, contentType: arquivo.type || 'image/jpeg' })
+    const { error } = await subirComRetentativa(nomeArquivo, arquivo)
     if (error) throw error
     return supabase.storage.from('fotos').getPublicUrl(nomeArquivo).data.publicUrl
   }
