@@ -124,8 +124,24 @@ export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promis
         if (fundoBranco && de >= 0 && Math.abs(lum(p) - lum(de)) > 5) return
         fundo[p] = 1; fila[fim++] = p
       }
-      for (let x = 0; x < w; x++) { tentar(x); tentar((h - 1) * w + x) }
-      for (let y = 0; y < h; y++) { tentar(y * w); tentar(y * w + w - 1) }
+      // Começa o "pintar" pelas bordas da foto, mas NÃO pelas aberturas estreitas
+      // (ponta de cabo branco que encosta na borda): senão ele entra pelo cabo e apaga o meio dele
+      const semear = (borda: number[]) => {
+        const minimo = Math.max(6, Math.round(borda.length * 0.05))
+        let i = 0
+        while (i < borda.length) {
+          if (dist(borda[i] * 4) >= TOL) { i++; continue }
+          let j = i
+          while (j < borda.length && dist(borda[j] * 4) < TOL) j++
+          const encostaNoCanto = i === 0 || j === borda.length
+          if (j - i >= minimo || encostaNoCanto) for (let k = i; k < j; k++) tentar(borda[k])
+          i = j
+        }
+      }
+      semear(Array.from({ length: w }, (_, x) => x))
+      semear(Array.from({ length: w }, (_, x) => (h - 1) * w + x))
+      semear(Array.from({ length: h }, (_, y) => y * w))
+      semear(Array.from({ length: h }, (_, y) => y * w + w - 1))
       while (ini < fim) {
         const p = fila[ini++]
         const x = p % w, y = (p - x) / w
@@ -174,6 +190,49 @@ export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promis
           const margem = x <= R || y <= R || x >= w - 1 - R || y >= h - 1 - R
           if (!cres2[p] && !margem) fundo[p] = 0
         }
+      }
+
+      // Cabo branco "oco": o fundo entrou pela ponta do cabo e apagou o meio dele.
+      // Acha faixas de fundo bem estreitas entre duas partes do produto que seguem por um trecho
+      // comprido (o miolo do cabo) e devolve ao produto.
+      {
+        const larguraMax = Math.max(4, Math.round(Math.min(w, h) * 0.035))
+        const comprimentoMin = larguraMax * 5
+        const marcarMiolo = (horizontal: boolean) => {
+          const linhas = horizontal ? h : w, colunas = horizontal ? w : h
+          const idx = (l: number, c: number) => horizontal ? l * w + c : c * w + l
+          const cand = new Uint8Array(w * h)
+          for (let l = 0; l < linhas; l++) {
+            let c = 0
+            while (c < colunas) {
+              if (!fundo[idx(l, c)]) { c++; continue }
+              let d = c
+              while (d < colunas && fundo[idx(l, d)]) d++
+              if (c > 0 && d < colunas && d - c <= larguraMax) for (let k = c; k < d; k++) cand[idx(l, k)] = 1
+              c = d
+            }
+          }
+          // só vale se a faixa estreita continua por um trecho comprido (miolo de cabo, não um vão qualquer)
+          for (let c = 0; c < colunas; c++) {
+            let l = 0
+            while (l < linhas) {
+              let tem = false
+              for (let k = Math.max(0, c - 1); k <= Math.min(colunas - 1, c + 1); k++) if (cand[idx(l, k)]) tem = true
+              if (!tem) { l++; continue }
+              let fim = l
+              while (fim < linhas) {
+                let t = false
+                for (let k = Math.max(0, c - larguraMax); k <= Math.min(colunas - 1, c + larguraMax); k++) if (cand[idx(fim, k)]) t = true
+                if (!t) break
+                fim++
+              }
+              if (fim - l >= comprimentoMin) for (let q = l; q < fim; q++) if (cand[idx(q, c)]) fundo[idx(q, c)] = 0
+              l = fim + 1
+            }
+          }
+        }
+        marcarMiolo(true)
+        marcarMiolo(false)
       }
 
       // A IA reconheceu como produto: nunca apaga (resolve produto branco em fundo branco)
