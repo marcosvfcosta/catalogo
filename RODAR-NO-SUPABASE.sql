@@ -175,3 +175,8 @@ alter table public.aparelhos add column if not exists precos_cor jsonb;
 alter table public.negociacoes add column if not exists retorno_em date;
 alter table public.negociacoes add column if not exists retorno_nota text;
 alter table public.negociacoes add column if not exists retorno_concluido_em timestamptz;
+
+-- 15) Fornecedor do preço mais barato de cada aparelho (lista do Admin)
+alter table public.aparelhos add column if not exists fornecedor text;
+-- 16) Preços de todos os fornecedores do dia, por cor (Negociação → "Ver fornecedor")
+alter table public.aparelhos add column if not exists ofertas jsonb;

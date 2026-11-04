@@ -16,6 +16,8 @@ type Aparelho = {
   id: string; modelo: string; cores: string[]; fotos: Record<string, string[]>
   preco?: number | null; disponivel?: boolean | null
   precos_cor?: Record<string, number> | null
+  fornecedor?: string | null
+  ofertas?: { dia: string; itens: { f: string; cor: string; custo: number }[] } | null
   doCatalogo?: boolean
 }
 
@@ -406,6 +408,7 @@ export default function Negociacao() {
   const [painelLucro, setPainelLucro] = useState(false)
   const [lucrosEdit, setLucrosEdit] = useState<Record<string, string>>({})
   const [salvandoLucroId, setSalvandoLucroId] = useState<string | null>(null)
+  const [verFornecedor, setVerFornecedor] = useState(false)
   const [form, setForm] = useState({
     nome: '', telefone: '', instagram: '',
     modelo: '', cor: '',
@@ -694,6 +697,7 @@ export default function Negociacao() {
 
   function selecionarAparelho(a: Aparelho) {
     setBuscaModelo(a.modelo)
+    setVerFornecedor(false)
     // Preço de venda vem do cadastro (custo do fornecedor + lucro)
     const valor = a.preco != null ? String(a.preco).replace('.', ',') : form.valor_aparelho
     setForm({ ...form, modelo: a.modelo, cor: '', valor_aparelho: valor })
@@ -977,6 +981,9 @@ export default function Negociacao() {
   // ---------- Dados derivados ----------
 
   const aparelhoSelecionado = todosAparelhos.find(a => a.modelo === form.modelo)
+  // Fornecedores do dia (só para a loja: não vai no WhatsApp nem no catálogo)
+  const ofertasHoje = aparelhoSelecionado?.ofertas?.dia === new Date().toLocaleDateString('sv-SE')
+    ? aparelhoSelecionado.ofertas.itens : []
   const coresDisponiveis = aparelhoSelecionado?.cores || []
   const fotoAtual = form.cor && aparelhoSelecionado?.fotos?.[form.cor]?.[0] || null
   // Cores com preços diferentes (ex: iPhone 17 Pro Max Laranja x Prata)
@@ -1278,6 +1285,46 @@ export default function Negociacao() {
                   <label style={s.label}>Valor do Aparelho *</label>
                   <div style={s.inputPrefix}><span style={s.prefix}>R$</span><input style={{ ...s.input, borderRadius: '0 10px 10px 0', borderColor: erros.valor_aparelho ? '#ff4444' : '#2a2a2a' }} value={form.valor_aparelho} onChange={e => { setForm({ ...form, valor_aparelho: e.target.value }); setErros({...erros, valor_aparelho: ''}) }} placeholder="0,00" /></div>
                   {erros.valor_aparelho && <p style={s.erro}>{erros.valor_aparelho}</p>}
+                  {(ofertasHoje.length > 0 || aparelhoSelecionado?.fornecedor) && (
+                    <div style={{ marginTop: 6 }}>
+                      <button type="button" onClick={() => setVerFornecedor(v => !v)}
+                        style={{ background: 'none', border: 'none', color: '#ffb27a', fontSize: 12, padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>
+                        🏷 {verFornecedor ? 'Esconder fornecedor ▴' : 'Ver fornecedor ▾'}
+                      </button>
+                      {verFornecedor && (() => {
+                        if (!ofertasHoje.length) return <p style={{ color: '#ffb27a', fontSize: 12, margin: '6px 0 0' }}>Fornecedor: <b>{aparelhoSelecionado?.fornecedor}</b></p>
+                        const porCor = (cor: string) => ofertasHoje.filter(o => o.cor === cor).sort((x, y) => x.custo - y.custo)
+                        const coresComOferta = Array.from(new Set(ofertasHoje.map(o => o.cor)))
+                        const linhaCor = (cor: string, destaque: boolean) => {
+                          const lista = porCor(cor)
+                          if (!lista.length) return null
+                          const menor = lista[0].custo
+                          return (
+                            <div key={cor} style={{ marginTop: 8 }}>
+                              <p style={{ margin: '0 0 4px', fontSize: 12, color: destaque ? '#fff' : '#aaa', fontWeight: 700 }}>{cor}</p>
+                              {lista.map((o, k) => (
+                                <p key={o.f} style={{ margin: '2px 0', fontSize: 12, color: k === 0 ? '#25D366' : '#ccc', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                                  <span>{k === 0 ? '✓ ' : `${k + 1}º `}{o.f}</span>
+                                  <span>{fmt(o.custo)}{k > 0 ? ` (+${fmt(o.custo - menor)})` : ''}</span>
+                                </p>
+                              ))}
+                            </div>
+                          )
+                        }
+                        return (
+                          <div style={{ marginTop: 6, background: '#0f0f0f', border: '1px solid #2a2a2a', borderRadius: 10, padding: '6px 10px 10px' }}>
+                            {form.cor && coresComOferta.includes(form.cor) ? (
+                              <>
+                                {linhaCor(form.cor, true)}
+                                {coresComOferta.length > 1 && <p style={{ margin: '10px 0 0', fontSize: 11, color: '#666', textTransform: 'uppercase', letterSpacing: 1 }}>Outras cores</p>}
+                                {coresComOferta.filter(c => c !== form.cor).map(c => linhaCor(c, false))}
+                              </>
+                            ) : coresComOferta.map(c => linhaCor(c, false))}
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label style={s.label}>Entrada{entradaVinculada ? ' (aparelho do cliente)' : ''}</label>

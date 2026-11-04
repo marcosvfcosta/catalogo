@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
-import { ajustarFoto } from '../lib/ajustarFoto'
+import { recortarProduto } from '../lib/recortarProduto'
 import AssistenteIA from './AssistenteIA'
 import VitrineAdmin from './VitrineAdmin'
 
@@ -59,7 +59,13 @@ type Aparelho = {
   precos_cor?: Record<string, number> | null
   chave?: string | null
   disponivel?: boolean | null
+  fornecedor?: string | null
+  ofertas?: Ofertas | null
 }
+
+// Preços de todos os fornecedores do dia, por cor (para achar outro fornecedor quando o mais barato não tem)
+type Ofertas = { dia: string; itens: { f: string; cor: string; custo: number }[] }
+const diaHoje = () => new Date().toLocaleDateString('sv-SE') // AAAA-MM-DD no horário do aparelho
 
 type ItemLista = {
   marca: string
@@ -77,6 +83,7 @@ type ItemPreparado = ItemLista & {
   chave: string
   status: 'novo' | 'alterado' | 'igual' | 'maiscaro'
   custoAntigo: number | null
+  fornecedorAntigo?: string | null
   marcado: boolean
 }
 
@@ -103,8 +110,20 @@ function lucroPorMemoria(memoria: string | null | undefined) {
 const normalizar = (t: string | null | undefined) =>
   (t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
 
+// iPhone/iPad: cada fornecedor escreve de um jeito (com 5G, com RAM...). Sem isso o mesmo aparelho
+// virava dois e o preço mais barato não era comparado.
+const ehApple = (i: { marca?: string | null; modelo?: string | null }) =>
+  /apple/i.test(i.marca || '') || /^(iphone|ipad)/i.test((i.modelo || '').trim())
+
 function montarNome(i: ItemLista) {
+  if (ehApple(i)) return [i.modelo, i.memoria].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
   return [i.modelo, i.memoria, i.ram ? `${i.ram} RAM` : '', i.rede || ''].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
+}
+
+// Chave para achar o mesmo aparelho entre listas de fornecedores diferentes
+function chaveComparar(chaveOuNome: string | null | undefined) {
+  const k = normalizar(chaveOuNome)
+  return /^(iphone|ipad)/.test(k) ? k.replace(/\d+gbram/g, '').replace(/[45]g$/, '') : k
 }
 
 function fmtReal(v: number | null | undefined) {
@@ -193,6 +212,7 @@ export default function Admin() {
   // Fundo com IA: url nova → url de antes (para o botão "voltar")
   const [antesIA, setAntesIA] = useState<Record<string, string>>({})
   const [iaTrabalhando, setIaTrabalhando] = useState<string | null>(null)
+  const [avisoIA, setAvisoIA] = useState('') // aviso enquanto a IA baixa / recorta
   const [apPrecosCor, setApPrecosCor] = useState<Record<string, string>>({})
 
   const [aparelhos, setAparelhos] = useState<Aparelho[]>([])
@@ -210,6 +230,11 @@ export default function Admin() {
   const [modoCadastro, setModoCadastro] = useState<'produto' | 'lista'>('produto')
   const [textoLista, setTextoLista] = useState('')
   const [lendoLista, setLendoLista] = useState(false)
+  // De qual fornecedor é a lista colada (fica salvo no aparelho o fornecedor do preço mais barato)
+  const [fornecedorLista, setFornecedorLista] = useState('')
+  const [fornecedoresSalvos, setFornecedoresSalvos] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('fornecedores') || '[]') } catch { return [] }
+  })
   const [itensLista, setItensLista] = useState<ItemPreparado[] | null>(null)
   const [saidas, setSaidas] = useState<Saida[]>([])
   const [finalizando, setFinalizando] = useState(false)
@@ -294,7 +319,13 @@ export default function Admin() {
 
   // Ajusta (se ligado) e envia para o Storage. Devolve a url e, se ajustou, a original
   async function enviarFoto(arquivo: File, prefixo: string, pasta = ''): Promise<{ url: string; original?: File }> {
-    const aj = ajusteAuto ? await ajustarFoto(arquivo) : { arquivo, ajustou: false }
+    // Recorte com IA grátis (no aparelho). Se der errado, envia a foto original sem mexer
+    let aj = { arquivo, ajustou: false }
+    if (ajusteAuto) {
+      try { aj = { arquivo: await recortarProduto(arquivo, setAvisoIA), ajustou: true } }
+      catch (e) { console.error('Recorte:', e) }
+      setAvisoIA('')
+    }
     const final = aj.arquivo
     const ext = (final.name.split('.').pop() || 'jpg').toLowerCase()
     const nomeArquivo = `${pasta}${prefixo}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`
@@ -313,28 +344,18 @@ export default function Admin() {
     return supabase.storage.from('fotos').getPublicUrl(nomeArquivo).data.publicUrl
   }
 
-  // ─── Tirar fundo com IA (Gemini) ───
-  async function fundoComIA(url: string, proporcao: '1:1' | '3:4') {
-    const { data, error } = await supabase.functions.invoke('gerar-banner', { body: { acao: 'tirar_fundo', foto_url: url, proporcao } })
-    if (error || !data?.imagem) {
-      let msg = data?.error || ''
-      try { msg = msg || (await (error as unknown as { context?: Response })?.context?.json())?.error || '' } catch { /* ok */ }
-      throw new Error(msg || error?.message || 'A IA não respondeu')
-    }
-    const bytes = Uint8Array.from(atob(data.imagem), c => c.charCodeAt(0))
-    let arquivo = new File([bytes], 'ia.png', { type: data.mime || 'image/png' })
-    // Produto: fundo branco vira transparente e centraliza no quadrado padrão
-    if (proporcao === '1:1') arquivo = (await ajustarFoto(arquivo)).arquivo
-    return enviarOriginal(arquivo, 'ia')
+  // ─── Recorte com IA grátis (roda no aparelho, sem custo) ───
+  async function recortarUrl(url: string) {
+    const r = await fetch(url, { cache: 'no-store' })
+    if (!r.ok) throw new Error('Não consegui abrir a foto')
+    try { return await enviarOriginal(await recortarProduto(await r.blob(), setAvisoIA), 'ia') }
+    finally { setAvisoIA('') }
   }
 
-  const AVISO_IA = 'Tirar o fundo com IA (Gemini)?\n\nUsa seus créditos do Gemini (cerca de R$ 0,20 por foto). Confira se a capa/aparelho ficou igual — dá pra voltar para a foto de antes.'
-
-  async function iaCapinha(f: CapaFoto) {
-    if (!confirm(AVISO_IA)) return
+  async function recortarCapinha(f: CapaFoto) {
     setIaTrabalhando(f.url)
     try {
-      const nova = await fundoComIA(f.url, '3:4')
+      const nova = await recortarUrl(f.url)
       await supabase.from('capas_fotos').update({ url: nova }).eq('id', f.id)
       setAntesIA(prev => ({ ...prev, [nova]: f.url }))
       await carregarCapas()
@@ -350,21 +371,11 @@ export default function Admin() {
     carregarCapas()
   }
 
-  // 🪄 Ajuste grátis (no próprio navegador): tira o fundo liso/as pontas brancas e centraliza
-  async function ajusteGratis(url: string) {
-    const r = await fetch(url, { cache: 'no-store' })
-    if (!r.ok) throw new Error('Não consegui abrir a foto')
-    const blob = await r.blob()
-    const aj = await ajustarFoto(new File([blob], 'foto.' + ((blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg')), { type: blob.type || 'image/png' }))
-    if (!aj.ajustou || !aj.semFundo) throw new Error('Não achei fundo branco/pontas pra tirar nessa foto (fundo com cenário ou já está limpa). Se precisar, use o ✨ Tirar fundo.')
-    return enviarOriginal(aj.arquivo, 'aj')
-  }
-
-  async function iaFotoEdicao(url: string, fotoId?: string, modo: 'ia' | 'ajuste' = 'ia') {
-    if (!editando || (modo === 'ia' && !confirm(AVISO_IA))) return
-    setIaTrabalhando(url + (modo === 'ajuste' ? '#aj' : ''))
+  async function iaFotoEdicao(url: string, fotoId?: string) {
+    if (!editando) return
+    setIaTrabalhando(url)
     try {
-      const nova = modo === 'ajuste' ? await ajusteGratis(url) : await fundoComIA(url, '1:1')
+      const nova = await recortarUrl(url)
       if (fotoId) await supabase.from('produto_fotos').update({ url: nova }).eq('id', fotoId)
       else {
         await supabase.from('produtos_catalogo').update({ foto_url: nova }).eq('id', editando.id)
@@ -769,6 +780,11 @@ export default function Admin() {
   // ─── Lista do dia: ler, conferir e aplicar ───
   async function lerLista() {
     if (textoLista.trim().length < 10) { alert('Cole a lista do fornecedor'); return }
+    if (!fornecedorLista.trim()) { alert('Escreva de qual fornecedor é essa lista'); return }
+    const nomeForn = fornecedorLista.trim()
+    const novosForn = [nomeForn, ...fornecedoresSalvos.filter(f => f.toLowerCase() !== nomeForn.toLowerCase())].slice(0, 12)
+    setFornecedoresSalvos(novosForn)
+    try { localStorage.setItem('fornecedores', JSON.stringify(novosForn)) } catch { /* sem armazenamento */ }
     setLendoLista(true)
     setItensLista(null)
     setSaidas([])
@@ -782,10 +798,10 @@ export default function Admin() {
 
       const [{ data: prods }, { data: aps }] = await Promise.all([
         supabase.from('produtos_catalogo').select('id, marca, modelo, memoria, chave, disponivel'),
-        supabase.from('aparelhos').select('id, modelo, marca, chave, custo, disponivel, ultima_lista'),
+        supabase.from('aparelhos').select('*'),
       ])
       const listaProdutos = (prods || []) as { id: string; marca: string; modelo: string; memoria?: string; chave?: string; disponivel?: boolean }[]
-      const listaAparelhos = (aps || []) as { id: string; modelo: string; marca?: string; chave?: string; custo?: number; disponivel?: boolean; ultima_lista?: string }[]
+      const listaAparelhos = (aps || []) as { id: string; modelo: string; marca?: string; chave?: string; custo?: number; disponivel?: boolean; ultima_lista?: string; fornecedor?: string | null }[]
 
       const vistos = new Set<string>()
       const preparados: ItemPreparado[] = []
@@ -816,14 +832,14 @@ export default function Admin() {
         }
         vistos.add(chave)
         item.custos_cor = Object.fromEntries(item.cores.map(c => [c, item.custo]))
-        const ap = listaAparelhos.find(a => (a.chave || normalizar(a.modelo)) === chave)
-        const existeProduto = listaProdutos.some(p => (p.chave || normalizar(p.modelo)) === chave)
+        const ap = listaAparelhos.find(a => chaveComparar(a.chave || a.modelo) === chaveComparar(chave))
+        const existeProduto = listaProdutos.some(p => chaveComparar(p.chave || p.modelo) === chaveComparar(chave))
         const custoAntigo = ap?.custo != null ? Number(ap.custo) : null
         // Já veio em outra lista hoje com custo menor: mantém o menor
         const status: ItemPreparado['status'] = !ap && !existeProduto ? 'novo'
           : custoAntigo != null && vistoHoje(ap?.ultima_lista) && custoAntigo < item.custo ? 'maiscaro'
           : custoAntigo != null && custoAntigo !== item.custo ? 'alterado' : 'igual'
-        preparados.push({ ...item, nome, chave, status, custoAntigo, marcado: true })
+        preparados.push({ ...item, nome, chave, status, custoAntigo, fornecedorAntigo: ap?.fornecedor || null, marcado: true })
       }
 
       setItensLista(preparados)
@@ -848,17 +864,20 @@ export default function Admin() {
       supabase.from('aparelhos').select('*'),
     ])
     const listaProdutos = (prods || []) as { id: string; modelo: string; chave?: string; cor?: string; ultima_lista?: string }[]
-    const listaAparelhos = (aps || []) as { id: string; modelo: string; chave?: string; cores?: string[]; fotos?: Record<string, string[]>; custo?: number; ultima_lista?: string; precos_cor?: Record<string, number> | null }[]
+    const listaAparelhos = (aps || []) as { id: string; modelo: string; chave?: string; cores?: string[]; fotos?: Record<string, string[]>; custo?: number; ultima_lista?: string; precos_cor?: Record<string, number> | null; fornecedor?: string | null; ofertas?: Ofertas | null }[]
+    const nomeFornecedor = fornecedorLista.trim() || null
 
     let feitos = 0
     let falhas = 0
     let semColunaCor = false
+    let semColunaForn = false
+    let semColunaOfertas = false
     let comPrecoPorCor = 0
     for (const i of selecionados) {
       try {
         if (i.custos_cor && new Set(Object.values(i.custos_cor)).size > 1) comPrecoPorCor++
         // Catálogo (sem preço). Se já veio em outra lista hoje, soma as cores
-        const prod = listaProdutos.find(p => (p.chave || normalizar(p.modelo)) === i.chave)
+        const prod = listaProdutos.find(p => chaveComparar(p.chave || p.modelo) === chaveComparar(i.chave))
         const coresProd = prod && vistoHoje(prod.ultima_lista)
           ? Array.from(new Set([...(prod.cor || '').split(',').map(c => c.trim()).filter(Boolean), ...i.cores]))
           : i.cores
@@ -872,9 +891,11 @@ export default function Admin() {
           }])
         }
         // Negociação (custo e preço de venda). Mesmo dia: fica o menor custo e soma as cores
-        const ap = listaAparelhos.find(a => (a.chave || normalizar(a.modelo)) === i.chave)
+        const ap = listaAparelhos.find(a => chaveComparar(a.chave || a.modelo) === chaveComparar(i.chave))
         const mesmoDia = !!ap && vistoHoje(ap.ultima_lista)
         const custo = mesmoDia && ap?.custo != null ? Math.min(Number(ap.custo), i.custo) : i.custo
+        // Fornecedor do preço que ficou (o mais barato do dia)
+        const fornecedor = mesmoDia && ap?.custo != null && Number(ap.custo) <= i.custo ? (ap.fornecedor || null) : nomeFornecedor
         const lucro = lucroPorMemoria(i.memoria)
         const preco = custo + lucro
         const cores = mesmoDia ? Array.from(new Set([...(ap?.cores || []), ...i.cores])) : i.cores
@@ -884,17 +905,29 @@ export default function Admin() {
           const p = v + lucro
           precosCor[c] = precosCor[c] != null ? Math.min(precosCor[c], p) : p
         }
-        const dadosAp = { modelo: i.nome, marca: i.marca, memoria: i.memoria, cores, custo, preco, precos_cor: precosCor, chave: i.chave, disponivel: true, ultima_lista: agora }
-        const r = ap
-          ? await supabase.from('aparelhos').update(dadosAp).eq('id', ap.id)
-          : await supabase.from('aparelhos').insert([{ ...dadosAp, fotos: {} }])
-        if (r.error?.message?.includes('precos_cor')) {
-          // SQL novo ainda não rodado: salva sem o preço por cor (e avisa no final)
-          semColunaCor = true
-          const { precos_cor: _semColuna, ...semPrecoCor } = dadosAp
-          void _semColuna
-          if (ap) await supabase.from('aparelhos').update(semPrecoCor).eq('id', ap.id)
-          else await supabase.from('aparelhos').insert([{ ...semPrecoCor, fotos: {} }])
+        // Guarda o preço desse fornecedor em cada cor (só as do dia; as de ontem somem)
+        const hoje = diaHoje()
+        const itensOferta = ap?.ofertas?.dia === hoje ? [...ap.ofertas.itens] : []
+        if (nomeFornecedor) {
+          const porCor = Object.keys(i.custos_cor || {}).length ? i.custos_cor! : Object.fromEntries(i.cores.map(c => [c, i.custo]))
+          for (const [c, v] of Object.entries(porCor)) {
+            const k = itensOferta.findIndex(o => o.cor === c && o.f.toLowerCase() === nomeFornecedor.toLowerCase())
+            if (k >= 0) itensOferta.splice(k, 1)
+            itensOferta.push({ f: nomeFornecedor, cor: c, custo: Number(v) })
+          }
+        }
+        const dadosAp: Record<string, unknown> = { modelo: ap?.modelo || i.nome, marca: i.marca, memoria: i.memoria, cores, custo, preco, precos_cor: precosCor, fornecedor, ofertas: { dia: hoje, itens: itensOferta }, chave: ap?.chave || i.chave, disponivel: true, ultima_lista: agora }
+        // Tenta salvar; se faltar alguma coluna nova no Supabase (SQL não rodado), tira ela e tenta de novo
+        for (let tentativa = 0; tentativa < 4; tentativa++) {
+          const r = ap
+            ? await supabase.from('aparelhos').update(dadosAp).eq('id', ap.id)
+            : await supabase.from('aparelhos').insert([{ ...dadosAp, fotos: {} }])
+          const msg = r.error?.message || ''
+          if (!r.error) break
+          if (msg.includes('precos_cor')) { semColunaCor = true; delete dadosAp.precos_cor; continue }
+          if (msg.includes('fornecedor')) { semColunaForn = true; delete dadosAp.fornecedor; continue }
+          if (msg.includes('ofertas')) { semColunaOfertas = true; delete dadosAp.ofertas; continue }
+          throw r.error
         }
       } catch (e) {
         falhas++
@@ -909,7 +942,9 @@ export default function Admin() {
       : 'Lista salva! Pode colar a próxima lista. Quando terminar todas as listas de hoje, toque em "Finalizar o dia".')
       + (semColunaCor
         ? '\n\n⚠️ O PREÇO POR COR NÃO FOI SALVO: falta rodar no Supabase (SQL Editor) a linha:\nalter table public.aparelhos add column if not exists precos_cor jsonb;\nDepois cole a lista de novo.'
-        : comPrecoPorCor ? `\n\n🎨 ${comPrecoPorCor} aparelho(s) com preço diferente por cor. Na Negociação o valor muda ao tocar na cor.` : ''))
+        : comPrecoPorCor ? `\n\n🎨 ${comPrecoPorCor} aparelho(s) com preço diferente por cor. Na Negociação o valor muda ao tocar na cor.` : '')
+      + (semColunaForn ? '\n\n⚠️ O FORNECEDOR NÃO FOI SALVO: falta criar no Supabase a coluna "fornecedor" (tipo text) na tabela aparelhos.' : '')
+      + (semColunaOfertas ? '\n\n⚠️ A LISTA DE FORNECEDORES NÃO FOI SALVA: falta criar no Supabase a coluna "ofertas" (tipo jsonb) na tabela aparelhos.' : ''))
     setItensLista(null)
     setTextoLista('')
     carregarProdutos()
@@ -1020,32 +1055,35 @@ export default function Admin() {
   const coresAtivas = editandoAparelho ? editandoAparelho.cores : coresSelecionadas
   const fotosAtivas = editandoAparelho ? editandoAparelho.fotos : fotosAparelho
 
-  // Botões "✨ Tirar fundo (IA)" e "↺ Voltar" embaixo de cada foto
-  const botoesIA = (url: string, aoUsar: () => void, aoVoltar: () => void, aoAjustar?: () => void) => (
+  // Botões "🪄 Recortar" (IA grátis) e "↺ Voltar" embaixo de cada foto
+  const botoesIA = (url: string, aoRecortar: () => void, aoVoltar: () => void) => (
     <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-      {aoAjustar && (
-        <button onClick={aoAjustar} disabled={!!iaTrabalhando} title="Grátis: tira as pontas/fundo branco e centraliza"
-          style={{ ...btnIA, background: '#0f2417', borderColor: '#25D366', color: '#7dffb0', opacity: iaTrabalhando && iaTrabalhando !== url + '#aj' ? 0.4 : 1 }}>
-          {iaTrabalhando === url + '#aj' ? '⏳...' : '🪄 Ajustar'}
-        </button>
-      )}
-      <button onClick={aoUsar} disabled={!!iaTrabalhando} style={{ ...btnIA, opacity: iaTrabalhando && iaTrabalhando !== url ? 0.4 : 1 }}>
-        {iaTrabalhando === url ? '⏳ IA...' : '✨ Tirar fundo'}
+      <button onClick={aoRecortar} disabled={!!iaTrabalhando} title="Grátis: a IA recorta só o produto e centraliza"
+        style={{ ...btnIA, background: '#0f2417', borderColor: '#25D366', color: '#7dffb0', opacity: iaTrabalhando && iaTrabalhando !== url ? 0.4 : 1 }}>
+        {iaTrabalhando === url ? '⏳ Recortando...' : '🪄 Recortar'}
       </button>
       {antesIA[url] && <button onClick={aoVoltar} style={{ ...btnIA, flex: '0 0 auto', background: '#1a1a1a', color: '#ccc', borderColor: '#333' }} title="Voltar para a foto de antes">↺</button>}
     </div>
   )
 
+  // Aviso flutuante enquanto a IA baixa / recorta
+  const avisoFlutuante = avisoIA ? (
+    <div style={{ position: 'fixed', left: 16, right: 16, bottom: 20, zIndex: 9999, background: '#0f2417', border: '1px solid #25D366', color: '#7dffb0', borderRadius: 14, padding: '12px 14px', fontSize: 14, fontWeight: 700, textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+      ⏳ {avisoIA}
+    </div>
+  ) : null
+
   const seletorAjuste = (
     <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: ajusteAuto ? '#25D366' : '#888', margin: '0 0 8px', cursor: 'pointer' }}>
       <input type="checkbox" checked={ajusteAuto} onChange={e => alternarAjuste(e.target.checked)} style={{ accentColor: '#25D366', width: 16, height: 16 }} />
-      🪄 Ajustar fotos automaticamente (tira o fundo e centraliza)
+      🪄 Recortar fotos automaticamente com IA grátis (deixa só o produto)
     </label>
   )
 
   if (editando) {
     return (
       <div style={adminPage}>
+        {avisoFlutuante}
         <div style={adminHeader}>
           <div><span style={logoMarcas}>Marcos</span><span style={{ ...logoMag, display: 'inline', marginLeft: 4 }}> Magazine</span></div>
           <button style={btnSecundario} onClick={() => { setEditando(null); setFotosEdicao([]) }}>← Voltar</button>
@@ -1113,7 +1151,7 @@ export default function Admin() {
                     <button onClick={excluirCapaEdicao} style={btnRemoverFoto}>✕</button>
                     {originais[editando.foto_url] && <button onClick={() => usarOriginalEdicao(editando.foto_url!)} style={btnOriginal}>↺ original</button>}
                   </div>
-                  {botoesIA(editando.foto_url, () => iaFotoEdicao(editando.foto_url!), () => voltarFotoEdicao(editando.foto_url!), () => iaFotoEdicao(editando.foto_url!, undefined, 'ajuste'))}
+                  {botoesIA(editando.foto_url, () => iaFotoEdicao(editando.foto_url!), () => voltarFotoEdicao(editando.foto_url!))}
                   <select style={seletorCor} value={editando.foto_cor || ''} onChange={e => definirCorFoto(null, e.target.value)}>
                     <option value="">Cor?</option>
                     {Array.from(new Set([...coresDoProduto(editando), editando.foto_cor || ''].filter(Boolean))).map(c => <option key={c}>{c}</option>)}
@@ -1128,7 +1166,7 @@ export default function Admin() {
                     <button onClick={() => excluirFotoExtra(foto.id, editando.id)} style={btnRemoverFoto}>✕</button>
                     {originais[foto.url] && <button onClick={() => usarOriginalEdicao(foto.url, foto.id)} style={btnOriginal}>↺ original</button>}
                   </div>
-                  {botoesIA(foto.url, () => iaFotoEdicao(foto.url, foto.id), () => voltarFotoEdicao(foto.url, foto.id), () => iaFotoEdicao(foto.url, foto.id, 'ajuste'))}
+                  {botoesIA(foto.url, () => iaFotoEdicao(foto.url, foto.id), () => voltarFotoEdicao(foto.url, foto.id))}
                   <select style={seletorCor} value={foto.cor || ''} onChange={e => definirCorFoto(foto, e.target.value)}>
                     <option value="">Cor?</option>
                     {Array.from(new Set([...coresDoProduto(editando), foto.cor || ''].filter(Boolean))).map(c => <option key={c}>{c}</option>)}
@@ -1155,6 +1193,7 @@ export default function Admin() {
 
   return (
     <div style={adminPage}>
+      {avisoFlutuante}
       <div style={adminHeader}>
         <div><span style={logoMarcas}>Marcos</span><span style={{ ...logoMag, display: 'inline', marginLeft: 4 }}> Magazine</span></div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -1216,6 +1255,16 @@ export default function Admin() {
                   {resumoHoje.faltando > 0 && <p style={{ margin: '4px 0 0', color: '#888', fontSize: 12 }}>{resumoHoje.faltando} ainda não apareceram em nenhuma lista hoje</p>}
                 </div>
               )}
+              <label style={labelStyle}>De qual fornecedor é a lista?</label>
+              <input style={inputStyle} value={fornecedorLista} onChange={e => setFornecedorLista(e.target.value)} placeholder="Ex: João Importados" />
+              {fornecedoresSalvos.length > 0 && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '-4px 0 12px' }}>
+                  {fornecedoresSalvos.map(f => (
+                    <button key={f} type="button" onClick={() => setFornecedorLista(f)}
+                      style={{ background: fornecedorLista === f ? '#ff6600' : '#1a1a1a', color: fornecedorLista === f ? '#fff' : '#ccc', border: '1px solid #333', borderRadius: 16, padding: '5px 12px', fontSize: 12, cursor: 'pointer' }}>{f}</button>
+                  ))}
+                </div>
+              )}
               <label style={labelStyle}>Cole a lista do fornecedor (do WhatsApp)</label>
               <textarea style={{ ...inputStyle, height: 220, fontFamily: 'monospace', fontSize: 13 }} value={textoLista}
                 onChange={e => setTextoLista(e.target.value)} placeholder={'📲*Redmi 15C 256GB 8Ram*\n*R$:965.00*\n*Preto*\n*Azul*'} />
@@ -1262,9 +1311,9 @@ export default function Admin() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, alignItems: 'flex-start' }}>
                           <p style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>{i.nome}</p>
                           {i.status === 'novo' && <span style={{ ...tagLista, color: '#4fc3f7', borderColor: '#4fc3f7' }}>NOVO</span>}
-                          {i.status === 'alterado' && <span style={{ ...tagLista, color: '#ffc800', borderColor: '#ffc800' }}>{fmtReal(i.custoAntigo)} → {fmtReal(i.custo)}</span>}
+                          {i.status === 'alterado' && <span style={{ ...tagLista, color: '#ffc800', borderColor: '#ffc800' }}>{fmtReal(i.custoAntigo)}{i.fornecedorAntigo ? ` (${i.fornecedorAntigo})` : ''} → {fmtReal(i.custo)}</span>}
                           {i.status === 'igual' && <span style={{ ...tagLista, color: '#888', borderColor: '#333' }}>IGUAL</span>}
-                          {i.status === 'maiscaro' && <span style={{ ...tagLista, color: '#888', borderColor: '#555' }}>fica {fmtReal(i.custoAntigo)} (outra lista)</span>}
+                          {i.status === 'maiscaro' && <span style={{ ...tagLista, color: '#888', borderColor: '#555' }}>fica {fmtReal(i.custoAntigo)} ({i.fornecedorAntigo || 'outra lista'}, mais barato)</span>}
                         </div>
                         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', margin: '6px 0' }}>
                           {i.cores.map(c => (
@@ -1541,7 +1590,7 @@ export default function Admin() {
                     <img src={f.url} alt="capinha" style={{ width: '100%', aspectRatio: '3 / 4', objectFit: 'cover', borderRadius: 10, border: '1px solid #333', display: 'block' }} />
                     <button onClick={() => excluirCapinha(f)}
                       style={{ position: 'absolute', top: 4, right: 4, background: '#7a1111', border: 'none', color: 'white', borderRadius: '50%', width: 26, height: 26, cursor: 'pointer', fontSize: 12 }}>✕</button>
-                    {botoesIA(f.url, () => iaCapinha(f), () => voltarCapinha(f))}
+                    {botoesIA(f.url, () => recortarCapinha(f), () => voltarCapinha(f))}
                   </div>
                 ))}
               </div>
@@ -1669,6 +1718,7 @@ export default function Admin() {
                       ? <span style={{ color: '#25D366', fontWeight: 700 }}>{Object.entries(ap.precos_cor).map(([c, v]) => `${c} ${fmtReal(v)}`).join(' · ')}</span>
                       : ap.preco != null && <span style={{ color: '#25D366', fontWeight: 700 }}>{fmtReal(ap.preco)}</span>}
                     {ap.custo != null && <span> · custo {fmtReal(ap.custo)}</span>}
+                    {ap.fornecedor && <span style={{ color: '#ffb27a' }}> · 🏷 {ap.fornecedor}</span>}
                     {ap.disponivel === false && <span style={{ color: '#ff4444', fontWeight: 700 }}> · Indisponível</span>}
                     {Object.values(ap.fotos || {}).flat().length === 0 && <span style={{ color: '#ffc800' }}> · sem foto</span>}
                   </p>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../supabase'
-import { ajustarFoto } from '../lib/ajustarFoto'
+import { recortarProduto } from '../lib/recortarProduto'
 
 // ─── Tipos ─────────────────────────────────────────
 type ProdutoIA = {
@@ -254,7 +254,9 @@ export default function AssistenteIA({ produtos, banners, ajusteAuto, aoMudar }:
     for (let i = 0; i < prontas.length; i++) {
       const f = prontas[i]
       try {
-        const aj = ajusteAuto ? await ajustarFoto(f.arquivo) : { arquivo: f.arquivo }
+        // Recorte com IA grátis; se falhar, usa a foto original
+        let aj = { arquivo: f.arquivo }
+        if (ajusteAuto) { try { aj = { arquivo: await recortarProduto(f.arquivo) } } catch (e) { console.error('Recorte:', e) } }
         const final = aj.arquivo
         const ext = (final.name.split('.').pop() || 'jpg').toLowerCase()
         const nome = `prod_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`
@@ -531,7 +533,7 @@ export default function AssistenteIA({ produtos, banners, ajusteAuto, aoMudar }:
 
       {/* ─── Fotos ─── */}
       <h2 style={{ ...titulo, marginTop: 36 }}>📷 Fotos com IA</h2>
-      <p style={ajuda}>Selecione várias fotos de uma vez. A IA descobre de qual produto é cada uma e coloca no lugar certo.{ajusteAuto ? ' As fotos serão ajustadas (fundo e centro) ao salvar.' : ''}</p>
+      <p style={ajuda}>Selecione várias fotos de uma vez. A IA descobre de qual produto é cada uma e coloca no lugar certo.{ajusteAuto ? ' A IA recorta só o produto de cada foto ao salvar.' : ''}</p>
       <label style={caixaUpload}>
         📸 Escolher fotos da galeria
         <input type="file" accept="image/*" multiple style={{ display: 'none' }}
