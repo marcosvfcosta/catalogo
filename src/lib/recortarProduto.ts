@@ -87,11 +87,24 @@ async function mascaraDoProduto(arquivo: Blob, aviso?: (t: string) => void) {
   return { w: LADO, h: LADO, dados }
 }
 
-export async function recortarProduto(original: Blob, aviso?: (t: string) => void): Promise<File> {
+// Uma foto por vez: a IA não aguenta duas ao mesmo tempo (ex: enviar foto nova enquanto recorta outra)
+let fila: Promise<unknown> = Promise.resolve()
+
+function comTempo<T>(p: Promise<T>, ms: number) {
+  return Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error('A IA demorou demais')), ms))])
+}
+
+export function recortarProduto(original: Blob, aviso?: (t: string) => void): Promise<File> {
+  const vez = fila.then(() => recortarAgora(original, aviso))
+  fila = vez.catch(() => undefined)
+  return vez
+}
+
+async function recortarAgora(original: Blob, aviso?: (t: string) => void): Promise<File> {
   const arquivo = original instanceof File ? original
     : new File([original], 'foto.' + ((original.type.split('/')[1] || 'png').replace('jpeg', 'jpg')), { type: original.type || 'image/png' })
   let mascara
-  try { mascara = await mascaraDoProduto(arquivo, aviso) }
+  try { mascara = await comTempo(mascaraDoProduto(arquivo, aviso), 60000) }
   catch (e) { console.error('IA do recorte:', e) } // sem IA: faz só o ajuste normal
   const aj = await ajustarFoto(arquivo, mascara)
   if (!aj.ajustou || !aj.semFundo) throw new Error('Não consegui separar o produto do fundo nessa foto')

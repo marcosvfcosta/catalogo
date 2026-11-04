@@ -415,6 +415,7 @@ export default function Admin() {
     if (arquivos.length === 0) return
     setEnviandoFotos({ feitas: 0, total: arquivos.length })
     let falhas = 0
+    let ultimoErro = ''
     for (let i = 0; i < arquivos.length; i++) {
       try {
         const { url, original } = await enviarFoto(arquivos[i], prefixo, pasta)
@@ -422,12 +423,13 @@ export default function Admin() {
         await aoEnviar(url)
       } catch (e) {
         falhas++
+        ultimoErro = e instanceof Error ? e.message : (e as { message?: string })?.message || String(e)
         console.error(e)
       }
       setEnviandoFotos({ feitas: i + 1, total: arquivos.length })
     }
     setEnviandoFotos(null)
-    if (falhas) alert(`${falhas} foto(s) não foram enviadas. Tente de novo.`)
+    if (falhas) alert(`${falhas} foto(s) não foram enviadas. Tente de novo.\n\nMotivo: ${ultimoErro}`)
   }
 
   // ─── Fotos do produto novo ───
