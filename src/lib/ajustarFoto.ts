@@ -10,6 +10,8 @@ const LIMITE_TRABALHO = 1200   // reduz fotos grandes antes de processar (mais r
 const TOLERANCIA = 38          // diferença de cor aceita como "fundo"
 
 export type FotoAjustada = { arquivo: File; ajustou: boolean; semFundo: boolean }
+// Máscara da IA (0 = fundo, 1 = produto), em qualquer tamanho: protege o produto de ser apagado
+export type MascaraIA = { w: number; h: number; dados: Float32Array }
 
 function carregarImagem(arquivo: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -30,7 +32,7 @@ function paraArquivo(canvas: HTMLCanvasElement, nomeBase: string): Promise<File>
   })
 }
 
-export async function ajustarFoto(original: File): Promise<FotoAjustada> {
+export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promise<FotoAjustada> {
   try {
     const img = await carregarImagem(original)
     const escala = Math.min(1, LIMITE_TRABALHO / Math.max(img.width, img.height))
@@ -92,7 +94,24 @@ export async function ajustarFoto(original: File): Promise<FotoAjustada> {
     const dist = (i: number) => distDe(coresFundo, i)
     const bordasLisas = normalOk || soPontas
 
+    // Valor da máscara da IA no pixel (x, y) da foto de trabalho
+    const ia = mascaraIA ? (x: number, y: number) => {
+      const mx = Math.min(mascaraIA.w - 1, Math.floor(x * mascaraIA.w / w))
+      const my = Math.min(mascaraIA.h - 1, Math.floor(y * mascaraIA.h / h))
+      return mascaraIA.dados[my * mascaraIA.w + mx]
+    } : null
+
     const fundo = new Uint8Array(w * h) // 1 = fundo
+    if (!bordasLisas && ia) {
+      // Fundo com cenário: usa só a IA (borda suave pela própria máscara)
+      for (let p = 0; p < w * h; p++) {
+        const x = p % w, y = (p - x) / w
+        const v = ia(x, y)
+        if (v < 0.5) fundo[p] = 1
+        px[p * 4 + 3] = Math.round(Math.min(1, Math.max(0, (v - 0.15) / 0.7)) * 255)
+      }
+      ctx.putImageData(dados, 0, 0)
+    }
     if (bordasLisas) {
       // ── 2. Pinta o fundo a partir das bordas (só o que encosta na borda some)
       const fila = new Int32Array(w * h)
@@ -157,8 +176,17 @@ export async function ajustarFoto(original: File): Promise<FotoAjustada> {
         }
       }
 
+      // A IA reconheceu como produto: nunca apaga (resolve produto branco em fundo branco)
+      if (ia) {
+        for (let p = 0; p < w * h; p++) {
+          if (!fundo[p]) continue
+          const x = p % w, y = (p - x) / w
+          if (ia(x, y) > 0.5) fundo[p] = 0
+        }
+      }
+
       // Só pontas: se apagou demais (ex: aparelho branco encostando na borda), desiste e usa a original
-      if (soPontas) {
+      if (soPontas && !ia) {
         let apagados = 0
         for (let p = 0; p < w * h; p++) apagados += fundo[p]
         if (apagados > w * h * 0.35) return { arquivo: original, ajustou: false, semFundo: false }
@@ -205,7 +233,7 @@ export async function ajustarFoto(original: File): Promise<FotoAjustada> {
       {
         let resto = 0
         for (let p = 0; p < w * h; p++) resto += fundo[p] ? 0 : 1
-        if (resto < w * h * 0.06) return { arquivo: original, ajustou: false, semFundo: false }
+        if (resto < w * h * 0.06 && !ia) return { arquivo: original, ajustou: false, semFundo: false }
       }
 
       // Aplica transparência, com borda suave para não ficar serrilhado
@@ -249,7 +277,7 @@ export async function ajustarFoto(original: File): Promise<FotoAjustada> {
 
     const nomeBase = (original.name.replace(/\.[^.]+$/, '') || 'foto') + '_ajustada'
     const arquivo = await paraArquivo(saida, nomeBase)
-    return { arquivo, ajustou: true, semFundo: bordasLisas }
+    return { arquivo, ajustou: true, semFundo: bordasLisas || !!ia }
   } catch (e) {
     console.error('Não foi possível ajustar a foto, usando a original:', e)
     return { arquivo: original, ajustou: false, semFundo: false }
