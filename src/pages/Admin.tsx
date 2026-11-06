@@ -61,6 +61,7 @@ type Aparelho = {
   disponivel?: boolean | null
   fornecedor?: string | null
   ofertas?: Ofertas | null
+  ultima_lista?: string | null
 }
 
 // Preços de todos os fornecedores do dia, por cor (para achar outro fornecedor quando o mais barato não tem)
@@ -203,7 +204,9 @@ const CORES_HEX: Record<string, string> = {
 export default function Admin() {
   const navigate = useNavigate()
   const [produtos, setProdutos] = useState<Produto[]>([])
-  const [aba, setAba] = useState<'cadastrar' | 'lista' | 'capas' | 'aparelhos' | 'hero' | 'vitrine' | 'ia'>('cadastrar')
+  const [aba, setAba] = useState<'cadastrar' | 'lista' | 'capas' | 'aparelhos' | 'hero' | 'vitrine' | 'ia' | 'precos'>('cadastrar')
+  const [buscaPreco, setBuscaPreco] = useState('')
+  const [precoAberto, setPrecoAberto] = useState<string | null>(null)
   const [uploadandoHero, setUploadandoHero] = useState(false)
   const [editando, setEditando] = useState<Produto | null>(null)
   const [heroImagens, setHeroImagens] = useState<HeroImagem[]>([])
@@ -1237,10 +1240,71 @@ export default function Admin() {
         <button style={aba === 'lista' ? abaAtiva : abaInativa} onClick={() => setAba('lista')}>📦 ({produtos.length})</button>
         <button style={aba === 'capas' ? abaAtiva : abaInativa} onClick={() => { setAba('capas'); setCapaAberta(null) }}>📱 Capas</button>
         <button style={aba === 'aparelhos' ? abaAtiva : abaInativa} onClick={() => setAba('aparelhos')}>🤝</button>
+        <button style={aba === 'precos' ? abaAtiva : abaInativa} onClick={() => { setAba('precos'); carregarAparelhos() }}>💰 Preços</button>
         <button style={aba === 'hero' ? abaAtiva : abaInativa} onClick={() => setAba('hero')}>🖼 Hero</button>
         <button style={aba === 'vitrine' ? abaAtiva : abaInativa} onClick={() => setAba('vitrine')}>🏷 Vitrine</button>
         <button style={aba === 'ia' ? abaAtiva : abaInativa} onClick={() => setAba('ia')}>🤖 IA</button>
       </div>
+
+      {aba === 'precos' && (() => {
+        // Preços da lista (venda, custo e fornecedores do dia), sem precisar abrir a Negociação
+        const hoje = diaHoje()
+        const termo = normalizar(buscaPreco)
+        const lista = aparelhos
+          .filter(a => a.disponivel !== false && a.custo != null)
+          .filter(a => !termo || normalizar(a.modelo).includes(termo))
+          .sort((a, b) => (a.marca || '').localeCompare(b.marca || '') || a.modelo.localeCompare(b.modelo, 'pt-BR', { numeric: true }))
+        return (
+          <div style={formContainer}>
+            <h2 style={formTitle}>💰 Preços da lista</h2>
+            <input style={inputStyle} value={buscaPreco} onChange={e => setBuscaPreco(e.target.value)} placeholder="Buscar modelo — ex: 17 pro max" />
+            <p style={{ color: '#777', fontSize: 12, margin: '0 0 12px' }}>{lista.length} aparelho(s) · toque para ver os fornecedores de hoje</p>
+            {lista.map(ap => {
+              const porCor = ap.precos_cor && new Set(Object.values(ap.precos_cor)).size > 1 ? ap.precos_cor : null
+              const ofertas = ap.ofertas?.dia === hoje ? ap.ofertas.itens : []
+              const aberto = precoAberto === ap.id
+              const cores = Array.from(new Set(ofertas.map(o => o.cor)))
+              return (
+                <div key={ap.id} onClick={() => setPrecoAberto(aberto ? null : ap.id)}
+                  style={{ background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 12, padding: 12, marginBottom: 8, cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontWeight: 700, fontSize: 14, color: '#fff', margin: 0 }}>{ap.modelo}</p>
+                      <p style={{ fontSize: 12, color: '#888', margin: '3px 0 0' }}>
+                        custo {fmtReal(ap.custo)}{ap.fornecedor ? <span style={{ color: '#ffb27a' }}> · 🏷 {ap.fornecedor}</span> : null}
+                        {!vistoHoje(ap.ultima_lista) && <span style={{ color: '#ffc800' }}> · lista antiga</span>}
+                      </p>
+                    </div>
+                    <p style={{ color: '#25D366', fontWeight: 800, fontSize: 16, margin: 0, whiteSpace: 'nowrap' }}>{fmtReal(ap.preco)}</p>
+                  </div>
+                  {porCor && (
+                    <p style={{ fontSize: 12, color: '#25D366', margin: '6px 0 0' }}>{Object.entries(porCor).map(([c, v]) => `${c} ${fmtReal(v)}`).join(' · ')}</p>
+                  )}
+                  {aberto && (
+                    <div style={{ marginTop: 10, borderTop: '1px solid #222', paddingTop: 8 }}>
+                      {cores.length === 0 && <p style={{ color: '#666', fontSize: 12, margin: 0 }}>Sem lista de fornecedores de hoje.</p>}
+                      {cores.map(cor => {
+                        const ofs = ofertas.filter(o => o.cor === cor).sort((x, y) => x.custo - y.custo)
+                        return (
+                          <div key={cor} style={{ marginBottom: 8 }}>
+                            <p style={{ margin: '0 0 3px', fontSize: 12, color: '#ccc', fontWeight: 700 }}>{cor}</p>
+                            {ofs.map((o, k) => (
+                              <p key={o.f} style={{ margin: '2px 0', fontSize: 12, color: k === 0 ? '#25D366' : '#aaa', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                                <span>{k === 0 ? '✓ ' : `${k + 1}º `}{o.f}</span>
+                                <span>{fmtReal(o.custo)}{k > 0 ? ` (+${fmtReal(o.custo - ofs[0].custo)})` : ''}</span>
+                              </p>
+                            ))}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
 
       {aba === 'vitrine' && (
         <VitrineAdmin produtos={produtos} aoMudar={() => { carregarCategorias(); carregarProdutos() }} />
