@@ -205,7 +205,7 @@ export default function Admin() {
   const navigate = useNavigate()
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [aba, setAba] = useState<'cadastrar' | 'lista' | 'capas' | 'aparelhos' | 'hero' | 'vitrine' | 'ia' | 'precos'>('cadastrar')
-  const [buscaPreco, setBuscaPreco] = useState('')
+  const [marcaPreco, setMarcaPreco] = useState('Todos')
   const [precoAberto, setPrecoAberto] = useState<string | null>(null)
   const [uploadandoHero, setUploadandoHero] = useState(false)
   const [editando, setEditando] = useState<Produto | null>(null)
@@ -1249,15 +1249,23 @@ export default function Admin() {
       {aba === 'precos' && (() => {
         // Preços da lista (venda, custo e fornecedores do dia), sem precisar abrir a Negociação
         const hoje = diaHoje()
-        const termo = normalizar(buscaPreco)
-        const lista = aparelhos
-          .filter(a => a.disponivel !== false && a.custo != null)
-          .filter(a => !termo || normalizar(a.modelo).includes(termo))
+        const marcaDe = (a: Aparelho) => (a.marca || '').trim() || (/^(iphone|ipad)/i.test(a.modelo) ? 'Apple' : 'Outros')
+        const todos = aparelhos.filter(a => a.disponivel !== false && a.custo != null)
+        const marcas = Array.from(new Set(todos.map(marcaDe))).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+        const lista = todos
+          .filter(a => marcaPreco === 'Todos' || marcaDe(a) === marcaPreco)
           .sort((a, b) => (a.marca || '').localeCompare(b.marca || '') || a.modelo.localeCompare(b.modelo, 'pt-BR', { numeric: true }))
         return (
           <div style={formContainer}>
             <h2 style={formTitle}>💰 Preços da lista</h2>
-            <input style={inputStyle} value={buscaPreco} onChange={e => setBuscaPreco(e.target.value)} placeholder="Buscar modelo — ex: 17 pro max" />
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6, marginBottom: 8 }}>
+              {['Todos', ...marcas].map(m => (
+                <button key={m} type="button" onClick={() => { setMarcaPreco(m); setPrecoAberto(null) }}
+                  style={{ flex: '0 0 auto', background: marcaPreco === m ? '#ff6600' : '#151515', color: marcaPreco === m ? '#fff' : '#ccc', border: '1px solid ' + (marcaPreco === m ? '#ff6600' : '#333'), borderRadius: 20, padding: '8px 16px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {m} <span style={{ opacity: 0.7, fontWeight: 400 }}>({m === 'Todos' ? todos.length : todos.filter(a => marcaDe(a) === m).length})</span>
+                </button>
+              ))}
+            </div>
             <p style={{ color: '#777', fontSize: 12, margin: '0 0 12px' }}>{lista.length} aparelho(s) · toque para ver os fornecedores de hoje</p>
             {lista.map(ap => {
               const porCor = ap.precos_cor && new Set(Object.values(ap.precos_cor)).size > 1 ? ap.precos_cor : null
@@ -1271,7 +1279,7 @@ export default function Admin() {
                     <div style={{ minWidth: 0 }}>
                       <p style={{ fontWeight: 700, fontSize: 14, color: '#fff', margin: 0 }}>{ap.modelo}</p>
                       <p style={{ fontSize: 12, color: '#888', margin: '3px 0 0' }}>
-                        custo {fmtReal(ap.custo)}{ap.fornecedor ? <span style={{ color: '#ffb27a' }}> · 🏷 {ap.fornecedor}</span> : null}
+                        <span style={{ color: '#ff4d4d', fontWeight: 700 }}>custo {fmtReal(ap.custo)}</span>{ap.fornecedor ? <span style={{ color: '#ffb27a' }}> · 🏷 {ap.fornecedor}</span> : null}
                         {!vistoHoje(ap.ultima_lista) && <span style={{ color: '#ffc800' }}> · lista antiga</span>}
                       </p>
                     </div>
@@ -1291,7 +1299,7 @@ export default function Admin() {
                             {ofs.map((o, k) => (
                               <p key={o.f} style={{ margin: '2px 0', fontSize: 12, color: k === 0 ? '#25D366' : '#aaa', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                                 <span>{k === 0 ? '✓ ' : `${k + 1}º `}{o.f}</span>
-                                <span>{fmtReal(o.custo)}{k > 0 ? ` (+${fmtReal(o.custo - ofs[0].custo)})` : ''}</span>
+                                <span style={{ color: '#ff4d4d' }}>{fmtReal(o.custo)}{k > 0 ? ` (+${fmtReal(o.custo - ofs[0].custo)})` : ''}</span>
                               </p>
                             ))}
                           </div>
