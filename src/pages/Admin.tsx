@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { recortarProduto } from '../lib/recortarProduto'
+import CartaoAparelho, { marcaDoAparelho, precosComFornecedor } from '../components/CartaoAparelho'
 import AssistenteIA from './AssistenteIA'
 import VitrineAdmin from './VitrineAdmin'
 
@@ -206,7 +207,6 @@ export default function Admin() {
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [aba, setAba] = useState<'cadastrar' | 'lista' | 'capas' | 'aparelhos' | 'hero' | 'vitrine' | 'ia' | 'precos'>('cadastrar')
   const [marcaPreco, setMarcaPreco] = useState('Todos')
-  const [precoAberto, setPrecoAberto] = useState<string | null>(null)
   const [uploadandoHero, setUploadandoHero] = useState(false)
   const [editando, setEditando] = useState<Produto | null>(null)
   const [heroImagens, setHeroImagens] = useState<HeroImagem[]>([])
@@ -300,6 +300,16 @@ export default function Admin() {
   async function carregarFotosEdicao(produtoId: string) {
     const { data } = await supabase.from('produto_fotos').select('*').eq('produto_id', produtoId).order('ordem')
     setFotosEdicao(data || [])
+  }
+
+  // Trocar o fornecedor de um aparelho (quando o mais barato não tem mais): muda custo e venda até a próxima lista
+  async function usarFornecedor(ap: Aparelho, fornecedor: string) {
+    const novo = precosComFornecedor(ap, fornecedor)
+    if (!novo) return
+    if (!confirm(`Usar ${fornecedor} no ${ap.modelo}?\nCusto ${fmtReal(novo.custo)} · venda a partir de ${fmtReal(Math.min(...Object.values(novo.precos_cor)))}`)) return
+    const { error } = await supabase.from('aparelhos').update(novo).eq('id', ap.id)
+    if (error) { alert('Erro: ' + error.message); return }
+    carregarAparelhos()
   }
 
   async function carregarAparelhos() {
@@ -1247,66 +1257,32 @@ export default function Admin() {
       </div>
 
       {aba === 'precos' && (() => {
-        // Preços da lista (venda, custo e fornecedores do dia), sem precisar abrir a Negociação
-        const hoje = diaHoje()
-        const marcaDe = (a: Aparelho) => (a.marca || '').trim() || (/^(iphone|ipad)/i.test(a.modelo) ? 'Apple' : 'Outros')
+        // Preços da lista no mesmo visual da conferência: separado por marca, foco no modelo e no valor final
         const todos = aparelhos.filter(a => a.disponivel !== false && a.custo != null)
-        const marcas = Array.from(new Set(todos.map(marcaDe))).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+        const marcas = Array.from(new Set(todos.map(marcaDoAparelho))).sort((a, b) => a.localeCompare(b, 'pt-BR'))
         const lista = todos
-          .filter(a => marcaPreco === 'Todos' || marcaDe(a) === marcaPreco)
-          .sort((a, b) => (a.marca || '').localeCompare(b.marca || '') || a.modelo.localeCompare(b.modelo, 'pt-BR', { numeric: true }))
+          .filter(a => marcaPreco === 'Todos' || marcaDoAparelho(a) === marcaPreco)
+          .sort((a, b) => marcaDoAparelho(a).localeCompare(marcaDoAparelho(b), 'pt-BR') || a.modelo.localeCompare(b.modelo, 'pt-BR', { numeric: true }))
+        let marcaAnterior = ''
         return (
           <div style={formContainer}>
             <h2 style={formTitle}>💰 Preços da lista</h2>
-            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6, marginBottom: 8 }}>
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6, marginBottom: 4 }}>
               {['Todos', ...marcas].map(m => (
-                <button key={m} type="button" onClick={() => { setMarcaPreco(m); setPrecoAberto(null) }}
+                <button key={m} type="button" onClick={() => setMarcaPreco(m)}
                   style={{ flex: '0 0 auto', background: marcaPreco === m ? '#ff6600' : '#151515', color: marcaPreco === m ? '#fff' : '#ccc', border: '1px solid ' + (marcaPreco === m ? '#ff6600' : '#333'), borderRadius: 20, padding: '8px 16px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                  {m} <span style={{ opacity: 0.7, fontWeight: 400 }}>({m === 'Todos' ? todos.length : todos.filter(a => marcaDe(a) === m).length})</span>
+                  {m} <span style={{ opacity: 0.7, fontWeight: 400 }}>({m === 'Todos' ? todos.length : todos.filter(a => marcaDoAparelho(a) === m).length})</span>
                 </button>
               ))}
             </div>
-            <p style={{ color: '#777', fontSize: 12, margin: '0 0 12px' }}>{lista.length} aparelho(s) · toque para ver os fornecedores de hoje</p>
             {lista.map(ap => {
-              const porCor = ap.precos_cor && new Set(Object.values(ap.precos_cor)).size > 1 ? ap.precos_cor : null
-              const ofertas = ap.ofertas?.dia === hoje ? ap.ofertas.itens : []
-              const aberto = precoAberto === ap.id
-              const cores = Array.from(new Set(ofertas.map(o => o.cor)))
+              const marca = marcaDoAparelho(ap)
+              const titulo = marca !== marcaAnterior ? <p style={{ color: '#ff6600', fontWeight: 800, letterSpacing: 2, fontSize: 13, textAlign: 'center', margin: '18px 0 10px', textTransform: 'uppercase' }}>{marca}</p> : null
+              marcaAnterior = marca
               return (
-                <div key={ap.id} onClick={() => setPrecoAberto(aberto ? null : ap.id)}
-                  style={{ background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 12, padding: 12, marginBottom: 8, cursor: 'pointer' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ fontWeight: 700, fontSize: 14, color: '#fff', margin: 0 }}>{ap.modelo}</p>
-                      <p style={{ fontSize: 12, color: '#888', margin: '3px 0 0' }}>
-                        <span style={{ color: '#ff4d4d', fontWeight: 700 }}>custo {fmtReal(ap.custo)}</span>{ap.fornecedor ? <span style={{ color: '#ffb27a' }}> · 🏷 {ap.fornecedor}</span> : null}
-                        {!vistoHoje(ap.ultima_lista) && <span style={{ color: '#ffc800' }}> · lista antiga</span>}
-                      </p>
-                    </div>
-                    <p style={{ color: '#25D366', fontWeight: 800, fontSize: 16, margin: 0, whiteSpace: 'nowrap' }}>{fmtReal(ap.preco)}</p>
-                  </div>
-                  {porCor && (
-                    <p style={{ fontSize: 12, color: '#25D366', margin: '6px 0 0' }}>{Object.entries(porCor).map(([c, v]) => `${c} ${fmtReal(v)}`).join(' · ')}</p>
-                  )}
-                  {aberto && (
-                    <div style={{ marginTop: 10, borderTop: '1px solid #222', paddingTop: 8 }}>
-                      {cores.length === 0 && <p style={{ color: '#666', fontSize: 12, margin: 0 }}>Sem lista de fornecedores de hoje.</p>}
-                      {cores.map(cor => {
-                        const ofs = ofertas.filter(o => o.cor === cor).sort((x, y) => x.custo - y.custo)
-                        return (
-                          <div key={cor} style={{ marginBottom: 8 }}>
-                            <p style={{ margin: '0 0 3px', fontSize: 12, color: '#ccc', fontWeight: 700 }}>{cor}</p>
-                            {ofs.map((o, k) => (
-                              <p key={o.f} style={{ margin: '2px 0', fontSize: 12, color: k === 0 ? '#25D366' : '#aaa', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                                <span>{k === 0 ? '✓ ' : `${k + 1}º `}{o.f}</span>
-                                <span style={{ color: '#ff4d4d' }}>{fmtReal(o.custo)}{k > 0 ? ` (+${fmtReal(o.custo - ofs[0].custo)})` : ''}</span>
-                              </p>
-                            ))}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
+                <div key={ap.id}>
+                  {titulo}
+                  <CartaoAparelho ap={ap} listaAntiga={!vistoHoje(ap.ultima_lista)} onUsarFornecedor={f => usarFornecedor(ap, f)} />
                 </div>
               )
             })}

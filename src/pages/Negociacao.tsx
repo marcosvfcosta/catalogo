@@ -1,3 +1,4 @@
+import CartaoAparelho, { marcaDoAparelho, precosComFornecedor } from '../components/CartaoAparelho'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabase'
 
@@ -15,6 +16,7 @@ type Negociacao = {
 type Aparelho = {
   id: string; modelo: string; cores: string[]; fotos: Record<string, string[]>
   preco?: number | null; disponivel?: boolean | null
+  custo?: number | null; marca?: string | null; ultima_lista?: string | null
   precos_cor?: Record<string, number> | null
   fornecedor?: string | null
   ofertas?: { dia: string; itens: { f: string; cor: string; custo: number }[] } | null
@@ -328,7 +330,6 @@ export default function Negociacao() {
   const [aparelhos, setAparelhos] = useState<Aparelho[]>([])
   const [aparelhosCatalogo, setAparelhosCatalogo] = useState<Aparelho[]>([])
   const [buscaModelo, setBuscaModelo] = useState('')
-  const [modeloSugestoes, setModeloSugestoes] = useState<Aparelho[]>([])
   const [filtro, setFiltro] = useState('Todos')
   const [dataRetornoCli, setDataRetornoCli] = useState('')
   const [notaRetornoCli, setNotaRetornoCli] = useState('')
@@ -408,7 +409,9 @@ export default function Negociacao() {
   const [painelLucro, setPainelLucro] = useState(false)
   const [lucrosEdit, setLucrosEdit] = useState<Record<string, string>>({})
   const [salvandoLucroId, setSalvandoLucroId] = useState<string | null>(null)
-  const [verFornecedor, setVerFornecedor] = useState(false)
+  const [marcaNeg, setMarcaNeg] = useState('Todos')
+  const [fornecedorNeg, setFornecedorNeg] = useState<string | null>(null) // trocou de fornecedor só nesta negociação
+  const [manualNeg, setManualNeg] = useState(false) // modelo digitado (fora da lista)
   const [form, setForm] = useState({
     nome: '', telefone: '', instagram: '',
     modelo: '', cor: '',
@@ -687,22 +690,14 @@ export default function Negociacao() {
     document.title = n ? `(${n}) Negociação · Marcos Magazine` : 'Negociação · Marcos Magazine'
   }, [entradas])
 
-  function buscarModelo(texto: string) {
-    setBuscaModelo(texto)
-    setForm({ ...form, modelo: texto, cor: '' })
-    if (texto.length < 2) { setModeloSugestoes([]); return }
-    const sugestoes = todosAparelhos.filter(a => a.disponivel !== false && tirarAcento(a.modelo).includes(tirarAcento(texto)))
-    setModeloSugestoes(sugestoes)
-  }
-
-  function selecionarAparelho(a: Aparelho) {
+  function selecionarAparelho(a: Aparelho, cor = '') {
     setBuscaModelo(a.modelo)
-    setVerFornecedor(false)
-    // Preço de venda vem do cadastro (custo do fornecedor + lucro)
-    const valor = a.preco != null ? String(a.preco).replace('.', ',') : form.valor_aparelho
-    setForm({ ...form, modelo: a.modelo, cor: '', valor_aparelho: valor })
+    setFornecedorNeg(null); setManualNeg(false)
+    // Preço de venda vem do cadastro (custo do fornecedor + lucro); com cor, o preço daquela cor
+    const v = cor && a.precos_cor?.[cor] != null ? a.precos_cor[cor] : a.preco
+    const valor = v != null ? String(v).replace('.', ',') : form.valor_aparelho
+    setForm({ ...form, modelo: a.modelo, cor, valor_aparelho: valor })
     setErros({ ...erros, valor_aparelho: '' })
-    setModeloSugestoes([])
   }
 
   function toggleCorAdmin(nome: string) {
@@ -981,16 +976,24 @@ export default function Negociacao() {
   // ---------- Dados derivados ----------
 
   const aparelhoSelecionado = todosAparelhos.find(a => a.modelo === form.modelo)
-  // Fornecedores do dia (só para a loja: não vai no WhatsApp nem no catálogo)
-  const ofertasHoje = aparelhoSelecionado?.ofertas?.dia === new Date().toLocaleDateString('sv-SE')
-    ? aparelhoSelecionado.ofertas.itens : []
   const coresDisponiveis = aparelhoSelecionado?.cores || []
-  const fotoAtual = form.cor && aparelhoSelecionado?.fotos?.[form.cor]?.[0] || null
-  // Cores com preços diferentes (ex: iPhone 17 Pro Max Laranja x Prata)
-  const temPrecoPorCor = !!aparelhoSelecionado?.precos_cor && new Set(Object.values(aparelhoSelecionado.precos_cor)).size > 1
+
+  // Aparelho como está nesta negociação (se trocou de fornecedor, com os preços dele)
+  const apNeg = aparelhoSelecionado && fornecedorNeg
+    ? { ...aparelhoSelecionado, ...(precosComFornecedor(aparelhoSelecionado, fornecedorNeg) || {}) } as Aparelho
+    : aparelhoSelecionado
+
+  function usarFornecedorNeg(f: string) {
+    if (!aparelhoSelecionado) return
+    const novo = precosComFornecedor(aparelhoSelecionado, f)
+    if (!novo) return
+    setFornecedorNeg(f === aparelhoSelecionado.fornecedor ? null : f)
+    const v = form.cor && novo.precos_cor[form.cor] != null ? novo.precos_cor[form.cor] : novo.preco
+    setForm({ ...form, valor_aparelho: String(v).replace('.', ',') })
+  }
 
   function escolherCorNegociacao(cor: string) {
-    const precoCor = aparelhoSelecionado?.precos_cor?.[cor]
+    const precoCor = apNeg?.precos_cor?.[cor]
     if (precoCor != null) {
       setForm({ ...form, cor, valor_aparelho: String(precoCor).replace('.', ',') })
       setErros({ ...erros, valor_aparelho: '' })
@@ -1232,46 +1235,68 @@ export default function Negociacao() {
             </div>
             <div style={s.section}>
               <h3 style={s.sectionTitle}>Aparelho</h3>
-              <div style={{ marginBottom: 16 }}>
-                <label style={s.label}>Modelo</label>
-                <div style={{ position: 'relative' }}>
-                  <input style={s.input} value={buscaModelo} onChange={e => buscarModelo(e.target.value)} placeholder="Buscar modelo cadastrado..." />
-                  {modeloSugestoes.length > 0 && (
-                    <div style={s.sugestoesBox}>
-                      {modeloSugestoes.map(a => (
-                        <div key={a.id} style={s.sugestaoItem} onClick={() => selecionarAparelho(a)}>
-                          <span style={{ color: 'white', fontWeight: 600 }}>{a.modelo}</span>
-                          <span style={{ color: a.preco != null ? '#25D366' : '#666', fontSize: 12, fontWeight: a.preco != null ? 700 : 400, whiteSpace: 'nowrap' }}>{a.preco != null ? fmt(Number(a.preco)) : `${a.cores.length} cor(es)`}</span>
-                        </div>
+              {aparelhoSelecionado ? (
+                <div key={aparelhoSelecionado.id}>
+                  <CartaoAparelho ap={apNeg!} selecionado corEscolhida={form.cor || undefined}
+                    onEscolherCor={escolherCorNegociacao} custoEscondido listaAntiga={false}
+                    fornecedorUsado={fornecedorNeg} onUsarFornecedor={usarFornecedorNeg} />
+                  <button type="button" onClick={() => { setForm({ ...form, modelo: '', cor: '' }); setBuscaModelo(''); setFornecedorNeg(null) }}
+                    style={{ width: '100%', background: '#151515', border: '1px solid #333', color: '#ccc', borderRadius: 12, padding: 11, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 12 }}>
+                    ↺ Trocar celular
+                  </button>
+                </div>
+              ) : manualNeg ? (
+                <div style={{ marginBottom: 16 }}>
+                  <label style={s.label}>Modelo (digitado)</label>
+                  <input style={s.input} value={form.modelo} onChange={e => setForm({ ...form, modelo: e.target.value })} placeholder="Ex: iPhone 13 128GB" />
+                  <button type="button" onClick={() => { setManualNeg(false); setForm({ ...form, modelo: '', cor: '' }) }}
+                    style={{ background: 'none', border: 'none', color: '#ff8a3d', fontSize: 13, marginTop: 8, cursor: 'pointer', fontFamily: 'inherit' }}>← Escolher da lista</button>
+                </div>
+              ) : (() => {
+                // Escolher o celular: busca + marcas + cartões com foto, cores e valor
+                const disponiveis = todosAparelhos.filter(a => a.disponivel !== false && (a.preco != null || a.cores.length))
+                const marcas = Array.from(new Set(disponiveis.map(marcaDoAparelho))).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+                const termo = tirarAcento(buscaModelo.trim())
+                const lista = disponiveis
+                  .filter(a => marcaNeg === 'Todos' || marcaDoAparelho(a) === marcaNeg)
+                  .filter(a => !termo || tirarAcento(a.modelo).includes(termo))
+                  .sort((a, b) => marcaDoAparelho(a).localeCompare(marcaDoAparelho(b), 'pt-BR') || a.modelo.localeCompare(b.modelo, 'pt-BR', { numeric: true }))
+                let marcaAnterior = ''
+                return (
+                  <div style={{ marginBottom: 8 }}>
+                    <input style={s.input} value={buscaModelo} onChange={e => setBuscaModelo(e.target.value)} placeholder="🔍 Buscar modelo..." />
+                    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '10px 0 4px' }}>
+                      {['Todos', ...marcas].map(m => (
+                        <button key={m} type="button" onClick={() => setMarcaNeg(m)}
+                          style={{ flex: '0 0 auto', background: marcaNeg === m ? '#ff6600' : '#151515', color: marcaNeg === m ? '#fff' : '#ccc', border: '1px solid ' + (marcaNeg === m ? '#ff6600' : '#333'), borderRadius: 20, padding: '8px 15px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{m}</button>
                       ))}
                     </div>
-                  )}
-                </div>
-              </div>
-              {coresDisponiveis.length > 0 && (
-                <div>
-                  <label style={{ ...s.label, textAlign: 'center', display: 'block' }}>Cor</label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8, justifyContent: 'center' }}>
-                    {coresDisponiveis.map(cor => (
-                      <div key={cor} onClick={() => escolherCorNegociacao(cor)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                        <div className="sem-inverter" style={{ width: 36, height: 36, borderRadius: '50%', background: CORES_HEX[cor] || '#888', border: form.cor === cor ? '3px solid #ff6600' : '3px solid transparent', boxShadow: form.cor === cor ? '0 0 0 2px rgba(255,102,0,0.4)' : 'none', outline: cor === 'Branco' ? '1px solid #444' : 'none', transition: 'all 0.2s' }} />
-                        <span style={{ fontSize: 10, color: form.cor === cor ? '#ff6600' : '#666', textAlign: 'center', maxWidth: 60 }}>{cor}</span>
-                        {temPrecoPorCor && aparelhoSelecionado?.precos_cor?.[cor] != null && (
-                          <span style={{ fontSize: 10, color: '#25D366', fontWeight: 700, whiteSpace: 'nowrap' }}>{fmt(Number(aparelhoSelecionado.precos_cor[cor]))}</span>
+                    {lista.length === 0 && (
+                      <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                        <p style={{ color: '#777', fontSize: 13, margin: '0 0 10px' }}>Nenhum celular encontrado.</p>
+                        {buscaModelo.trim() && (
+                          <button type="button" onClick={() => { setManualNeg(true); setForm({ ...form, modelo: buscaModelo.trim(), cor: '' }) }}
+                            style={{ background: 'none', border: '1px solid #ff6600', color: '#ff8a3d', borderRadius: 12, padding: '9px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                            Usar "{buscaModelo.trim()}" mesmo assim
+                          </button>
                         )}
                       </div>
-                    ))}
+                    )}
+                    {lista.map(a => {
+                      const marca = marcaDoAparelho(a)
+                      const titulo = marca !== marcaAnterior ? <p style={{ color: '#ff6600', fontWeight: 800, letterSpacing: 2, fontSize: 13, textAlign: 'center', margin: '16px 0 10px', textTransform: 'uppercase' }}>{marca}</p> : null
+                      marcaAnterior = marca
+                      return (
+                        <div key={a.id}>
+                          {titulo}
+                          <CartaoAparelho ap={a} custoEscondido onTocarCartao={() => selecionarAparelho(a)} onEscolherCor={cor => selecionarAparelho(a, cor)} />
+                        </div>
+                      )
+                    })}
                   </div>
-                  {form.cor && <p style={{ color: '#ff6600', fontSize: 13, marginTop: 10, textAlign: 'center' }}>✓ {form.cor}</p>}
-                  {fotoAtual && (
-                    <div style={{ marginTop: 20, display: 'flex', justifyContent: 'center' }}>
-                      <img src={fotoAtual} alt={form.cor} onClick={() => window.open(fotoAtual, '_blank')}
-                        style={{ width: 200, height: 200, objectFit: 'contain', borderRadius: 16, border: '1px solid #2a2a2a', background: '#0a0a0a', cursor: 'zoom-in' }} />
-                    </div>
-                  )}
-                </div>
-              )}
-              {coresDisponiveis.length === 0 && (
+                )
+              })()}
+              {manualNeg && coresDisponiveis.length === 0 && (
                 <div>
                   <label style={s.label}>Cor</label>
                   <input style={s.input} value={form.cor} onChange={e => setForm({ ...form, cor: e.target.value })} placeholder="Ex: Preto Titânio" />
@@ -1285,46 +1310,6 @@ export default function Negociacao() {
                   <label style={s.label}>Valor do Aparelho *</label>
                   <div style={s.inputPrefix}><span style={s.prefix}>R$</span><input style={{ ...s.input, borderRadius: '0 10px 10px 0', borderColor: erros.valor_aparelho ? '#ff4444' : '#2a2a2a' }} value={form.valor_aparelho} onChange={e => { setForm({ ...form, valor_aparelho: e.target.value }); setErros({...erros, valor_aparelho: ''}) }} placeholder="0,00" /></div>
                   {erros.valor_aparelho && <p style={s.erro}>{erros.valor_aparelho}</p>}
-                  {(ofertasHoje.length > 0 || aparelhoSelecionado?.fornecedor) && (
-                    <div style={{ marginTop: 6 }}>
-                      <button type="button" onClick={() => setVerFornecedor(v => !v)}
-                        style={{ background: 'none', border: 'none', color: '#ffb27a', fontSize: 12, padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>
-                        🏷 {verFornecedor ? 'Esconder fornecedor ▴' : 'Ver fornecedor ▾'}
-                      </button>
-                      {verFornecedor && (() => {
-                        if (!ofertasHoje.length) return <p style={{ color: '#ffb27a', fontSize: 12, margin: '6px 0 0' }}>Fornecedor: <b>{aparelhoSelecionado?.fornecedor}</b></p>
-                        const porCor = (cor: string) => ofertasHoje.filter(o => o.cor === cor).sort((x, y) => x.custo - y.custo)
-                        const coresComOferta = Array.from(new Set(ofertasHoje.map(o => o.cor)))
-                        const linhaCor = (cor: string, destaque: boolean) => {
-                          const lista = porCor(cor)
-                          if (!lista.length) return null
-                          const menor = lista[0].custo
-                          return (
-                            <div key={cor} style={{ marginTop: 8 }}>
-                              <p style={{ margin: '0 0 4px', fontSize: 12, color: destaque ? '#fff' : '#aaa', fontWeight: 700 }}>{cor}</p>
-                              {lista.map((o, k) => (
-                                <p key={o.f} style={{ margin: '2px 0', fontSize: 12, color: k === 0 ? '#25D366' : '#ccc', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                                  <span>{k === 0 ? '✓ ' : `${k + 1}º `}{o.f}</span>
-                                  <span>{fmt(o.custo)}{k > 0 ? ` (+${fmt(o.custo - menor)})` : ''}</span>
-                                </p>
-                              ))}
-                            </div>
-                          )
-                        }
-                        return (
-                          <div style={{ marginTop: 6, background: '#0f0f0f', border: '1px solid #2a2a2a', borderRadius: 10, padding: '6px 10px 10px' }}>
-                            {form.cor && coresComOferta.includes(form.cor) ? (
-                              <>
-                                {linhaCor(form.cor, true)}
-                                {coresComOferta.length > 1 && <p style={{ margin: '10px 0 0', fontSize: 11, color: '#666', textTransform: 'uppercase', letterSpacing: 1 }}>Outras cores</p>}
-                                {coresComOferta.filter(c => c !== form.cor).map(c => linhaCor(c, false))}
-                              </>
-                            ) : coresComOferta.map(c => linhaCor(c, false))}
-                          </div>
-                        )
-                      })()}
-                    </div>
-                  )}
                 </div>
                 <div>
                   <label style={s.label}>Entrada{entradaVinculada ? ' (aparelho do cliente)' : ''}</label>
