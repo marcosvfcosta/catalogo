@@ -407,6 +407,10 @@ export default function Negociacao() {
   const [entradaVinculada, setEntradaVinculada] = useState<Entrada | null>(null)
   const [linkCopiado, setLinkCopiado] = useState(false)
   const [painelLucro, setPainelLucro] = useState(false)
+  // Tela que pergunta o lucro logo depois de fechar a venda
+  const [pedeLucro, setPedeLucro] = useState<{ id: string; nome: string; modelo: string; cor: string; valor: number; aviso: string } | null>(null)
+  const [lucroTxt, setLucroTxt] = useState('')
+  const [salvandoLucroVenda, setSalvandoLucroVenda] = useState(false)
   const [lucrosEdit, setLucrosEdit] = useState<Record<string, string>>({})
   const [salvandoLucroId, setSalvandoLucroId] = useState<string | null>(null)
   const [marcaNeg, setMarcaNeg] = useState('') // nenhuma marca aberta: lista escondida até tocar
@@ -799,12 +803,15 @@ export default function Negociacao() {
       observacoes: form.observacoes, vendedor: form.vendedor.trim(), status,
     }
     let error
+    let novoId: string | null = null
+    const apVenda = apNeg
     if (editandoId) {
       const res = await supabase.from('negociacoes').update(dados).eq('id', editandoId)
       error = res.error
     } else {
-      const res = await supabase.from('negociacoes').insert([dados])
+      const res = await supabase.from('negociacoes').insert([dados]).select('id')
       error = res.error
+      novoId = (res.data as { id: string }[] | null)?.[0]?.id || null
     }
     if (!error && entradaVinculada) {
       await supabase.from('entradas').update({ status: 'Usada' }).eq('id', entradaVinculada.id)
@@ -816,7 +823,12 @@ export default function Negociacao() {
       ? await enviarParaRetornos({ nome: form.nome, telefone: form.telefone, modelo: form.modelo, cor: form.cor }) : ''
     setSalvando(false)
     if (error) { alert('Erro: ' + JSON.stringify(error)); return }
-    alert((editandoId ? 'Negociação atualizada!' : 'Negociação salva!') + (resRetorno ? avisoRetorno(resRetorno) : ''))
+    const idVenda = editandoId || novoId
+    if (status === 'Venda Fechada' && !jaEraFechada && idVenda) {
+      abrirPedeLucro({ id: idVenda, nome: form.nome, modelo: form.modelo, cor: form.cor, valor: valorAparelho }, resRetorno ? avisoRetorno(resRetorno) : '', apVenda)
+    } else {
+      alert((editandoId ? 'Negociação atualizada!' : 'Negociação salva!') + (resRetorno ? avisoRetorno(resRetorno) : ''))
+    }
     limpar()
   }
 
@@ -898,12 +910,35 @@ export default function Negociacao() {
     window.open(linkWhatsApp(c.telefone, msg), '_blank')
   }
 
+  // Lucro sugerido = lucro da lista (venda − custo) ajustado pelo desconto/acréscimo dado
+  function abrirPedeLucro(v: { id: string; nome: string; modelo: string; cor: string; valor: number }, aviso: string, ap?: Aparelho) {
+    const a = ap || todosAparelhos.find(x => x.modelo === v.modelo)
+    let sugestao: number | null = null
+    if (a && a.preco != null && a.custo != null) {
+      const base = v.cor && a.precos_cor?.[v.cor] != null ? Number(a.precos_cor[v.cor]) : Number(a.preco)
+      sugestao = Math.round(Number(a.preco) - Number(a.custo) + (v.valor - base))
+    }
+    setLucroTxt(sugestao != null ? String(sugestao) : '')
+    setPedeLucro({ ...v, aviso: aviso.trim() })
+  }
+
+  async function registrarLucroVenda() {
+    if (!pedeLucro) return
+    if (!lucroTxt.trim()) { alert('Digite o lucro ou toque em Depois'); return }
+    setSalvandoLucroVenda(true)
+    const { error } = await supabase.from('negociacoes').update({ lucro: parseValor(lucroTxt) }).eq('id', pedeLucro.id)
+    setSalvandoLucroVenda(false)
+    if (error) { alert('Erro ao salvar o lucro: ' + error.message); return }
+    setPedeLucro(null)
+    carregarClientes()
+  }
+
   async function alterarStatus(id: string, status: string) {
     const c = clientes.find(x => x.id === id)
     const { error } = await supabase.from('negociacoes').update({ status }).eq('id', id)
     if (!error && status === 'Venda Fechada' && c && c.status !== 'Venda Fechada') {
       const res = await enviarParaRetornos(c)
-      alert('Venda fechada!' + avisoRetorno(res))
+      abrirPedeLucro({ id: c.id, nome: c.nome, modelo: c.modelo, cor: c.cor, valor: Number(c.valor_aparelho) || 0 }, avisoRetorno(res))
     }
     carregarClientes(); setClienteSelecionado(null)
   }
@@ -1133,6 +1168,30 @@ export default function Negociacao() {
   return (
     <div style={s.page}>
       {celular && <style>{AJUSTE_CELULAR}</style>}
+      {pedeLucro && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ width: '100%', maxWidth: 360, background: '#111', border: '1px solid #25D366', borderRadius: 20, padding: 20, textAlign: 'center' }}>
+            <div style={{ fontSize: 34 }}>✅</div>
+            <p style={{ color: '#fff', fontSize: 20, fontWeight: 800, margin: '4px 0 2px' }}>Venda fechada!</p>
+            <p style={{ color: '#aaa', fontSize: 13, margin: '0 0 14px' }}>{pedeLucro.nome} · {pedeLucro.modelo}{pedeLucro.cor ? ' ' + pedeLucro.cor : ''}</p>
+            <div style={{ background: '#0b0b0b', borderRadius: 12, padding: '10px 12px', display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#aaa', marginBottom: 12 }}>
+              <span>Valor de venda</span><b style={{ color: '#25D366' }}>{fmt(pedeLucro.valor)}</b>
+            </div>
+            <p style={{ color: '#ccc', fontSize: 14, margin: '0 0 6px', textAlign: 'left' }}>Quanto foi o lucro?</p>
+            <div style={{ display: 'flex', alignItems: 'center', background: '#000', border: '2px solid #ff6600', borderRadius: 12, padding: '10px 14px', marginBottom: 6 }}>
+              <span style={{ color: '#888', fontSize: 18, marginRight: 6 }}>R$</span>
+              <input autoFocus inputMode="decimal" value={lucroTxt} onChange={e => setLucroTxt(e.target.value)} placeholder="0"
+                style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', outline: 'none', color: '#fff', fontSize: 24, fontWeight: 800, fontFamily: 'inherit' }} />
+            </div>
+            <p style={{ color: '#777', fontSize: 11, margin: '0 0 12px', textAlign: 'left' }}>Já vem com o lucro da lista (venda − custo). Mude se deu desconto.</p>
+            {pedeLucro.aviso && <p style={{ color: '#888', fontSize: 12, margin: '0 0 12px', whiteSpace: 'pre-line' }}>{pedeLucro.aviso}</p>}
+            <button type="button" onClick={registrarLucroVenda} disabled={salvandoLucroVenda}
+              style={{ width: '100%', background: '#25D366', color: '#000', border: 'none', borderRadius: 12, padding: 13, fontSize: 16, fontWeight: 800, marginBottom: 8, cursor: 'pointer', fontFamily: 'inherit' }}>{salvandoLucroVenda ? 'Salvando...' : 'Registrar lucro'}</button>
+            <button type="button" onClick={() => { setPedeLucro(null); carregarClientes() }}
+              style={{ width: '100%', background: 'none', color: '#888', border: '1px solid #333', borderRadius: 12, padding: 11, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>Depois</button>
+          </div>
+        </div>
+      )}
       <style>{`@keyframes mmDesce { from { transform: translate(-50%, -140%) } to { transform: translate(-50%, 0) } }`}</style>
       {avisoEntrada && (
         <div style={s.avisoEntrada}>
