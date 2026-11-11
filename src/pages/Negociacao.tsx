@@ -409,7 +409,7 @@ export default function Negociacao() {
   const [painelLucro, setPainelLucro] = useState(false)
   const [lucrosEdit, setLucrosEdit] = useState<Record<string, string>>({})
   const [salvandoLucroId, setSalvandoLucroId] = useState<string | null>(null)
-  const [marcaNeg, setMarcaNeg] = useState('Todos')
+  const [marcaNeg, setMarcaNeg] = useState('') // nenhuma marca aberta: lista escondida até tocar
   const [abertoNeg, setAbertoNeg] = useState<string | null>(null) // menu sanfona: qual modelo está aberto
   const [fornecedorNeg, setFornecedorNeg] = useState<string | null>(null) // trocou de fornecedor só nesta negociação
   const [manualNeg, setManualNeg] = useState(false) // modelo digitado (fora da lista)
@@ -1255,11 +1255,12 @@ export default function Negociacao() {
                 </div>
               ) : (() => {
                 // Escolher o celular: busca + marcas + cartões com foto, cores e valor
-                const disponiveis = todosAparelhos.filter(a => a.disponivel !== false && (a.preco != null || a.cores.length))
+                const disponiveis = todosAparelhos.filter(a => a.disponivel !== false && a.preco != null)
                 const marcas = Array.from(new Set(disponiveis.map(marcaDoAparelho))).sort((a, b) => a.localeCompare(b, 'pt-BR'))
                 const termo = tirarAcento(buscaModelo.trim())
-                const lista = disponiveis
-                  .filter(a => marcaNeg === 'Todos' || marcaDoAparelho(a) === marcaNeg)
+                const mostrar = !!marcaNeg || !!termo
+                const lista = !mostrar ? [] : disponiveis
+                  .filter(a => termo || marcaNeg === 'Todos' || marcaDoAparelho(a) === marcaNeg)
                   .filter(a => !termo || tirarAcento(a.modelo).includes(termo))
                   .sort((a, b) => marcaDoAparelho(a).localeCompare(marcaDoAparelho(b), 'pt-BR') || a.modelo.localeCompare(b.modelo, 'pt-BR', { numeric: true }))
                 return (
@@ -1267,11 +1268,12 @@ export default function Negociacao() {
                     <input style={s.input} value={buscaModelo} onChange={e => setBuscaModelo(e.target.value)} placeholder="🔍 Buscar modelo..." />
                     <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '10px 0 4px' }}>
                       {['Todos', ...marcas].map(m => (
-                        <button key={m} type="button" onClick={() => setMarcaNeg(m)}
+                        <button key={m} type="button" onClick={() => { setMarcaNeg(marcaNeg === m ? '' : m); setAbertoNeg(null) }}
                           style={{ flex: '0 0 auto', background: marcaNeg === m ? '#ff6600' : '#151515', color: marcaNeg === m ? '#fff' : '#ccc', border: '1px solid ' + (marcaNeg === m ? '#ff6600' : '#333'), borderRadius: 20, padding: '8px 15px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{m}</button>
                       ))}
                     </div>
-                    {lista.length === 0 && (
+                    {!mostrar && <p style={{ color: '#888', fontSize: 13, textAlign: 'center', margin: '12px 0 4px' }}>Toque numa marca ou busque o modelo</p>}
+                    {mostrar && lista.length === 0 && (
                       <div style={{ textAlign: 'center', padding: '16px 0' }}>
                         <p style={{ color: '#777', fontSize: 13, margin: '0 0 10px' }}>Nenhum celular encontrado.</p>
                         {buscaModelo.trim() && (
