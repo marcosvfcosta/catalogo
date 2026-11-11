@@ -342,6 +342,7 @@ export default function Negociacao() {
   const [mesRef, setMesRef] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
   const [lendoCaixa, setLendoCaixa] = useState(false)
   const [msgCaixa, setMsgCaixa] = useState('')
+  const [fotoProposta, setFotoProposta] = useState<File | null>(null)
   const [relAberto, setRelAberto] = useState<string | null>(null)
   const [vendedorAberto, setVendedorAberto] = useState<string | null>(null)
   const [entradas, setEntradas] = useState<Entrada[]>([])
@@ -942,24 +943,6 @@ export default function Negociacao() {
     carregarClientes()
   }
 
-  // Foto da caixinha: lê IMEI e série pelos códigos de barras e coloca nas observações
-  async function aoFotografarCaixa(arquivo?: File) {
-    if (!arquivo) return
-    setLendoCaixa(true); setMsgCaixa('Lendo a caixinha...')
-    try {
-      const { imeis, serie } = await lerCaixinha(arquivo)
-      if (!imeis.length && !serie) { setMsgCaixa('⚠️ Não consegui ler. Tire de perto, só da parte dos códigos de barras, sem reflexo.'); return }
-      const linha = '📦 ' + [imeis[0] && 'IMEI: ' + imeis[0], imeis[1] && 'IMEI 2: ' + imeis[1], serie && 'Série: ' + serie].filter(Boolean).join(' · ')
-      setForm(f => {
-        const resto = (f.observacoes || '').split('\n').filter(l => !l.startsWith('📦 ')).join('\n').trim()
-        return { ...f, observacoes: resto ? linha + '\n' + resto : linha }
-      })
-      setMsgCaixa('✅ Lido! ' + (imeis.length ? imeis.length + ' IMEI' : '') + (serie ? (imeis.length ? ' e ' : '') + 'série' : ''))
-    } catch (e) {
-      setMsgCaixa('⚠️ ' + (e instanceof Error ? e.message : 'Erro ao ler'))
-    } finally { setLendoCaixa(false) }
-  }
-
   // Mesma leitura da caixinha, direto na negociação aberta (salva na hora)
   async function lerCaixaDoCliente(c: Negociacao, arquivo?: File) {
     if (!arquivo) return
@@ -1066,6 +1049,62 @@ export default function Negociacao() {
   const apNeg = aparelhoSelecionado && fornecedorNeg
     ? { ...aparelhoSelecionado, ...(precosComFornecedor(aparelhoSelecionado, fornecedorNeg) || {}) } as Aparelho
     : aparelhoSelecionado
+
+  // Foto do celular escolhido (na cor escolhida) já preparada: o iPhone só deixa compartilhar
+  // arquivo se ele estiver pronto na hora do toque
+  const urlFotoProposta = (() => {
+    if (!apNeg) return null
+    const f = apNeg.fotos || {}
+    return (form.cor && f[form.cor]?.[0]) || apNeg.cores.map(c => f[c]?.[0]).find(Boolean) || Object.values(f).flat()[0] || null
+  })()
+  useEffect(() => {
+    setFotoProposta(null)
+    if (!urlFotoProposta) return
+    let cancelado = false
+    ;(async () => {
+      try {
+        const blob = await (await fetch(urlFotoProposta)).blob()
+        const img = await createImageBitmap(blob)
+        const lado = 1080, c = document.createElement('canvas')
+        c.width = lado; c.height = lado
+        const ctx = c.getContext('2d')!
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, lado, lado) // fundo branco (PNG sem fundo fica preto no WhatsApp)
+        const esc = Math.min((lado * 0.88) / img.width, (lado * 0.88) / img.height)
+        const w = img.width * esc, h = img.height * esc
+        ctx.drawImage(img, (lado - w) / 2, (lado - h) / 2, w, h)
+        const jpg = await new Promise<Blob | null>(ok => c.toBlob(ok, 'image/jpeg', 0.9))
+        if (jpg && !cancelado) setFotoProposta(new File([jpg], 'celular.jpg', { type: 'image/jpeg' }))
+      } catch (e) { console.error('Foto da proposta:', e) }
+    })()
+    return () => { cancelado = true }
+  }, [urlFotoProposta])
+
+  function textoProposta() {
+    const nome = form.nome.trim().split(' ')[0]
+    const pagamento = !parcelaSelecionada ? ''
+      : taxaAtual.label.includes('sem juros') ? taxaAtual.label.toLowerCase()
+      : parcelaSelecionada === 1 ? 'no crédito 1x' : `em ${parcelaSelecionada}x de ${fmt(valorParcela)}`
+    return `Olá${nome ? ' ' + nome : ''}! ✨\n\nSegue a proposta:\n\n📱 *${form.modelo}${form.cor ? ' ' + form.cor : ''}*\n✅ Valor: ${fmt(valorAparelho)}`
+      + (valorEntrada > 0 ? `\n✅ Entrada: ${fmt(valorEntrada)}` : '')
+      + (pagamento ? `\n✅ Pagamento: ${pagamento}` : '')
+      + `\n\nQualquer dúvida estou à disposição!\n\n_Marcos Magazine_`
+  }
+
+  async function enviarProposta() {
+    if (!form.modelo.trim() || !valorAparelho) { alert('Escolha o celular primeiro'); return }
+    const texto = textoProposta()
+    if (fotoProposta && navigator.canShare?.({ files: [fotoProposta] })) {
+      try { await navigator.clipboard?.writeText(texto) } catch { /* sem copiar */ }
+      try {
+        await navigator.share({ files: [fotoProposta], text: texto })
+        return
+      } catch (e) {
+        if (e instanceof Error && e.name === 'AbortError') return // fechou sem enviar
+      }
+    }
+    if (!form.telefone.replace(/\D/g, '')) { alert('Digite o WhatsApp do cliente'); return }
+    window.open(linkWhatsApp(form.telefone, texto), '_blank')
+  }
 
   function usarFornecedorNeg(f: string) {
     if (!aparelhoSelecionado) return
@@ -1500,14 +1539,17 @@ export default function Negociacao() {
             )}
             <div style={s.section}>
               <h3 style={s.sectionTitle}>Observações</h3>
-              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#151515', border: '1px dashed #ff6600', color: '#ff8a3d', borderRadius: 12, padding: '12px', fontSize: 15, fontWeight: 800, marginBottom: 8, cursor: 'pointer', opacity: lendoCaixa ? 0.6 : 1 }}>
-                📷 {lendoCaixa ? 'Lendo...' : 'Foto da caixinha (IMEI e série)'}
-                <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} disabled={lendoCaixa}
-                  onChange={e => { aoFotografarCaixa(e.target.files?.[0]); e.target.value = '' }} />
-              </label>
-              {msgCaixa && <p style={{ color: msgCaixa.startsWith('✅') ? '#25D366' : '#ffc800', fontSize: 13, margin: '0 0 8px' }}>{msgCaixa}</p>}
               <textarea style={{ ...s.input, height: 80, resize: 'none' }} value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} placeholder="Anotações sobre a negociação..." />
             </div>
+            {form.modelo && valorAparelho > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <button type="button" onClick={enviarProposta}
+                  style={{ width: '100%', background: '#25D366', color: '#000', border: 'none', borderRadius: 14, padding: 15, fontSize: 17, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  📲 Enviar proposta no WhatsApp{fotoProposta ? ' (com foto)' : ''}
+                </button>
+                {fotoProposta && <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0', textAlign: 'center' }}>Escolha o WhatsApp e o cliente. Se o texto não for junto, é só colar: ele já fica copiado.</p>}
+              </div>
+            )}
             <div style={s.botoesRow}>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flex: 1 }}>
                 <div style={{ flex: 1 }}>
