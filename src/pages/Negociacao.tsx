@@ -410,6 +410,7 @@ export default function Negociacao() {
   const [lucrosEdit, setLucrosEdit] = useState<Record<string, string>>({})
   const [salvandoLucroId, setSalvandoLucroId] = useState<string | null>(null)
   const [marcaNeg, setMarcaNeg] = useState('Todos')
+  const [abertoNeg, setAbertoNeg] = useState<string | null>(null) // menu sanfona: qual modelo está aberto
   const [fornecedorNeg, setFornecedorNeg] = useState<string | null>(null) // trocou de fornecedor só nesta negociação
   const [manualNeg, setManualNeg] = useState(false) // modelo digitado (fora da lista)
   const [form, setForm] = useState({
@@ -1261,7 +1262,6 @@ export default function Negociacao() {
                   .filter(a => marcaNeg === 'Todos' || marcaDoAparelho(a) === marcaNeg)
                   .filter(a => !termo || tirarAcento(a.modelo).includes(termo))
                   .sort((a, b) => marcaDoAparelho(a).localeCompare(marcaDoAparelho(b), 'pt-BR') || a.modelo.localeCompare(b.modelo, 'pt-BR', { numeric: true }))
-                let marcaAnterior = ''
                 return (
                   <div style={{ marginBottom: 8 }}>
                     <input style={s.input} value={buscaModelo} onChange={e => setBuscaModelo(e.target.value)} placeholder="🔍 Buscar modelo..." />
@@ -1282,17 +1282,27 @@ export default function Negociacao() {
                         )}
                       </div>
                     )}
-                    {lista.map(a => {
-                      const marca = marcaDoAparelho(a)
-                      const titulo = marca !== marcaAnterior ? <p style={{ color: '#ff6600', fontWeight: 800, letterSpacing: 2, fontSize: 13, textAlign: 'center', margin: '16px 0 10px', textTransform: 'uppercase' }}>{marca}</p> : null
-                      marcaAnterior = marca
-                      return (
-                        <div key={a.id}>
-                          {titulo}
-                          <CartaoAparelho ap={a} custoEscondido onTocarCartao={() => selecionarAparelho(a)} onEscolherCor={cor => selecionarAparelho(a, cor)} />
+                    {(() => {
+                      // Agrupa por marca; cada grupo é um bloco com as linhas da sanfona
+                      const grupos: { marca: string; itens: Aparelho[] }[] = []
+                      for (const a of lista) {
+                        const m = marcaDoAparelho(a)
+                        const g = grupos[grupos.length - 1]
+                        if (g && g.marca === m) g.itens.push(a); else grupos.push({ marca: m, itens: [a] })
+                      }
+                      return grupos.map(g => (
+                        <div key={g.marca}>
+                          <p style={{ color: '#ff6600', fontWeight: 800, letterSpacing: 2, fontSize: 13, textAlign: 'center', margin: '16px 0 8px', textTransform: 'uppercase' }}>{g.marca}</p>
+                          <div style={{ border: '1px solid #222', borderRadius: 16, overflow: 'hidden' }}>
+                            {g.itens.map((a, k) => (
+                              <CartaoAparelho key={a.id} ap={a} custoEscondido
+                                sanfona={{ aberto: abertoNeg === a.id, alternar: () => setAbertoNeg(abertoNeg === a.id ? null : a.id), ultimo: k === g.itens.length - 1 }}
+                                onEscolherCor={cor => { setAbertoNeg(null); selecionarAparelho(a, cor) }} />
+                            ))}
+                          </div>
                         </div>
-                      )
-                    })}
+                      ))
+                    })()}
                   </div>
                 )
               })()}

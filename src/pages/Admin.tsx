@@ -207,6 +207,7 @@ export default function Admin() {
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [aba, setAba] = useState<'cadastrar' | 'lista' | 'capas' | 'aparelhos' | 'hero' | 'vitrine' | 'ia' | 'precos'>('cadastrar')
   const [marcaPreco, setMarcaPreco] = useState('Todos')
+  const [precoAberto, setPrecoAberto] = useState<string | null>(null)
   const [uploadandoHero, setUploadandoHero] = useState(false)
   const [editando, setEditando] = useState<Produto | null>(null)
   const [heroImagens, setHeroImagens] = useState<HeroImagem[]>([])
@@ -1263,7 +1264,6 @@ export default function Admin() {
         const lista = todos
           .filter(a => marcaPreco === 'Todos' || marcaDoAparelho(a) === marcaPreco)
           .sort((a, b) => marcaDoAparelho(a).localeCompare(marcaDoAparelho(b), 'pt-BR') || a.modelo.localeCompare(b.modelo, 'pt-BR', { numeric: true }))
-        let marcaAnterior = ''
         return (
           <div style={formContainer}>
             <h2 style={formTitle}>💰 Preços da lista</h2>
@@ -1275,17 +1275,25 @@ export default function Admin() {
                 </button>
               ))}
             </div>
-            {lista.map(ap => {
-              const marca = marcaDoAparelho(ap)
-              const titulo = marca !== marcaAnterior ? <p style={{ color: '#ff6600', fontWeight: 800, letterSpacing: 2, fontSize: 13, textAlign: 'center', margin: '18px 0 10px', textTransform: 'uppercase' }}>{marca}</p> : null
-              marcaAnterior = marca
-              return (
-                <div key={ap.id}>
-                  {titulo}
-                  <CartaoAparelho ap={ap} listaAntiga={!vistoHoje(ap.ultima_lista)} onUsarFornecedor={f => usarFornecedor(ap, f)} />
+            {(() => {
+              const grupos: { marca: string; itens: Aparelho[] }[] = []
+              for (const ap of lista) {
+                const m = marcaDoAparelho(ap)
+                const g = grupos[grupos.length - 1]
+                if (g && g.marca === m) g.itens.push(ap); else grupos.push({ marca: m, itens: [ap] })
+              }
+              return grupos.map(g => (
+                <div key={g.marca}>
+                  <p style={{ color: '#ff6600', fontWeight: 800, letterSpacing: 2, fontSize: 13, textAlign: 'center', margin: '18px 0 8px', textTransform: 'uppercase' }}>{g.marca}</p>
+                  <div style={{ border: '1px solid #222', borderRadius: 16, overflow: 'hidden' }}>
+                    {g.itens.map((ap, k) => (
+                      <CartaoAparelho key={ap.id} ap={ap} listaAntiga={!vistoHoje(ap.ultima_lista)} onUsarFornecedor={f => usarFornecedor(ap, f)}
+                        sanfona={{ aberto: precoAberto === ap.id, alternar: () => setPrecoAberto(precoAberto === ap.id ? null : ap.id), ultimo: k === g.itens.length - 1 }} />
+                    ))}
+                  </div>
                 </div>
-              )
-            })}
+              ))
+            })()}
           </div>
         )
       })()}

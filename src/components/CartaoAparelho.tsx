@@ -87,9 +87,11 @@ type Props = {
   listaAntiga?: boolean
   fornecedorUsado?: string | null // fornecedor escolhido (se trocou)
   onUsarFornecedor?: (fornecedor: string) => void
+  // Menu sanfona: fechado mostra só uma linha (modelo + preço); tocando abre
+  sanfona?: { aberto: boolean; alternar: () => void; ultimo?: boolean }
 }
 
-export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolherCor, onTocarCartao, custoEscondido, listaAntiga, fornecedorUsado, onUsarFornecedor }: Props) {
+export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolherCor, onTocarCartao, custoEscondido, listaAntiga, fornecedorUsado, onUsarFornecedor, sanfona }: Props) {
   const [verCusto, setVerCusto] = useState(!custoEscondido)
   const [verFornecedores, setVerFornecedores] = useState(false)
   const { titulo, detalhe } = separarNome(ap.modelo)
@@ -111,9 +113,34 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
   const custoCor = corEscolhida && fornecedorAtual ? ofertas.find(o => o.f === fornecedorAtual && o.cor === corEscolhida)?.custo : null
   const custoMostrado = custoCor ?? ap.custo
 
+  if (sanfona && !sanfona.aberto) {
+    return (
+      <div onClick={sanfona.alternar}
+        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: '#111', borderBottom: sanfona.ultimo ? 'none' : '1px solid #1e1e1e', cursor: 'pointer', textAlign: 'left' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: 17, fontWeight: 800, color: '#fff', margin: 0 }}>{titulo}</p>
+          {detalhe && <p style={{ color: '#888', fontSize: 12, margin: '2px 0 0' }}>{detalhe}</p>}
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          {variosPrecos && <p style={{ color: '#888', fontSize: 10, margin: 0 }}>a partir de</p>}
+          <p style={{ color: '#25D366', fontSize: 16, fontWeight: 800, margin: 0, whiteSpace: 'nowrap' }}>{real(menor)}</p>
+          {listaAntiga && <p style={{ color: '#ffc800', fontSize: 9, fontWeight: 800, margin: '2px 0 0' }}>LISTA ANTIGA</p>}
+        </div>
+        <span style={{ color: '#666', fontSize: 20, width: 12 }}>›</span>
+      </div>
+    )
+  }
+
   return (
     <div onClick={onTocarCartao}
-      style={{ background: '#111', border: selecionado ? '2px solid #25D366' : '1px solid #222', boxShadow: selecionado ? '0 0 0 4px rgba(37,211,102,0.12)' : 'none', borderRadius: 18, padding: 16, marginBottom: 12, cursor: onTocarCartao ? 'pointer' : 'default', textAlign: 'left' }}>
+      style={sanfona
+        ? { background: '#1a120b', padding: 16, borderBottom: sanfona.ultimo ? 'none' : '1px solid #1e1e1e', textAlign: 'left' }
+        : { background: '#111', border: selecionado ? '2px solid #25D366' : '1px solid #222', boxShadow: selecionado ? '0 0 0 4px rgba(37,211,102,0.12)' : 'none', borderRadius: 18, padding: 16, marginBottom: 12, cursor: onTocarCartao ? 'pointer' : 'default', textAlign: 'left' }}>
+      {sanfona && (
+        <div onClick={e => { e.stopPropagation(); sanfona.alternar() }} style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: -8, cursor: 'pointer' }}>
+          <span style={{ color: '#ff6600', fontSize: 13, fontWeight: 700 }}>fechar ▴</span>
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
         <div style={{ width: 92, height: 116, flex: '0 0 92px', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(60% 60% at 50% 55%, rgba(255,255,255,0.08), transparent)' }}>
           {foto
