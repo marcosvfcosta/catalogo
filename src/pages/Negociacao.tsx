@@ -2,6 +2,7 @@ import CartaoAparelho, { marcaDoAparelho, precosComFornecedor } from '../compone
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabase'
 import { lerCaixinha } from '../lib/lerCaixinha'
+import { completarFotos } from '../lib/fotosCatalogo'
 
 type Negociacao = {
   id: string; nome: string; telefone: string; instagram: string
@@ -650,7 +651,8 @@ export default function Negociacao() {
       }
       if (igual.preco == null && c.preco != null) igual.preco = c.preco
     }
-    return lista.sort((a, b) => a.modelo.localeCompare(b.modelo))
+    // Aparelho da lista com nome diferente ("... 4GB RAM 4G") puxa a foto do mesmo modelo já cadastrado
+    return completarFotos(lista, [...aparelhosCatalogo, ...lista]).sort((a, b) => a.modelo.localeCompare(b.modelo))
   })()
 
   async function carregarEntradas() {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { carregarFotosCatalogo, completarFotos, type ComFotos } from '../lib/fotosCatalogo'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { recortarProduto } from '../lib/recortarProduto'
@@ -227,6 +228,7 @@ export default function Admin() {
   const [apPrecosCor, setApPrecosCor] = useState<Record<string, string>>({})
 
   const [aparelhos, setAparelhos] = useState<Aparelho[]>([])
+  const [fotosCat, setFotosCat] = useState<ComFotos[]>([])
   const [novoModelo, setNovoModelo] = useState('')
   const [coresSelecionadas, setCoresSelecionadas] = useState<string[]>([])
   const [fotosAparelho, setFotosAparelho] = useState<Record<string, string[]>>({})
@@ -319,6 +321,7 @@ export default function Admin() {
     const lista = (data || []) as Aparelho[]
     if (await juntarDuplicados(lista)) return carregarAparelhos()
     setAparelhos(lista)
+    carregarFotosCatalogo().then(setFotosCat).catch(() => {})
   }
 
   // Mesmo aparelho cadastrado 2x (ex: "Galaxy A07 128GB" e "Galaxy A07 128GB 4G"):
@@ -1311,7 +1314,7 @@ export default function Admin() {
 
       {aba === 'precos' && (() => {
         // Preços da lista no mesmo visual da conferência: separado por marca, foco no modelo e no valor final
-        const todos = aparelhos.filter(a => a.disponivel !== false && a.custo != null)
+        const todos = completarFotos(aparelhos.filter(a => a.disponivel !== false && a.custo != null), [...fotosCat, ...aparelhos])
         const marcas = Array.from(new Set(todos.map(marcaDoAparelho))).sort((a, b) => a.localeCompare(b, 'pt-BR'))
         const lista = todos
           .filter(a => marcaPreco === 'Todos' || marcaDoAparelho(a) === marcaPreco)
