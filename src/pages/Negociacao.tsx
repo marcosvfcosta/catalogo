@@ -958,6 +958,27 @@ export default function Negociacao() {
     } finally { setLendoCaixa(false) }
   }
 
+  // Mesma leitura da caixinha, direto na negociação aberta (salva na hora)
+  async function lerCaixaDoCliente(c: Negociacao, arquivo?: File) {
+    if (!arquivo) return
+    setLendoCaixa(true); setMsgCaixa('Lendo a caixinha...')
+    try {
+      const { imeis, serie } = await lerCaixinha(arquivo)
+      if (!imeis.length && !serie) { setMsgCaixa('⚠️ Não consegui ler. Tire de perto, só da parte dos códigos de barras, sem reflexo.'); return }
+      const linha = '📦 ' + [imeis[0] && 'IMEI: ' + imeis[0], imeis[1] && 'IMEI 2: ' + imeis[1], serie && 'Série: ' + serie].filter(Boolean).join(' · ')
+      const resto = (c.observacoes || '').split('\n').filter(l => !l.startsWith('📦 ')).join('\n').trim()
+      const observacoes = resto ? linha + '\n' + resto : linha
+      const { error } = await supabase.from('negociacoes').update({ observacoes }).eq('id', c.id)
+      if (error) { setMsgCaixa('⚠️ Erro ao salvar: ' + error.message); return }
+      const novo = { ...c, observacoes }
+      setClientes(prev => prev.map(x => x.id === c.id ? novo : x))
+      setClienteSelecionado(novo)
+      setMsgCaixa('✅ IMEI salvo nesta venda!')
+    } catch (e) {
+      setMsgCaixa('⚠️ ' + (e instanceof Error ? e.message : 'Erro ao ler'))
+    } finally { setLendoCaixa(false) }
+  }
+
   async function alterarStatus(id: string, status: string) {
     const c = clientes.find(x => x.id === id)
     const { error } = await supabase.from('negociacoes').update({ status }).eq('id', id)
@@ -1121,7 +1142,7 @@ export default function Negociacao() {
     <div style={{ ...s.page, flexDirection: 'column' }}>
       {celular && <style>{AJUSTE_CELULAR}</style>}
       <header style={s.header}>
-        <button style={s.btnBack} onClick={() => setClienteSelecionado(null)}>← Voltar</button>
+        <button style={s.btnBack} onClick={() => { setClienteSelecionado(null); setMsgCaixa('') }}>← Voltar</button>
         <div style={s.logo}><span style={s.logoM}>Marcos</span><span style={s.logoMag}>Magazine</span></div>
         {chaveTema}
       </header>
@@ -1145,7 +1166,13 @@ export default function Negociacao() {
 
           <div style={s.detalheCard}><p style={s.detalheLabel}>Data</p><p style={s.detalheValor}>{new Date(clienteSelecionado.created_at).toLocaleDateString('pt-BR')}</p></div>
         </div>
-        {clienteSelecionado.observacoes && <div style={{ ...s.detalheCard, marginTop: 12 }}><p style={s.detalheLabel}>Obs</p><p style={s.detalheValor}>{clienteSelecionado.observacoes}</p></div>}
+        {clienteSelecionado.observacoes && <div style={{ ...s.detalheCard, marginTop: 12 }}><p style={s.detalheLabel}>Obs</p><p style={{ ...s.detalheValor, whiteSpace: 'pre-line', wordBreak: 'break-word' }}>{clienteSelecionado.observacoes}</p></div>}
+        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#151515', border: '1px dashed #ff6600', color: '#ff8a3d', borderRadius: 14, padding: 14, fontSize: 16, fontWeight: 800, marginTop: 12, cursor: 'pointer', opacity: lendoCaixa ? 0.6 : 1 }}>
+          📷 {lendoCaixa ? 'Lendo...' : (clienteSelecionado.observacoes || '').includes('📦 ') ? 'Ler a caixinha de novo' : 'Foto da caixinha (IMEI e série)'}
+          <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} disabled={lendoCaixa}
+            onChange={e => { lerCaixaDoCliente(clienteSelecionado, e.target.files?.[0]); e.target.value = '' }} />
+        </label>
+        {msgCaixa && <p style={{ color: msgCaixa.startsWith('✅') ? '#25D366' : '#ffc800', fontSize: 13, margin: '6px 0 0', textAlign: 'center' }}>{msgCaixa}</p>}
         <div style={{ ...s.detalheCard, marginTop: 12, border: '1px solid ' + (clienteSelecionado.retorno_em ? '#ff6600' : '#1e1e1e') }}>
           <p style={{ ...s.detalheLabel, color: '#ff8a3d' }}>📅 Retornar contato</p>
           {clienteSelecionado.retorno_em ? (
