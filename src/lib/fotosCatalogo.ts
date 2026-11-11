@@ -12,7 +12,7 @@ const MARCAS = /\b(apple|samsung|xiaomi|motorola|realme|infinix|tecno|honor|huaw
 export function baseModelo(nome: string) {
   return tirarAcento(nome)
     .replace(/\b\d+\s*(gb|tb)\b(\s*(de\s*)?ram)?/g, ' ')
-    .replace(/\b(ram|4g|5g|cpo|dual\s*chip|lacrado|novo|seminovo)\b/g, ' ')
+    .replace(/\b(ram|4g|5g|cpo|nfc|dual\s*chip|lacrado|novo|seminovo|galaxy|smartphone|celular)\b/g, ' ')
     .replace(MARCAS, ' ')
     .replace(/[^a-z0-9]/g, '')
 }
@@ -28,7 +28,7 @@ export async function carregarFotosCatalogo(): Promise<ComFotos[]> {
   const fotos = (fts.data || []) as { produto_id: string; url: string; cor: string | null }[]
   type P = { id: string; categoria?: string | null; modelo: string; memoria?: string | null; cor?: string | null; foto_url?: string | null; foto_cor?: string | null }
   return ((prod.data || []) as P[])
-    .filter(p => /celular|tablet|ipad/.test(tirarAcento(p.categoria || '')))
+    .filter(p => !/capa|pelicula|carregador|fone|cabo|caixa|relogio|smartwatch|acessorio/.test(tirarAcento(p.categoria || '')))
     .map(p => {
       const cores = (p.cor || '').split(/[,/;]| e /).map(c => c.trim()).filter(Boolean)
       const porCor: Record<string, string[]> = {}
@@ -50,13 +50,19 @@ export function completarFotos<T extends ComFotos>(aparelhos: T[], fontes: ComFo
   const porBase = new Map<string, Record<string, string[]>>()
   for (const f of fontes) {
     const b = baseModelo(f.modelo)
-    if (!b) continue
+    if (!b || !Object.values(f.fotos || {}).some(u => u?.length)) continue
     const atual = porBase.get(b) || {}
     for (const [cor, urls] of Object.entries(f.fotos || {})) if (urls?.length && !atual[cor]?.length) atual[cor] = urls
     porBase.set(b, atual)
   }
+  const bases = Array.from(porBase.keys())
   return aparelhos.map(a => {
-    const achadas = porBase.get(baseModelo(a.modelo))
+    const b = baseModelo(a.modelo)
+    // Nome igual; senão o cadastro escrito mais curto ("Note 14 Pro" ↔ "Redmi Note 14 Pro")
+    const parecido = porBase.has(b) ? b
+      : bases.filter(x => x.length >= 3 && /\d/.test(x) && (b.endsWith(x) || x.endsWith(b) && b.length >= 3 && /\d/.test(b)))
+          .sort((x, y) => y.length - x.length)[0]
+    const achadas = parecido ? porBase.get(parecido) : undefined
     if (!achadas) return a
     const fotos: Record<string, string[]> = { ...(a.fotos || {}) }
     const nomes = Object.keys(achadas)
