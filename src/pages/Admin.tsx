@@ -1038,6 +1038,16 @@ export default function Admin() {
     alert('Dia finalizado! Os indisponíveis ficam no filtro "Indisponíveis" da aba 📦, onde dá pra excluir.')
   }
 
+  // Aba Preços: tira (deixa indisponível) os aparelhos que não vieram em nenhuma lista de hoje
+  async function tirarListasAntigas(ids: string[]) {
+    if (!ids.length) return
+    if (!confirm(`Tirar ${ids.length} aparelho(s) de lista antiga?\n\nEles somem dos Preços e da Negociação. Se vierem numa lista nova, voltam sozinhos.`)) return
+    const { error } = await supabase.from('aparelhos').update({ disponivel: false }).in('id', ids)
+    if (error) { alert('Erro: ' + error.message); return }
+    carregarAparelhos()
+    carregarResumoHoje()
+  }
+
   async function excluirIndisponiveis() {
     const ids = produtos.filter(p => !p.disponivel).map(p => p.id)
     if (ids.length === 0) return
@@ -1267,6 +1277,15 @@ export default function Admin() {
         return (
           <div style={formContainer}>
             <h2 style={formTitle}>💰 Preços da lista</h2>
+            {(() => {
+              const antigos = todos.filter(a => !vistoHoje(a.ultima_lista))
+              return antigos.length > 0 && (
+                <button type="button" onClick={() => tirarListasAntigas(antigos.map(a => a.id))}
+                  style={{ width: '100%', background: 'rgba(255,200,0,0.08)', border: '1px solid #ffc800', color: '#ffc800', borderRadius: 14, padding: '12px', fontSize: 15, fontWeight: 800, marginBottom: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  🧹 Tirar listas antigas ({antigos.length})
+                </button>
+              )
+            })()}
             <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6, marginBottom: 4 }}>
               {['Todos', ...marcas].map(m => (
                 <button key={m} type="button" onClick={() => setMarcaPreco(m)}
