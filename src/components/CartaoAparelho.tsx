@@ -134,9 +134,9 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
   }
 
   return (
-    <div onClick={onTocarCartao}
+    <div onClick={onTocarCartao || sanfona?.alternar}
       style={sanfona
-        ? { background: '#1a120b', padding: '16px 16px 6px', borderBottom: sanfona.ultimo ? 'none' : '1px solid #1e1e1e', textAlign: 'left' }
+        ? { background: '#1a120b', padding: '16px 16px 6px', cursor: 'pointer', borderBottom: sanfona.ultimo ? 'none' : '1px solid #1e1e1e', textAlign: 'left' }
         : { background: '#111', border: selecionado ? '2px solid #25D366' : '1px solid #222', boxShadow: selecionado ? '0 0 0 4px rgba(37,211,102,0.12)' : 'none', borderRadius: 18, padding: 16, marginBottom: 12, cursor: onTocarCartao ? 'pointer' : 'default', textAlign: 'left' }}>
       <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
         <div style={{ width: 92, height: 116, flex: '0 0 92px', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(60% 60% at 50% 55%, rgba(255,255,255,0.08), transparent)' }}>
@@ -231,7 +231,7 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
         </div>
       )}
       {sanfona && (
-        <div onClick={e => { e.stopPropagation(); sanfona.alternar() }} style={{ textAlign: 'center', color: '#ff6600', fontSize: 16, lineHeight: 1, padding: '8px 0 2px', cursor: 'pointer' }}>▴</div>
+        <div onClick={e => { e.stopPropagation(); sanfona.alternar() }} style={{ textAlign: 'center', color: '#ff6600', fontSize: 20, lineHeight: 1, padding: '10px 0 4px', cursor: 'pointer' }}>▴</div>
       )}
     </div>
   )
