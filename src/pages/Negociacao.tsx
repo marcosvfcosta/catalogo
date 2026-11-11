@@ -1260,14 +1260,14 @@ export default function Negociacao() {
                 const termo = tirarAcento(buscaModelo.trim())
                 const mostrar = !!marcaNeg || !!termo
                 const lista = !mostrar ? [] : disponiveis
-                  .filter(a => termo || marcaNeg === 'Todos' || marcaDoAparelho(a) === marcaNeg)
+                  .filter(a => termo || marcaDoAparelho(a) === marcaNeg)
                   .filter(a => !termo || tirarAcento(a.modelo).includes(termo))
                   .sort((a, b) => marcaDoAparelho(a).localeCompare(marcaDoAparelho(b), 'pt-BR') || a.modelo.localeCompare(b.modelo, 'pt-BR', { numeric: true }))
                 return (
                   <div style={{ marginBottom: 8 }}>
                     <input style={s.input} value={buscaModelo} onChange={e => setBuscaModelo(e.target.value)} placeholder="🔍 Buscar modelo..." />
                     <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '10px 0 4px' }}>
-                      {['Todos', ...marcas].map(m => (
+                      {marcas.map(m => (
                         <button key={m} type="button" onClick={() => { setMarcaNeg(marcaNeg === m ? '' : m); setAbertoNeg(null) }}
                           style={{ flex: '0 0 auto', background: marcaNeg === m ? '#ff6600' : '#151515', color: marcaNeg === m ? '#fff' : '#ccc', border: '1px solid ' + (marcaNeg === m ? '#ff6600' : '#333'), borderRadius: 20, padding: '8px 15px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{m}</button>
                       ))}
