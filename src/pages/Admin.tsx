@@ -316,7 +316,48 @@ export default function Admin() {
 
   async function carregarAparelhos() {
     const { data } = await supabase.from('aparelhos').select('*').order('modelo')
-    setAparelhos(data || [])
+    const lista = (data || []) as Aparelho[]
+    if (await juntarDuplicados(lista)) return carregarAparelhos()
+    setAparelhos(lista)
+  }
+
+  // Mesmo aparelho cadastrado 2x (ex: "Galaxy A07 128GB" e "Galaxy A07 128GB 4G"):
+  // junta num só (menor preço de cada cor, todas as cores e fornecedores) e tira o outro
+  async function juntarDuplicados(lista: Aparelho[]) {
+    const grupos = new Map<string, Aparelho[]>()
+    for (const a of lista) {
+      if (a.disponivel === false || !a.chave) continue
+      const k = chaveComparar(a.chave)
+      grupos.set(k, [...(grupos.get(k) || []), a])
+    }
+    let mudou = false
+    for (const g of grupos.values()) {
+      if (g.length < 2) continue
+      const comPreco = g.filter(a => a.preco != null)
+      const barato = (comPreco.length ? comPreco : g).reduce((x, y) => Number(y.preco) < Number(x.preco) ? y : x)
+      const principal = g.find(a => !/\b4g\b/i.test(a.modelo)) || g[0]
+      const outros = g.filter(a => a.id !== principal.id)
+      const cores = Array.from(new Set(g.flatMap(a => a.cores || [])))
+      const precosCor: Record<string, number> = {}
+      for (const a of g) for (const [c, v] of Object.entries(a.precos_cor || {})) {
+        if (v != null && (precosCor[c] == null || Number(v) < precosCor[c])) precosCor[c] = Number(v)
+      }
+      const fotos: Record<string, string[]> = { ...(principal.fotos || {}) }
+      for (const a of outros) for (const [c, fs] of Object.entries(a.fotos || {})) if (!fotos[c]?.length && fs?.length) fotos[c] = fs
+      const hoje = diaHoje()
+      const itens = g.flatMap(a => a.ofertas?.dia === hoje ? a.ofertas.itens : [])
+      const ultima = g.map(a => a.ultima_lista || '').sort().pop() || null
+      const dados: Record<string, unknown> = {
+        cores, fotos, precos_cor: precosCor, custo: barato.custo, preco: barato.preco, fornecedor: barato.fornecedor ?? null,
+        ultima_lista: ultima,
+      }
+      if (itens.length) dados.ofertas = { dia: hoje, itens }
+      const { error } = await supabase.from('aparelhos').update(dados).eq('id', principal.id)
+      if (error) { console.error('Juntar duplicados:', error); continue }
+      const r2 = await supabase.from('aparelhos').update({ disponivel: false }).in('id', outros.map(a => a.id))
+      if (!r2.error) mudou = true
+    }
+    return mudou
   }
 
   // ─── Capas: funções ───
@@ -873,7 +914,7 @@ export default function Admin() {
         }
         vistos.add(chave)
         item.custos_cor = Object.fromEntries(item.cores.map(c => [c, item.custo]))
-        const ap = listaAparelhos.find(a => chaveComparar(a.chave || a.modelo) === chaveComparar(chave))
+        const ap = (listaAparelhos.find(a => a.disponivel !== false && chaveComparar(a.chave || a.modelo) === chaveComparar(chave)) || listaAparelhos.find(a => chaveComparar(a.chave || a.modelo) === chaveComparar(chave)))
         const existeProduto = listaProdutos.some(p => chaveComparar(p.chave || p.modelo) === chaveComparar(chave))
         const custoAntigo = ap?.custo != null ? Number(ap.custo) : null
         // Já veio em outra lista hoje com custo menor: mantém o menor
@@ -906,7 +947,7 @@ export default function Admin() {
       supabase.from('aparelhos').select('*'),
     ])
     const listaProdutos = (prods || []) as { id: string; modelo: string; chave?: string; cor?: string; ultima_lista?: string }[]
-    const listaAparelhos = (aps || []) as { id: string; modelo: string; chave?: string; cores?: string[]; fotos?: Record<string, string[]>; custo?: number; ultima_lista?: string; precos_cor?: Record<string, number> | null; fornecedor?: string | null; ofertas?: Ofertas | null }[]
+    const listaAparelhos = (aps || []) as { id: string; modelo: string; chave?: string; cores?: string[]; fotos?: Record<string, string[]>; custo?: number; ultima_lista?: string; precos_cor?: Record<string, number> | null; fornecedor?: string | null; ofertas?: Ofertas | null; disponivel?: boolean }[]
     const nomeFornecedor = fornecedorLista.trim() || null
 
     let feitos = 0
@@ -936,7 +977,7 @@ export default function Admin() {
           }])
         }
         // Negociação (custo e preço de venda). Mesmo dia: fica o menor custo e soma as cores
-        const ap = listaAparelhos.find(a => chaveComparar(a.chave || a.modelo) === chaveComparar(i.chave))
+        const ap = (listaAparelhos.find(a => a.disponivel !== false && chaveComparar(a.chave || a.modelo) === chaveComparar(i.chave)) || listaAparelhos.find(a => chaveComparar(a.chave || a.modelo) === chaveComparar(i.chave)))
         const mesmoDia = !!ap && vistoHoje(ap.ultima_lista)
         const custo = mesmoDia && ap?.custo != null ? Math.min(Number(ap.custo), i.custo) : i.custo
         // Fornecedor do preço que ficou (o mais barato do dia)
