@@ -1,6 +1,7 @@
 import CartaoAparelho, { marcaDoAparelho, precosComFornecedor } from '../components/CartaoAparelho'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabase'
+import { lerCaixinha } from '../lib/lerCaixinha'
 
 type Negociacao = {
   id: string; nome: string; telefone: string; instagram: string
@@ -124,7 +125,7 @@ const CORES_HEX: Record<string, string> = {"Prata":"#c0c0c0","Lilás":"#c8a2c8",
 const PERIODOS = [
   { k: 'hoje', l: 'Hoje' },
   { k: '7d', l: '7 dias' },
-  { k: 'mes', l: 'Este mês' },
+  { k: 'mes', l: 'Mês' },
   { k: 'todos', l: 'Tudo' },
 ] as const
 type Periodo = typeof PERIODOS[number]['k']
@@ -147,13 +148,15 @@ function parseValor(v: string) {
 const fmt = (v: number) => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const norm = (t: string | null | undefined) => (t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 
-function noPeriodo(data: string, periodo: Periodo) {
+const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+
+function noPeriodo(data: string, periodo: Periodo, mesRef: Date = new Date()) {
   if (periodo === 'todos') return true
   const d = new Date(data)
   const agora = new Date()
   if (periodo === 'hoje') return d.toDateString() === agora.toDateString()
   if (periodo === '7d') return agora.getTime() - d.getTime() <= 7 * 24 * 60 * 60 * 1000
-  return d.getMonth() === agora.getMonth() && d.getFullYear() === agora.getFullYear()
+  return d.getMonth() === mesRef.getMonth() && d.getFullYear() === mesRef.getFullYear()
 }
 
 function resumoEntrada(e: Entrada) {
@@ -335,6 +338,9 @@ export default function Negociacao() {
   const [notaRetornoCli, setNotaRetornoCli] = useState('')
   const [buscaCliente, setBuscaCliente] = useState('')
   const [periodo, setPeriodo] = useState<Periodo>('todos')
+  const [mesRef, setMesRef] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
+  const [lendoCaixa, setLendoCaixa] = useState(false)
+  const [msgCaixa, setMsgCaixa] = useState('')
   const [relAberto, setRelAberto] = useState<string | null>(null)
   const [vendedorAberto, setVendedorAberto] = useState<string | null>(null)
   const [entradas, setEntradas] = useState<Entrada[]>([])
@@ -833,6 +839,7 @@ export default function Negociacao() {
   }
 
   function limpar() {
+    setMsgCaixa('')
     setForm({ nome: '', telefone: '', instagram: '', modelo: '', cor: '', valor_aparelho: '', valor_entrada: '', lucro: '', observacoes: '', vendedor: '' })
     setOpcaoPagamento(null)
     setErros({})
@@ -931,6 +938,24 @@ export default function Negociacao() {
     if (error) { alert('Erro ao salvar o lucro: ' + error.message); return }
     setPedeLucro(null)
     carregarClientes()
+  }
+
+  // Foto da caixinha: lê IMEI e série pelos códigos de barras e coloca nas observações
+  async function aoFotografarCaixa(arquivo?: File) {
+    if (!arquivo) return
+    setLendoCaixa(true); setMsgCaixa('Lendo a caixinha...')
+    try {
+      const { imeis, serie } = await lerCaixinha(arquivo)
+      if (!imeis.length && !serie) { setMsgCaixa('⚠️ Não consegui ler. Tire de perto, só da parte dos códigos de barras, sem reflexo.'); return }
+      const linha = '📦 ' + [imeis[0] && 'IMEI: ' + imeis[0], imeis[1] && 'IMEI 2: ' + imeis[1], serie && 'Série: ' + serie].filter(Boolean).join(' · ')
+      setForm(f => {
+        const resto = (f.observacoes || '').split('\n').filter(l => !l.startsWith('📦 ')).join('\n').trim()
+        return { ...f, observacoes: resto ? linha + '\n' + resto : linha }
+      })
+      setMsgCaixa('✅ Lido! ' + (imeis.length ? imeis.length + ' IMEI' : '') + (serie ? (imeis.length ? ' e ' : '') + 'série' : ''))
+    } catch (e) {
+      setMsgCaixa('⚠️ ' + (e instanceof Error ? e.message : 'Erro ao ler'))
+    } finally { setLendoCaixa(false) }
   }
 
   async function alterarStatus(id: string, status: string) {
@@ -1048,7 +1073,7 @@ export default function Negociacao() {
     .filter(r => !termoRet
       || semAc(`${r.nome} ${r.modelo} ${r.cupom || ''}`).includes(termoRet.replace('#', ''))
       || (digitosRet.length >= 4 && r.telefone.replace(/\D/g, '').includes(digitosRet)))
-  const clientesPeriodo = clientes.filter(c => noPeriodo(c.created_at, periodo))
+  const clientesPeriodo = clientes.filter(c => noPeriodo(c.created_at, periodo, mesRef))
 
   const porVendedor = Object.values(
     clientesPeriodo.reduce((acc, c) => {
@@ -1446,6 +1471,12 @@ export default function Negociacao() {
             )}
             <div style={s.section}>
               <h3 style={s.sectionTitle}>Observações</h3>
+              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#151515', border: '1px dashed #ff6600', color: '#ff8a3d', borderRadius: 12, padding: '12px', fontSize: 15, fontWeight: 800, marginBottom: 8, cursor: 'pointer', opacity: lendoCaixa ? 0.6 : 1 }}>
+                📷 {lendoCaixa ? 'Lendo...' : 'Foto da caixinha (IMEI e série)'}
+                <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} disabled={lendoCaixa}
+                  onChange={e => { aoFotografarCaixa(e.target.files?.[0]); e.target.value = '' }} />
+              </label>
+              {msgCaixa && <p style={{ color: msgCaixa.startsWith('✅') ? '#25D366' : '#ffc800', fontSize: 13, margin: '0 0 8px' }}>{msgCaixa}</p>}
               <textarea style={{ ...s.input, height: 80, resize: 'none' }} value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} placeholder="Anotações sobre a negociação..." />
             </div>
             <div style={s.botoesRow}>
@@ -1554,6 +1585,19 @@ export default function Negociacao() {
                 <button key={p.k} style={periodo === p.k ? s.filtroBtnAtivo : s.filtroBtn} onClick={() => { setPeriodo(p.k); setRelAberto(null); setVendedorAberto(null) }}>{p.l}</button>
               ))}
             </div>
+            {periodo === 'mes' && (() => {
+              const hoje = new Date()
+              const ehAtual = mesRef.getFullYear() === hoje.getFullYear() && mesRef.getMonth() === hoje.getMonth()
+              const mudar = (n: number) => { setMesRef(new Date(mesRef.getFullYear(), mesRef.getMonth() + n, 1)); setRelAberto(null); setVendedorAberto(null) }
+              const seta = { background: '#151515', border: '1px solid #333', color: '#ff6600', borderRadius: 12, width: 44, height: 40, fontSize: 22, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' } as const
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, margin: '4px 0 16px' }}>
+                  <button type="button" style={seta} onClick={() => mudar(-1)}>‹</button>
+                  <span style={{ color: '#fff', fontSize: 18, fontWeight: 800, minWidth: 170, textAlign: 'center' }}>{MESES[mesRef.getMonth()]} {mesRef.getFullYear()}</span>
+                  <button type="button" style={{ ...seta, opacity: ehAtual ? 0.3 : 1 }} disabled={ehAtual} onClick={() => mudar(1)}>›</button>
+                </div>
+              )
+            })()}
             <div style={s.relGrid}>
               {[
                 { label: 'Vendas Fechadas', status: 'Venda Fechada', icon: '✅', cor: '#25D366', rgb: '37,211,102' },
