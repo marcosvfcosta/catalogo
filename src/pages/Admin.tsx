@@ -131,6 +131,7 @@ function chaveComparar(chaveOuNome: string | null | undefined) {
   const cpo = k.endsWith('cpo')
   if (cpo) k = k.slice(0, -3)
   if (/^(iphone|ipad)/.test(k)) k = k.replace(/\d+gbram/g, '').replace(/[45]g$/, '')
+  else k = k.replace(/4g$/, '') // "4G" no fim é o mesmo aparelho; só "5G" separa
   return k + (cpo ? 'cpo' : '')
 }
 
