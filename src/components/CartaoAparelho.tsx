@@ -1,4 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+
+// iPad (tela larga): modelo, descrição, valor e foto maiores. No celular fica igual.
+function useTelaGrande() {
+  const medir = () => typeof window !== 'undefined' && window.innerWidth >= 700
+  const [grande, setGrande] = useState(medir)
+  useEffect(() => {
+    const f = () => setGrande(medir())
+    window.addEventListener('resize', f)
+    return () => window.removeEventListener('resize', f)
+  }, [])
+  return grande
+}
 
 // Cartão de aparelho da lista de preços (Admin → Preços e Negociação → escolher o celular).
 // Foco no modelo e no valor final; cada cor numa linha com a bolinha e o preço.
@@ -94,6 +106,7 @@ type Props = {
 export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolherCor, onTocarCartao, custoEscondido, listaAntiga, fornecedorUsado, onUsarFornecedor, sanfona }: Props) {
   const [verCusto, setVerCusto] = useState(!custoEscondido)
   const [verFornecedores, setVerFornecedores] = useState(false)
+  const g = useTelaGrande()
   const { titulo, detalhe } = separarNome(ap.modelo)
   const fornecedorAtual = fornecedorUsado || ap.fornecedor || null
   const ofertas = ap.ofertas?.dia === diaDeHoje() ? ap.ofertas.itens : []
@@ -119,12 +132,12 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
         style={{ padding: '14px 16px 6px', background: '#111', borderBottom: sanfona.ultimo ? 'none' : '1px solid #1e1e1e', cursor: 'pointer', textAlign: 'left' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: 17, fontWeight: 800, color: '#fff', margin: 0 }}>{titulo}</p>
-          {detalhe && <p style={{ color: '#888', fontSize: 12, margin: '2px 0 0' }}>{detalhe}</p>}
+          <p style={{ fontSize: g ? 24 : 17, fontWeight: 800, color: '#fff', margin: 0 }}>{titulo}</p>
+          {detalhe && <p style={{ color: '#888', fontSize: g ? 16 : 12, margin: '2px 0 0' }}>{detalhe}</p>}
         </div>
         <div style={{ textAlign: 'right' }}>
-          {variosPrecos && <p style={{ color: '#888', fontSize: 10, margin: 0 }}>a partir de</p>}
-          <p style={{ color: '#25D366', fontSize: 16, fontWeight: 800, margin: 0, whiteSpace: 'nowrap' }}>{real(menor)}</p>
+          {variosPrecos && <p style={{ color: '#888', fontSize: g ? 13 : 10, margin: 0 }}>a partir de</p>}
+          <p style={{ color: '#25D366', fontSize: g ? 24 : 16, fontWeight: 800, margin: 0, whiteSpace: 'nowrap' }}>{real(menor)}</p>
           {listaAntiga && <p style={{ color: '#ffc800', fontSize: 9, fontWeight: 800, margin: '2px 0 0' }}>LISTA ANTIGA</p>}
         </div>
         </div>
@@ -138,21 +151,21 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
       style={sanfona
         ? { background: '#1a120b', padding: '16px 16px 6px', cursor: 'pointer', borderBottom: sanfona.ultimo ? 'none' : '1px solid #1e1e1e', textAlign: 'left' }
         : { background: '#111', border: selecionado ? '2px solid #25D366' : '1px solid #222', boxShadow: selecionado ? '0 0 0 4px rgba(37,211,102,0.12)' : 'none', borderRadius: 18, padding: 16, marginBottom: 12, cursor: onTocarCartao ? 'pointer' : 'default', textAlign: 'left' }}>
-      <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-        <div style={{ width: 92, height: 116, flex: '0 0 92px', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(60% 60% at 50% 55%, rgba(255,255,255,0.08), transparent)' }}>
+      <div style={{ display: 'flex', gap: g ? 28 : 14, alignItems: 'center' }}>
+        <div style={{ width: g ? 200 : 92, height: g ? 250 : 116, flex: g ? '0 0 200px' : '0 0 92px', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(60% 60% at 50% 55%, rgba(255,255,255,0.08), transparent)' }}>
           {foto
-            ? <img src={foto} alt={ap.modelo} loading="lazy" style={{ maxWidth: '90%', maxHeight: 108, objectFit: 'contain' }} />
+            ? <img src={foto} alt={ap.modelo} loading="lazy" style={{ maxWidth: '90%', maxHeight: g ? 236 : 108, objectFit: 'contain' }} />
             : <div style={{ textAlign: 'center', opacity: 0.5, fontSize: 28 }}>📱<small style={{ display: 'block', fontSize: 10, color: '#888' }}>sem foto</small></div>}
         </div>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
-            <p style={{ fontSize: 19, fontWeight: 800, color: '#fff', margin: 0, letterSpacing: -0.3, lineHeight: 1.15 }}>{titulo}</p>
+            <p style={{ fontSize: g ? 32 : 19, fontWeight: 800, color: '#fff', margin: 0, letterSpacing: -0.3, lineHeight: 1.15 }}>{titulo}</p>
             {listaAntiga && <span style={{ border: '1px solid #ffc800', color: '#ffc800', fontSize: 9, fontWeight: 800, borderRadius: 7, padding: '3px 6px', whiteSpace: 'nowrap' }}>LISTA ANTIGA</span>}
           </div>
-          {detalhe && <p style={{ color: '#aaa', fontSize: 13, margin: '3px 0 0' }}>{detalhe}</p>}
-          <p style={{ color: '#888', fontSize: 11, margin: '8px 0 0' }}>{corEscolhida ? corEscolhida : variosPrecos ? 'a partir de' : 'Valor final'}</p>
-          <p style={{ color: '#25D366', fontSize: 26, fontWeight: 900, margin: 0, letterSpacing: -0.5 }}>{real(valorMostrado)}</p>
-          <p style={{ color: '#888', fontSize: 11, margin: 0 }}>até 18x no cartão</p>
+          {detalhe && <p style={{ color: '#aaa', fontSize: g ? 20 : 13, margin: '3px 0 0' }}>{detalhe}</p>}
+          <p style={{ color: '#888', fontSize: g ? 15 : 11, margin: g ? '14px 0 0' : '8px 0 0' }}>{corEscolhida ? corEscolhida : variosPrecos ? 'a partir de' : 'Valor final'}</p>
+          <p style={{ color: '#25D366', fontSize: g ? 46 : 26, fontWeight: 900, margin: 0, letterSpacing: -0.5 }}>{real(valorMostrado)}</p>
+          <p style={{ color: '#888', fontSize: g ? 15 : 11, margin: 0 }}>até 18x no cartão</p>
         </div>
       </div>
 
