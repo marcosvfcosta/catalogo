@@ -126,6 +126,15 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
   const custoCor = corEscolhida && fornecedorAtual ? ofertas.find(o => o.f === fornecedorAtual && o.cor === corEscolhida)?.custo : null
   const custoMostrado = custoCor ?? ap.custo
 
+  // Valor final: no celular embaixo do modelo; no iPad do lado direito
+  const blocoPreco = (
+    <>
+      <p style={{ color: '#888', fontSize: g ? 15 : 11, margin: g ? 0 : '8px 0 0' }}>{corEscolhida ? corEscolhida : variosPrecos ? 'a partir de' : 'Valor final'}</p>
+      <p style={{ color: '#25D366', fontSize: g ? 46 : 26, fontWeight: 900, margin: 0, letterSpacing: -0.5, whiteSpace: 'nowrap' }}>{real(valorMostrado)}</p>
+      <p style={{ color: '#888', fontSize: g ? 15 : 11, margin: 0 }}>até 18x no cartão</p>
+    </>
+  )
+
   if (sanfona && !sanfona.aberto) {
     return (
       <div onClick={sanfona.alternar}
@@ -163,10 +172,9 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
             {listaAntiga && <span style={{ border: '1px solid #ffc800', color: '#ffc800', fontSize: 9, fontWeight: 800, borderRadius: 7, padding: '3px 6px', whiteSpace: 'nowrap' }}>LISTA ANTIGA</span>}
           </div>
           {detalhe && <p style={{ color: '#aaa', fontSize: g ? 20 : 13, margin: '3px 0 0' }}>{detalhe}</p>}
-          <p style={{ color: '#888', fontSize: g ? 15 : 11, margin: g ? '14px 0 0' : '8px 0 0' }}>{corEscolhida ? corEscolhida : variosPrecos ? 'a partir de' : 'Valor final'}</p>
-          <p style={{ color: '#25D366', fontSize: g ? 46 : 26, fontWeight: 900, margin: 0, letterSpacing: -0.5 }}>{real(valorMostrado)}</p>
-          <p style={{ color: '#888', fontSize: g ? 15 : 11, margin: 0 }}>até 18x no cartão</p>
+          {!g && blocoPreco}
         </div>
+        {g && <div style={{ textAlign: 'right', flex: '0 0 auto' }}>{blocoPreco}</div>}
       </div>
 
       {ap.cores.length > 0 && (
