@@ -23,11 +23,13 @@ type Aparelho = {
   fornecedor?: string | null
   ofertas?: { dia: string; itens: { f: string; cor: string; custo: number }[] } | null
   doCatalogo?: boolean
+  naLoja?: boolean
 }
 
 type ProdutoCatalogo = {
   id: string; categoria: string; modelo: string; memoria?: string | null; cor?: string | null
   foto_url?: string | null; foto_cor?: string | null; preco?: number | null; disponivel?: boolean | null
+  na_loja?: boolean | null
 }
 
 const tirarAcento = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
@@ -53,7 +55,7 @@ function aparelhosDoCatalogo(produtos: ProdutoCatalogo[], fotos: { produto_id: s
         id: `cat-${p.id}`,
         modelo: [p.modelo, p.memoria].filter(Boolean).join(' '),
         cores: todasCores, fotos: porCor,
-        preco: p.preco ?? null, disponivel: p.disponivel !== false, doCatalogo: true,
+        preco: p.preco ?? null, disponivel: p.disponivel !== false, doCatalogo: true, naLoja: !!p.na_loja,
       }
     })
 }
@@ -634,7 +636,7 @@ export default function Negociacao() {
     setAparelhos(data || [])
     // Fotos dos celulares/tablets do catálogo
     const [prod, fts] = await Promise.all([
-      supabase.from('produtos_catalogo').select('id, categoria, modelo, memoria, cor, foto_url, foto_cor, preco, disponivel'),
+      supabase.from('produtos_catalogo').select('*'),
       supabase.from('produto_fotos').select('produto_id, url, cor').order('ordem'),
     ])
     setAparelhosCatalogo(aparelhosDoCatalogo((prod.data || []) as ProdutoCatalogo[], (fts.data || []) as { produto_id: string; url: string; cor: string | null }[]))
@@ -651,6 +653,7 @@ export default function Negociacao() {
         if (!igual.fotos[cor]?.length && c.fotos[cor]) igual.fotos[cor] = c.fotos[cor]
       }
       if (igual.preco == null && c.preco != null) igual.preco = c.preco
+      if (c.naLoja) igual.naLoja = true
     }
     // Aparelho da lista com nome diferente ("... 4GB RAM 4G") puxa a foto do mesmo modelo já cadastrado
     return completarFotos(lista, [...aparelhosCatalogo, ...lista]).sort((a, b) => a.modelo.localeCompare(b.modelo))
@@ -1412,17 +1415,20 @@ export default function Negociacao() {
                 const termo = tirarAcento(buscaModelo.trim())
                 const mostrar = !!marcaNeg || !!termo
                 const lista = !mostrar ? [] : disponiveis
-                  .filter(a => termo || marcaDoAparelho(a) === marcaNeg)
+                  .filter(a => termo || (marcaNeg === 'Disponíveis' ? a.naLoja : marcaDoAparelho(a) === marcaNeg))
                   .filter(a => !termo || tirarAcento(a.modelo).includes(termo))
                   .sort((a, b) => marcaDoAparelho(a).localeCompare(marcaDoAparelho(b), 'pt-BR') || a.modelo.localeCompare(b.modelo, 'pt-BR', { numeric: true }))
                 return (
                   <div style={{ marginBottom: 8 }}>
                     <input style={s.input} value={buscaModelo} onChange={e => setBuscaModelo(e.target.value)} placeholder="🔍 Buscar modelo..." />
                     <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '10px 0 4px' }}>
-                      {marcas.map(m => (
+                      {['Disponíveis', ...marcas].map(m => {
+                        const verde = m === 'Disponíveis', on = marcaNeg === m, cor = verde ? '#25D366' : '#ff6600'
+                        return (
                         <button key={m} type="button" onClick={() => { setMarcaNeg(marcaNeg === m ? '' : m); setAbertoNeg(null) }}
-                          style={{ flex: '0 0 auto', background: marcaNeg === m ? '#ff6600' : '#151515', color: marcaNeg === m ? '#fff' : '#ccc', border: '1px solid ' + (marcaNeg === m ? '#ff6600' : '#333'), borderRadius: 20, padding: '8px 15px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{m}</button>
-                      ))}
+                          style={{ flex: '0 0 auto', background: on ? cor : '#151515', color: on ? (verde ? '#000' : '#fff') : verde ? '#25D366' : '#ccc', border: '1px solid ' + (on || verde ? cor : '#333'), borderRadius: 20, padding: '8px 15px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          {verde ? `✓ Disponíveis (${disponiveis.filter(a => a.naLoja).length})` : m}</button>
+                      )})}
                     </div>
                     {!mostrar && <p style={{ color: '#888', fontSize: 13, textAlign: 'center', margin: '12px 0 4px' }}>Toque numa marca ou busque o modelo</p>}
                     {mostrar && lista.length === 0 && (

@@ -107,6 +107,7 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
   const [verCusto, setVerCusto] = useState(!custoEscondido)
   const [verFornecedores, setVerFornecedores] = useState(false)
   const g = useTelaGrande()
+  const [verCores, setVerCores] = useState(false)
   const { titulo, detalhe } = separarNome(ap.modelo)
   const fornecedorAtual = fornecedorUsado || ap.fornecedor || null
   const ofertas = ap.ofertas?.dia === diaDeHoje() ? ap.ofertas.itens : []
@@ -161,10 +162,20 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
         ? { background: '#1a120b', padding: '16px 16px 6px', cursor: 'pointer', borderBottom: sanfona.ultimo ? 'none' : '1px solid #1e1e1e', textAlign: 'left' }
         : { background: '#111', border: selecionado ? '2px solid #25D366' : '1px solid #222', boxShadow: selecionado ? '0 0 0 4px rgba(37,211,102,0.12)' : 'none', borderRadius: 18, padding: 16, marginBottom: 12, cursor: onTocarCartao ? 'pointer' : 'default', textAlign: 'left' }}>
       <div style={{ display: 'flex', gap: g ? 28 : 14, alignItems: 'center' }}>
-        <div style={{ width: g ? 200 : 92, height: g ? 250 : 116, flex: g ? '0 0 200px' : '0 0 92px', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(60% 60% at 50% 55%, rgba(255,255,255,0.08), transparent)' }}>
+        <div style={{ flex: g ? '0 0 200px' : '0 0 92px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div style={{ width: g ? 200 : 92, height: g ? 250 : 116, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(60% 60% at 50% 55%, rgba(255,255,255,0.08), transparent)' }}>
           {foto
             ? <img src={foto} alt={ap.modelo} loading="lazy" style={{ maxWidth: '90%', maxHeight: g ? 236 : 108, objectFit: 'contain' }} />
             : <div style={{ textAlign: 'center', opacity: 0.5, fontSize: 28 }}>📱<small style={{ display: 'block', fontSize: 10, color: '#888' }}>sem foto</small></div>}
+        </div>
+        {/* Setinha das cores, embaixo da foto: tocando mostra cada cor com o valor */}
+        {ap.cores.length > 0 && (
+          <div onClick={e => { e.stopPropagation(); setVerCores(v => !v) }}
+            style={{ color: '#ff6600', fontSize: g ? 30 : 22, lineHeight: 1, padding: g ? '6px 24px 2px' : '4px 16px 0', cursor: 'pointer', textAlign: 'center' }}>
+            {verCores ? '▴' : '▾'}
+            {corEscolhida && !verCores && <div style={{ color: '#25D366', fontSize: g ? 14 : 11, fontWeight: 700, marginTop: 2 }}>{corEscolhida}</div>}
+          </div>
+        )}
         </div>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
@@ -179,12 +190,7 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
 
       {ap.cores.length > 0 && (
         <>
-          {onEscolherCor && (
-            <p style={{ fontSize: 12, color: '#888', margin: '12px 0 6px' }}>
-              {corEscolhida ? <>Cor escolhida: <b style={{ color: '#25D366' }}>{corEscolhida}</b></> : 'Toque na cor para escolher'}
-            </p>
-          )}
-          <div style={{ background: '#0b0b0b', borderRadius: 12, padding: '4px 12px', marginTop: onEscolherCor ? 0 : 12 }}>
+          {verCores && <div style={{ background: '#0b0b0b', borderRadius: 12, padding: '4px 12px', marginTop: 12 }}>
             {ap.cores.map((c, k) => {
               const on = c === corEscolhida
               return (
@@ -197,7 +203,7 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
                 </div>
               )
             })}
-          </div>
+          </div>}
         </>
       )}
 

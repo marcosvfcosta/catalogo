@@ -30,6 +30,7 @@ type Produto = {
   lancamento?: boolean
   promocao?: boolean
   mais_procurado?: boolean
+  na_loja?: boolean | null
 }
 
 type HeroImagem = {
@@ -278,7 +279,7 @@ export default function Admin() {
     disponivel: true, destaque: false, lancamento: false,
     promocao: false, mais_procurado: false,
     tipo: '', compativel: [] as string[], conector: '',
-    preco_antigo: '', mostrar_preco: false,
+    preco_antigo: '', mostrar_preco: false, na_loja: false,
   })
 
   useEffect(() => {
@@ -773,6 +774,12 @@ export default function Admin() {
     )
   }
 
+  // "Disponível na loja" (vai para a aba Disponíveis da Negociação). Salvo à parte: sem a coluna, o resto salva normal
+  async function salvarNaLoja(id: string, valor: boolean) {
+    const { error } = await supabase.from('produtos_catalogo').update({ na_loja: valor }).eq('id', id)
+    if (error && valor) alert('O produto foi salvo, mas o "Disponível na loja" não.\n\nCrie no Supabase a coluna na_loja (tipo bool, padrão false) na tabela produtos_catalogo.')
+  }
+
   async function salvarProduto() {
     if (!novoProduto.marca || !novoProduto.modelo || !novoProduto.categoria) {
       alert('Preencha categoria, marca e modelo.'); return
@@ -788,6 +795,7 @@ export default function Admin() {
       ...dadosAcessorio(novoProduto),
     }]).select()
     if (error) { alert('Erro ao salvar produto' + (error.message?.includes('column') ? ' — rode o SQL novo no Supabase' : '')); return }
+    if (data && data[0] && novoProduto.na_loja) await salvarNaLoja(data[0].id, true)
     if (data && data[0] && fotosNovas.length > 1) {
       const produtoId = data[0].id
       const extras = fotosNovas.slice(1)
@@ -796,7 +804,7 @@ export default function Admin() {
       }
     }
     alert('Produto cadastrado!')
-    setNovoProduto({ categoria: 'Celulares', marca: '', modelo: '', memoria: '', cor: '', condicao: '', bateria_saude: '', preco: '', foto_url: '', descricao: '', disponivel: true, destaque: false, lancamento: false, promocao: false, mais_procurado: false, tipo: '', compativel: [], conector: '', preco_antigo: '', mostrar_preco: false })
+    setNovoProduto({ categoria: 'Celulares', marca: '', modelo: '', memoria: '', cor: '', condicao: '', bateria_saude: '', preco: '', foto_url: '', descricao: '', disponivel: true, destaque: false, lancamento: false, promocao: false, mais_procurado: false, tipo: '', compativel: [], conector: '', preco_antigo: '', mostrar_preco: false, na_loja: false })
     setFotosNovas([])
     carregarProdutos()
     setAba('lista')
@@ -815,6 +823,7 @@ export default function Admin() {
       ...dadosAcessorio({ tipo: editando.tipo || '', compativel: editando.compativel || [], conector: editando.conector || '' }),
     }).eq('id', editando.id)
     if (error) { alert('Erro ao editar produto' + (error.message?.includes('column') ? ' — rode o SQL novo no Supabase' : '')); return }
+    await salvarNaLoja(editando.id, !!editando.na_loja)
     alert('Produto atualizado!')
     setEditando(null)
     setFotosEdicao([])
@@ -1279,6 +1288,7 @@ export default function Admin() {
           <div style={tagsBox}>
             <p style={tagsTitle}>Tags do produto</p>
             <label style={checkLabel}><input type="checkbox" checked={editando.disponivel || false} onChange={e => setEditando({ ...editando, disponivel: e.target.checked })} />✅ Disponível no catálogo</label>
+            <label style={{ ...checkLabel, color: '#25D366', fontWeight: 800 }}><input type="checkbox" checked={!!editando.na_loja} onChange={e => setEditando({ ...editando, na_loja: e.target.checked })} />🏪 Disponível na loja (vai para Disponíveis na Negociação)</label>
             <label style={checkLabel}><input type="checkbox" checked={editando.destaque || false} onChange={e => setEditando({ ...editando, destaque: e.target.checked })} />☆ Destaque</label>
             <label style={checkLabel}><input type="checkbox" checked={editando.lancamento || false} onChange={e => setEditando({ ...editando, lancamento: e.target.checked })} />🚀 Lançamento</label>
             <label style={checkLabel}><input type="checkbox" checked={editando.promocao || false} onChange={e => setEditando({ ...editando, promocao: e.target.checked })} />🏷 Promoção</label>
@@ -1316,8 +1326,15 @@ export default function Admin() {
         // Preços da lista no mesmo visual da conferência: separado por marca, foco no modelo e no valor final
         const todos = completarFotos(aparelhos.filter(a => a.disponivel !== false && a.custo != null), [...fotosCat, ...aparelhos])
         const marcas = Array.from(new Set(todos.map(marcaDoAparelho))).sort((a, b) => a.localeCompare(b, 'pt-BR'))
-        const lista = todos
-          .filter(a => marcaPreco === 'Todos' || marcaDoAparelho(a) === marcaPreco)
+        // Disponíveis: os celulares cadastrados com "Disponível na loja"
+        const naLoja = completarFotos(produtos.filter(p => p.na_loja && p.disponivel !== false).map(p => ({
+          id: 'loja-' + p.id, modelo: [p.modelo, p.memoria].filter(Boolean).join(' '), marca: p.marca,
+          cores: (p.cor || '').split(/[,/;]| e /).map(c => c.trim()).filter(Boolean),
+          fotos: p.foto_url ? { [(p.foto_cor || (p.cor || '').split(/[,/;]| e /)[0] || 'Padrão').trim()]: [p.foto_url] } : {},
+          preco: p.preco ?? null, custo: null, ultima_lista: new Date().toISOString(),
+        } as Aparelho)), [...fotosCat, ...aparelhos])
+        const lista = (marcaPreco === 'Disponíveis' ? naLoja : todos
+          .filter(a => marcaPreco === 'Todos' || marcaDoAparelho(a) === marcaPreco))
           .sort((a, b) => marcaDoAparelho(a).localeCompare(marcaDoAparelho(b), 'pt-BR') || a.modelo.localeCompare(b.modelo, 'pt-BR', { numeric: true }))
         return (
           <div style={formContainer}>
@@ -1332,12 +1349,15 @@ export default function Admin() {
               )
             })()}
             <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6, marginBottom: 4 }}>
-              {['Todos', ...marcas].map(m => (
-                <button key={m} type="button" onClick={() => setMarcaPreco(m)}
-                  style={{ flex: '0 0 auto', background: marcaPreco === m ? '#ff6600' : '#151515', color: marcaPreco === m ? '#fff' : '#ccc', border: '1px solid ' + (marcaPreco === m ? '#ff6600' : '#333'), borderRadius: 20, padding: '8px 16px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                  {m} <span style={{ opacity: 0.7, fontWeight: 400 }}>({m === 'Todos' ? todos.length : todos.filter(a => marcaDoAparelho(a) === m).length})</span>
+              {['Disponíveis', 'Todos', ...marcas].map(m => {
+                const verde = m === 'Disponíveis', on = marcaPreco === m
+                const cor = verde ? '#25D366' : '#ff6600'
+                return (
+                <button key={m} type="button" onClick={() => { setMarcaPreco(m); setPrecoAberto(null) }}
+                  style={{ flex: '0 0 auto', background: on ? cor : '#151515', color: on ? (verde ? '#000' : '#fff') : verde ? '#25D366' : '#ccc', border: '1px solid ' + (on || verde ? cor : '#333'), borderRadius: 20, padding: '8px 16px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {verde ? '✓ ' : ''}{m} <span style={{ opacity: 0.7, fontWeight: 400 }}>({verde ? naLoja.length : m === 'Todos' ? todos.length : todos.filter(a => marcaDoAparelho(a) === m).length})</span>
                 </button>
-              ))}
+              )})}
             </div>
             {(() => {
               const grupos: { marca: string; itens: Aparelho[] }[] = []
@@ -1351,7 +1371,7 @@ export default function Admin() {
                   <p style={{ color: '#ff6600', fontWeight: 800, letterSpacing: 2, fontSize: 13, textAlign: 'center', margin: '18px 0 8px', textTransform: 'uppercase' }}>{g.marca}</p>
                   <div style={{ border: '1px solid #222', borderRadius: 16, overflow: 'hidden' }}>
                     {g.itens.map((ap, k) => (
-                      <CartaoAparelho key={ap.id} ap={ap} listaAntiga={!vistoHoje(ap.ultima_lista)} onUsarFornecedor={f => usarFornecedor(ap, f)}
+                      <CartaoAparelho key={ap.id} ap={ap} listaAntiga={!vistoHoje(ap.ultima_lista)} onUsarFornecedor={ap.id.startsWith('loja-') ? undefined : f => usarFornecedor(ap, f)}
                         sanfona={{ aberto: precoAberto === ap.id, alternar: () => setPrecoAberto(precoAberto === ap.id ? null : ap.id), ultimo: k === g.itens.length - 1 }} />
                     ))}
                   </div>
@@ -1565,6 +1585,7 @@ export default function Admin() {
           <div style={tagsBox}>
             <p style={tagsTitle}>Tags do produto</p>
             <label style={checkLabel}><input type="checkbox" checked={novoProduto.disponivel} onChange={e => setNovoProduto({ ...novoProduto, disponivel: e.target.checked })} />✅ Disponível no catálogo</label>
+            <label style={{ ...checkLabel, color: '#25D366', fontWeight: 800 }}><input type="checkbox" checked={novoProduto.na_loja} onChange={e => setNovoProduto({ ...novoProduto, na_loja: e.target.checked })} />🏪 Disponível na loja (vai para Disponíveis na Negociação)</label>
             <label style={checkLabel}><input type="checkbox" checked={novoProduto.destaque} onChange={e => setNovoProduto({ ...novoProduto, destaque: e.target.checked })} />☆ Destaque</label>
             <label style={checkLabel}><input type="checkbox" checked={novoProduto.lancamento} onChange={e => setNovoProduto({ ...novoProduto, lancamento: e.target.checked })} />🚀 Lançamento</label>
             <label style={checkLabel}><input type="checkbox" checked={novoProduto.promocao} onChange={e => setNovoProduto({ ...novoProduto, promocao: e.target.checked })} />🏷 Promoção</label>
