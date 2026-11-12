@@ -65,6 +65,7 @@ type Aparelho = {
   fornecedor?: string | null
   ofertas?: Ofertas | null
   ultima_lista?: string | null
+  na_loja?: boolean | null
 }
 
 // Preços de todos os fornecedores do dia, por cor (para achar outro fornecedor quando o mais barato não tem)
@@ -1093,6 +1094,14 @@ export default function Admin() {
   }
 
   // Aba Preços: tira (deixa indisponível) os aparelhos que não vieram em nenhuma lista de hoje
+  // Marca/desmarca o celular da lista como "tenho na loja" (aba Disponíveis)
+  async function alternarNaLoja(ap: Aparelho) {
+    const valor = !ap.na_loja
+    const { error } = await supabase.from('aparelhos').update({ na_loja: valor }).eq('id', ap.id)
+    if (error) { alert('Não salvou.\n\nCrie no Supabase a coluna na_loja (tipo bool, padrão false) na tabela aparelhos.'); return }
+    setAparelhos(prev => prev.map(a => a.id === ap.id ? { ...a, na_loja: valor } : a))
+  }
+
   async function tirarListasAntigas(ids: string[]) {
     if (!ids.length) return
     if (!confirm(`Tirar ${ids.length} aparelho(s) de lista antiga?\n\nEles somem dos Preços e da Negociação. Se vierem numa lista nova, voltam sozinhos.`)) return
@@ -1333,7 +1342,8 @@ export default function Admin() {
           fotos: p.foto_url ? { [(p.foto_cor || (p.cor || '').split(/[,/;]| e /)[0] || 'Padrão').trim()]: [p.foto_url] } : {},
           preco: p.preco ?? null, custo: null, ultima_lista: new Date().toISOString(),
         } as Aparelho)), [...fotosCat, ...aparelhos])
-        const lista = (marcaPreco === 'Disponíveis' ? naLoja : todos
+        const disponiveisLoja = [...todos.filter(a => a.na_loja), ...naLoja]
+        const lista = (marcaPreco === 'Disponíveis' ? disponiveisLoja : todos
           .filter(a => marcaPreco === 'Todos' || marcaDoAparelho(a) === marcaPreco))
           .sort((a, b) => marcaDoAparelho(a).localeCompare(marcaDoAparelho(b), 'pt-BR') || a.modelo.localeCompare(b.modelo, 'pt-BR', { numeric: true }))
         return (
@@ -1355,7 +1365,7 @@ export default function Admin() {
                 return (
                 <button key={m} type="button" onClick={() => { setMarcaPreco(m); setPrecoAberto(null) }}
                   style={{ flex: '0 0 auto', background: on ? cor : '#151515', color: on ? (verde ? '#000' : '#fff') : verde ? '#25D366' : '#ccc', border: '1px solid ' + (on || verde ? cor : '#333'), borderRadius: 20, padding: '8px 16px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                  {verde ? '✓ ' : ''}{m} <span style={{ opacity: 0.7, fontWeight: 400 }}>({verde ? naLoja.length : m === 'Todos' ? todos.length : todos.filter(a => marcaDoAparelho(a) === m).length})</span>
+                  {verde ? '✓ ' : ''}{m} <span style={{ opacity: 0.7, fontWeight: 400 }}>({verde ? disponiveisLoja.length : m === 'Todos' ? todos.length : todos.filter(a => marcaDoAparelho(a) === m).length})</span>
                 </button>
               )})}
             </div>
@@ -1372,6 +1382,7 @@ export default function Admin() {
                   <div style={{ border: '1px solid #222', borderRadius: 16, overflow: 'hidden' }}>
                     {g.itens.map((ap, k) => (
                       <CartaoAparelho key={ap.id} ap={ap} listaAntiga={!vistoHoje(ap.ultima_lista)} onUsarFornecedor={ap.id.startsWith('loja-') ? undefined : f => usarFornecedor(ap, f)}
+                        onAlternarNaLoja={ap.id.startsWith('loja-') ? undefined : () => alternarNaLoja(ap)}
                         sanfona={{ aberto: precoAberto === ap.id, alternar: () => setPrecoAberto(precoAberto === ap.id ? null : ap.id), ultimo: k === g.itens.length - 1 }} />
                     ))}
                   </div>

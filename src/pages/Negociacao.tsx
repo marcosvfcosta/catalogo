@@ -24,6 +24,7 @@ type Aparelho = {
   ofertas?: { dia: string; itens: { f: string; cor: string; custo: number }[] } | null
   doCatalogo?: boolean
   naLoja?: boolean
+  na_loja?: boolean | null
 }
 
 type ProdutoCatalogo = {
@@ -1415,7 +1416,7 @@ export default function Negociacao() {
                 const termo = tirarAcento(buscaModelo.trim())
                 const mostrar = !!marcaNeg || !!termo
                 const lista = !mostrar ? [] : disponiveis
-                  .filter(a => termo || (marcaNeg === 'Disponíveis' ? a.naLoja : marcaDoAparelho(a) === marcaNeg))
+                  .filter(a => termo || (marcaNeg === 'Disponíveis' ? (a.naLoja || a.na_loja) : marcaDoAparelho(a) === marcaNeg))
                   .filter(a => !termo || tirarAcento(a.modelo).includes(termo))
                   .sort((a, b) => marcaDoAparelho(a).localeCompare(marcaDoAparelho(b), 'pt-BR') || a.modelo.localeCompare(b.modelo, 'pt-BR', { numeric: true }))
                 return (
@@ -1427,7 +1428,7 @@ export default function Negociacao() {
                         return (
                         <button key={m} type="button" onClick={() => { setMarcaNeg(marcaNeg === m ? '' : m); setAbertoNeg(null) }}
                           style={{ flex: '0 0 auto', background: on ? cor : '#151515', color: on ? (verde ? '#000' : '#fff') : verde ? '#25D366' : '#ccc', border: '1px solid ' + (on || verde ? cor : '#333'), borderRadius: 20, padding: '8px 15px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                          {verde ? `✓ Disponíveis (${disponiveis.filter(a => a.naLoja).length})` : m}</button>
+                          {verde ? `✓ Disponíveis (${disponiveis.filter(a => a.naLoja || a.na_loja).length})` : m}</button>
                       )})}
                     </div>
                     {!mostrar && <p style={{ color: '#888', fontSize: 13, textAlign: 'center', margin: '12px 0 4px' }}>Toque numa marca ou busque o modelo</p>}

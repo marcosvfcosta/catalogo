@@ -29,6 +29,7 @@ export type AparelhoPreco = {
   fornecedor?: string | null
   ofertas?: { dia: string; itens: Oferta[] } | null
   ultima_lista?: string | null
+  na_loja?: boolean | null
 }
 
 export const CORES_BOLINHA: Record<string, string> = {
@@ -100,10 +101,11 @@ type Props = {
   fornecedorUsado?: string | null // fornecedor escolhido (se trocou)
   onUsarFornecedor?: (fornecedor: string) => void
   // Menu sanfona: fechado mostra só uma linha (modelo + preço); tocando abre
+  onAlternarNaLoja?: () => void
   sanfona?: { aberto: boolean; alternar: () => void; ultimo?: boolean }
 }
 
-export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolherCor, onTocarCartao, custoEscondido, listaAntiga, fornecedorUsado, onUsarFornecedor, sanfona }: Props) {
+export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolherCor, onTocarCartao, custoEscondido, listaAntiga, fornecedorUsado, onUsarFornecedor, onAlternarNaLoja, sanfona }: Props) {
   const [verCusto, setVerCusto] = useState(!custoEscondido)
   const [verFornecedores, setVerFornecedores] = useState(false)
   const g = useTelaGrande()
@@ -207,6 +209,12 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
         </>
       )}
 
+      {onAlternarNaLoja && (
+        <button type="button" onClick={e => { e.stopPropagation(); onAlternarNaLoja() }}
+          style={{ width: '100%', marginTop: 12, background: ap.na_loja ? '#25D366' : 'none', color: ap.na_loja ? '#000' : '#25D366', border: '1px solid #25D366', borderRadius: 12, padding: g ? 14 : 11, fontSize: g ? 17 : 15, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+          {ap.na_loja ? '✓ Tenho na loja' : '🏪 Marcar: tenho na loja'}
+        </button>
+      )}
       {/* Custo e fornecedor (escondidos no olhinho na Negociação) */}
       <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: verCusto ? 10 : 0, borderTop: verCusto ? '1px solid #1e1e1e' : 'none' }}>
         {verCusto ? (
