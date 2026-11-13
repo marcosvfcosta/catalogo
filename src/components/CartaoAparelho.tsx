@@ -45,6 +45,15 @@ export const CORES_BOLINHA: Record<string, string> = {
 const real = (v: number | null | undefined) =>
   v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
 
+// Lista do dia anterior vale só até as 9h da manhã; depois disso precisa colar a lista de hoje
+export function listaValida(ultima: string | null | undefined) {
+  if (!ultima) return false
+  const agora = new Date()
+  const inicio = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate())
+  if (agora.getHours() < 9) inicio.setDate(inicio.getDate() - 1)
+  return new Date(ultima) >= inicio
+}
+
 export const diaDeHoje = () => new Date().toLocaleDateString('sv-SE')
 
 // Marca: a cadastrada ou deduzida pelo nome

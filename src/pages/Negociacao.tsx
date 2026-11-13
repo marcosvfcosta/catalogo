@@ -1,4 +1,4 @@
-import CartaoAparelho, { marcaDoAparelho, precosComFornecedor } from '../components/CartaoAparelho'
+import CartaoAparelho, { marcaDoAparelho, precosComFornecedor, listaValida } from '../components/CartaoAparelho'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabase'
 import { lerCaixinha } from '../lib/lerCaixinha'
@@ -1499,7 +1499,9 @@ export default function Negociacao() {
                 </div>
               ) : (() => {
                 // Escolher o celular: busca + marcas + cartões com foto, cores e valor
-                const disponiveis = todosAparelhos.filter(a => a.disponivel !== false && a.preco != null)
+                const disponiveis = todosAparelhos.filter(a => a.disponivel !== false && a.preco != null
+                  // da lista: some às 9h do dia seguinte (menos os da loja)
+                  && (!a.ultima_lista || a.naLoja || a.na_loja || listaValida(a.ultima_lista)))
                 const marcas = Array.from(new Set(disponiveis.map(marcaDoAparelho))).sort((a, b) => a.localeCompare(b, 'pt-BR'))
                 const termo = tirarAcento(buscaModelo.trim())
                 const mostrar = !!marcaNeg || !!termo || !!aparelhoSelecionado

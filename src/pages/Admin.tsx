@@ -3,7 +3,7 @@ import { carregarFotosCatalogo, completarFotos, type ComFotos } from '../lib/fot
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { recortarProduto } from '../lib/recortarProduto'
-import CartaoAparelho, { marcaDoAparelho, precosComFornecedor } from '../components/CartaoAparelho'
+import CartaoAparelho, { marcaDoAparelho, precosComFornecedor, listaValida } from '../components/CartaoAparelho'
 import AssistenteIA from './AssistenteIA'
 import VitrineAdmin from './VitrineAdmin'
 
@@ -322,8 +322,22 @@ export default function Admin() {
     const { data } = await supabase.from('aparelhos').select('*').order('modelo')
     const lista = (data || []) as Aparelho[]
     if (await juntarDuplicados(lista)) return carregarAparelhos()
+    if (await zerarListaVencida(lista)) return carregarAparelhos()
     setAparelhos(lista)
     carregarFotosCatalogo().then(setFotosCat).catch(() => {})
+  }
+
+  // Às 9h do dia seguinte a lista vence: o que não veio em lista de hoje fica indisponível
+  // (Negociação, Preços e catálogo). Os marcados "Tenho na loja" ficam.
+  async function zerarListaVencida(lista: Aparelho[]) {
+    const ids = lista.filter(a => a.chave && a.disponivel !== false && !a.na_loja && !listaValida(a.ultima_lista)).map(a => a.id)
+    const { data: prods } = await supabase.from('produtos_catalogo').select('*').eq('origem', 'lista')
+    const prodIds = ((prods || []) as { id: string; disponivel?: boolean; na_loja?: boolean | null; ultima_lista?: string | null }[])
+      .filter(p => p.disponivel !== false && !p.na_loja && !listaValida(p.ultima_lista)).map(p => p.id)
+    if (prodIds.length) { await supabase.from('produtos_catalogo').update({ disponivel: false }).in('id', prodIds); carregarProdutos() }
+    if (!ids.length) return false
+    const { error } = await supabase.from('aparelhos').update({ disponivel: false }).in('id', ids)
+    return !error
   }
 
   // Mesmo aparelho cadastrado 2x (ex: "Galaxy A07 128GB" e "Galaxy A07 128GB 4G"):
