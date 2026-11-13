@@ -348,6 +348,9 @@ export default function Negociacao() {
   const [fotoProposta, setFotoProposta] = useState<File | null>(null)
   const [relAberto, setRelAberto] = useState<string | null>(null)
   const [vendedorAberto, setVendedorAberto] = useState<string | null>(null)
+  const [vendedorFiltro, setVendedorFiltro] = useState<string | null>(null) // Fechadas / Andamento / Desistiram do vendedor
+  const [editLucro, setEditLucro] = useState<{ id: string; lucro: string; despesa: string } | null>(null)
+  const [salvandoEditLucro, setSalvandoEditLucro] = useState(false)
   const [entradas, setEntradas] = useState<Entrada[]>([])
   const [avisoEntrada, setAvisoEntrada] = useState<Entrada | null>(null)
   const [zoomFotos, setZoomFotos] = useState<{ fotos: { lado: string; url: string }[]; i: number } | null>(null)
@@ -1162,15 +1165,77 @@ export default function Negociacao() {
     const desistiram = v.lista.filter(c => c.status === 'Desistiram').length
     const vendido = fechadas.reduce((soma, c) => soma + (Number(c.valor_aparelho) || 0), 0)
     const lucro = fechadas.reduce((soma, c) => soma + (Number(c.lucro) || 0), 0)
+    const despesa = fechadas.reduce((soma, c) => soma + despesaDe(c), 0)
     const semLucro = fechadas.filter(c => c.lucro == null).length
     const conversao = v.lista.length ? Math.round((fechadas.length / v.lista.length) * 100) : 0
     const ticket = fechadas.length ? vendido / fechadas.length : 0
-    return { ...v, fechadas: fechadas.length, pendentes, desistiram, vendido, lucro, semLucro, conversao, ticket }
+    return { ...v, fechadas: fechadas.length, pendentes, desistiram, vendido, lucro, despesa, semLucro, conversao, ticket }
   }).sort((a, b) => b.vendido - a.vendido || b.fechadas - a.fechadas || b.lista.length - a.lista.length)
 
   const totalVendidoPeriodo = porVendedor.reduce((soma, v) => soma + v.vendido, 0)
   const totalLucroPeriodo = porVendedor.reduce((soma, v) => soma + v.lucro, 0)
   const totalSemLucro = porVendedor.reduce((soma, v) => soma + v.semLucro, 0)
+
+  // Despesa da venda fica anotada nas observações: "💸 Despesa: R$ 50,00 (lucro do aparelho R$ 450,00)"
+  function despesaDe(c: Negociacao) {
+    const m = /💸 Despesa: ([^(\n]+)/.exec(c.observacoes || '')
+    return m ? parseValor(m[1]) : 0
+  }
+
+  async function salvarLucroDespesa(c: Negociacao) {
+    if (!editLucro) return
+    const bruto = parseValor(editLucro.lucro), despesa = parseValor(editLucro.despesa)
+    const resto = (c.observacoes || '').split('\n').filter(l => !l.startsWith('💸 Despesa:')).join('\n').trim()
+    const observacoes = despesa > 0 ? (resto ? resto + '\n' : '') + `💸 Despesa: ${fmt(despesa)} (lucro do aparelho ${fmt(bruto)})` : resto
+    setSalvandoEditLucro(true)
+    const { error } = await supabase.from('negociacoes').update({ lucro: bruto - despesa, observacoes }).eq('id', c.id)
+    setSalvandoEditLucro(false)
+    if (error) { alert('Erro ao salvar: ' + error.message); return }
+    setClientes(prev => prev.map(x => x.id === c.id ? { ...x, lucro: bruto - despesa, observacoes } : x))
+    setEditLucro(null)
+  }
+
+  // Lucro, despesa e lucro total da venda fechada (dentro do cartão)
+  function blocoLucro(c: Negociacao) {
+    const pare = (e: { stopPropagation: () => void }) => e.stopPropagation()
+    const despesa = despesaDe(c)
+    if (editLucro?.id === c.id) {
+      const total = parseValor(editLucro.lucro) - parseValor(editLucro.despesa)
+      const campo = { width: '100%', boxSizing: 'border-box' as const, background: '#000', border: '1px solid #333', color: '#fff', borderRadius: 10, padding: '9px 10px', fontSize: 16, fontFamily: 'inherit', margin: '3px 0 8px' }
+      return (
+        <div onClick={pare} style={{ marginTop: 12, background: '#0b0b0b', borderRadius: 12, padding: 12, textAlign: 'left' }}>
+          <label style={{ color: '#aaa', fontSize: 12 }}>Lucro do aparelho</label>
+          <input autoFocus inputMode="decimal" placeholder="0" style={campo} value={editLucro.lucro} onChange={e => setEditLucro({ ...editLucro, lucro: e.target.value })} />
+          <label style={{ color: '#aaa', fontSize: 12 }}>Despesa (película, capa, frete...)</label>
+          <input inputMode="decimal" placeholder="0" style={{ ...campo, borderColor: '#ff4d4d', color: '#ff4d4d' }} value={editLucro.despesa} onChange={e => setEditLucro({ ...editLucro, despesa: e.target.value })} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '2px 0 10px' }}>
+            <span style={{ color: '#ccc', fontSize: 14 }}>Lucro total</span>
+            <b style={{ color: '#25D366', fontSize: 20 }}>{fmt(total)}</b>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" onClick={() => setEditLucro(null)} style={{ flex: 1, background: 'none', border: '1px solid #333', color: '#888', borderRadius: 10, padding: 10, fontFamily: 'inherit', cursor: 'pointer' }}>Cancelar</button>
+            <button type="button" onClick={() => salvarLucroDespesa(c)} disabled={salvandoEditLucro} style={{ flex: 2, background: '#25D366', border: 'none', color: '#000', fontWeight: 800, borderRadius: 10, padding: 10, fontFamily: 'inherit', cursor: 'pointer' }}>{salvandoEditLucro ? 'Salvando...' : 'Salvar'}</button>
+          </div>
+        </div>
+      )
+    }
+    const abrir = (e: { stopPropagation: () => void }) => {
+      pare(e)
+      const bruto = c.lucro != null ? Number(c.lucro) + despesa : null
+      setEditLucro({ id: c.id, lucro: bruto != null ? String(bruto).replace('.', ',') : '', despesa: despesa ? String(despesa).replace('.', ',') : '' })
+    }
+    if (c.lucro == null) return (
+      <button type="button" onClick={abrir} style={{ marginTop: 12, width: '100%', background: 'none', border: '1px dashed #ffc800', color: '#ffc800', borderRadius: 10, padding: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>✏️ Colocar lucro e despesa</button>
+    )
+    const caixa = { flex: 1, background: '#0b0b0b', borderRadius: 10, padding: '7px 4px', textAlign: 'center' as const, fontSize: 13 }
+    return (
+      <div onClick={abrir} style={{ marginTop: 12, display: 'flex', gap: 6, cursor: 'pointer' }}>
+        <span style={caixa}><span style={{ color: '#888', fontSize: 11 }}>Lucro</span><br />{fmt(Number(c.lucro) + despesa)}</span>
+        <span style={caixa}><span style={{ color: '#888', fontSize: 11 }}>Despesa</span><br /><span style={{ color: '#ff4d4d' }}>− {fmt(despesa)}</span></span>
+        <span style={{ ...caixa, background: '#0f2417', border: '1px solid #25D366' }}><span style={{ color: '#888', fontSize: 11 }}>Total</span><br /><b style={{ color: '#25D366' }}>{fmt(Number(c.lucro))}</b></span>
+      </div>
+    )
+  }
 
   function miniCard(c: Negociacao) {
     return (
@@ -1187,6 +1252,7 @@ export default function Negociacao() {
             <p style={{ color: '#555', fontSize: 11 }}>{new Date(c.created_at).toLocaleDateString('pt-BR')}</p>
           </div>
         </div>
+        {c.status === 'Venda Fechada' && blocoLucro(c)}
       </div>
     )
   }
@@ -1789,7 +1855,7 @@ export default function Negociacao() {
                   const aberto = vendedorAberto === v.chave
                   return (
                     <div key={v.chave}>
-                      <div style={{ ...s.vendedorCard, border: aberto ? '1px solid #ff6600' : '1px solid #1e1e1e' }} onClick={() => setVendedorAberto(aberto ? null : v.chave)}>
+                      <div style={{ ...s.vendedorCard, border: aberto ? '1px solid #ff6600' : '1px solid #1e1e1e' }} onClick={() => { setVendedorAberto(aberto ? null : v.chave); setVendedorFiltro(null) }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 180, flex: 1 }}>
                           <div style={{ ...s.vendedorPos, background: i === 0 && v.vendido > 0 ? '#ff6600' : '#1a1a1a', color: i === 0 && v.vendido > 0 ? 'white' : '#888' }}>{i + 1}º</div>
                           <div>
@@ -1798,20 +1864,38 @@ export default function Negociacao() {
                           </div>
                         </div>
                         <div style={s.vendedorStats}>
-                          <div style={s.vendedorStat}><span style={{ ...s.vendedorStatNum, color: '#25D366' }}>{v.fechadas}</span><span style={s.vendedorStatLabel}>Fechadas</span></div>
-                          <div style={s.vendedorStat}><span style={{ ...s.vendedorStatNum, color: '#ffc800' }}>{v.pendentes}</span><span style={s.vendedorStatLabel}>Andamento</span></div>
-                          <div style={s.vendedorStat}><span style={{ ...s.vendedorStatNum, color: '#ff3333' }}>{v.desistiram}</span><span style={s.vendedorStatLabel}>Desistiram</span></div>
+                          {[
+                            { st: 'Venda Fechada', n: v.fechadas, l: 'Fechadas', cor: '#25D366' },
+                            { st: 'Venda Pendente', n: v.pendentes, l: 'Andamento', cor: '#ffc800' },
+                            { st: 'Desistiram', n: v.desistiram, l: 'Desistiram', cor: '#ff3333' },
+                          ].map(x => {
+                            const on = aberto && vendedorFiltro === x.st
+                            return (
+                              <div key={x.st} onClick={e => { e.stopPropagation(); setVendedorAberto(v.chave); setVendedorFiltro(on ? null : x.st) }}
+                                style={{ ...s.vendedorStat, cursor: 'pointer', borderRadius: 12, padding: '6px 10px', border: '1px solid ' + x.cor, background: on ? x.cor : 'transparent' }}>
+                                <span style={{ ...s.vendedorStatNum, color: on ? '#000' : x.cor }}>{x.n}</span>
+                                <span style={{ ...s.vendedorStatLabel, color: on ? '#000' : undefined }}>{x.l}</span>
+                              </div>
+                            )
+                          })}
                           <div style={s.vendedorStat}><span style={s.vendedorStatNum}>{v.conversao}%</span><span style={s.vendedorStatLabel}>Conversão</span></div>
                           <div style={{ ...s.vendedorStat, minWidth: 110 }}><span style={{ ...s.vendedorStatNum, color: '#ff6600' }}>{fmt(v.vendido)}</span><span style={s.vendedorStatLabel}>Vendido</span></div>
-                          <div style={{ ...s.vendedorStat, minWidth: 100 }}><span style={{ ...s.vendedorStatNum, color: '#25D366' }}>{fmt(v.lucro)}</span><span style={s.vendedorStatLabel}>Lucro</span></div>
+                          <div style={{ ...s.vendedorStat, minWidth: 100 }}><span style={{ ...s.vendedorStatNum, color: '#25D366' }}>{fmt(v.lucro)}</span><span style={s.vendedorStatLabel}>Lucro total</span></div>
+                          <div style={{ ...s.vendedorStat, minWidth: 90 }}><span style={{ ...s.vendedorStatNum, color: '#ff4d4d', fontSize: 15 }}>{fmt(v.despesa)}</span><span style={s.vendedorStatLabel}>Despesas</span></div>
                           <div style={{ ...s.vendedorStat, minWidth: 100 }}><span style={{ ...s.vendedorStatNum, fontSize: 15 }}>{fmt(v.ticket)}</span><span style={s.vendedorStatLabel}>Ticket médio</span></div>
                         </div>
                       </div>
-                      {aberto && (
-                        <div style={{ ...s.listaGrid, marginTop: 10 }}>
-                          {v.lista.map(c => miniCard(c))}
-                        </div>
-                      )}
+                      {aberto && (() => {
+                        const itens = vendedorFiltro ? v.lista.filter(c => c.status === vendedorFiltro) : v.lista
+                        return (
+                          <>
+                            {vendedorFiltro && <p style={{ color: '#888', fontSize: 13, margin: '10px 0 0' }}>Mostrando só: <b style={{ color: '#fff' }}>{vendedorFiltro === 'Venda Fechada' ? 'Fechadas' : vendedorFiltro === 'Venda Pendente' ? 'Andamento' : 'Desistiram'}</b> · <span onClick={() => setVendedorFiltro(null)} style={{ color: '#ff8a3d', cursor: 'pointer' }}>ver todas</span></p>}
+                            {itens.length === 0
+                              ? <p style={{ color: '#555', textAlign: 'center', padding: 16 }}>Nenhuma negociação aqui</p>
+                              : <div style={{ ...s.listaGrid, marginTop: 10 }}>{itens.map(c => miniCard(c))}</div>}
+                          </>
+                        )
+                      })()}
                     </div>
                   )
                 })}
