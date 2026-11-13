@@ -712,6 +712,20 @@ export default function Negociacao() {
     document.title = n ? `(${n}) Negociação · Marcos Magazine` : 'Negociação · Marcos Magazine'
   }, [entradas])
 
+  // Vendeu o celular que estava na loja: tira dos Disponíveis
+  async function tirarDaLoja(a: Aparelho) {
+    if (!confirm(`Tirar ${a.modelo} dos Disponíveis (já vendeu)?`)) return
+    const doCat = a.id.startsWith('cat-')
+    const { error } = doCat
+      ? await supabase.from('produtos_catalogo').update({ na_loja: false }).eq('id', a.id.slice(4))
+      : await supabase.from('aparelhos').update({ na_loja: false }).eq('id', a.id)
+    if (error) { alert('Erro: ' + error.message); return }
+    // Se veio do catálogo junto com um da lista, tira dos dois
+    const prod = aparelhosCatalogo.find(c => c.modelo === a.modelo && c.naLoja)
+    if (!doCat && prod) await supabase.from('produtos_catalogo').update({ na_loja: false }).eq('id', prod.id.slice(4))
+    carregarAparelhos()
+  }
+
   function selecionarAparelho(a: Aparelho, cor = '') {
     setFornecedorNeg(null); setManualNeg(false)
     // Preço de venda vem do cadastro (custo do fornecedor + lucro); com cor, o preço daquela cor
@@ -1536,7 +1550,8 @@ export default function Negociacao() {
                           <div style={{ border: '1px solid #222', borderRadius: 16, overflow: 'hidden' }}>
                             {g.itens.map((a, k) => (
                               a.id === aparelhoSelecionado?.id
-                                ? <CartaoAparelho key={a.id} ap={apNeg!} custoEscondido selecionado corEscolhida={form.cor || undefined}
+                                ? <CartaoAparelho key={a.id} ap={{ ...apNeg!, na_loja: !!(apNeg!.naLoja || apNeg!.na_loja) }} custoEscondido selecionado corEscolhida={form.cor || undefined}
+                                    onAlternarNaLoja={apNeg!.naLoja || apNeg!.na_loja ? () => tirarDaLoja(a) : undefined}
                                     fornecedorUsado={fornecedorNeg} onUsarFornecedor={usarFornecedorNeg}
                                     sanfona={{ aberto: abertoNeg === a.id, alternar: () => setAbertoNeg(abertoNeg === a.id ? null : a.id), ultimo: k === g.itens.length - 1 }}
                                     onEscolherCor={escolherCorNegociacao} />

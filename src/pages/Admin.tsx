@@ -337,7 +337,7 @@ export default function Admin() {
     }
     let mudou = false
     for (const g of grupos.values()) {
-      if (g.length < 2) continue
+      if (g.length < 2 || g.some(a => a.na_loja)) continue // o da loja tem preço travado: não mexe
       const comPreco = g.filter(a => a.preco != null)
       const barato = (comPreco.length ? comPreco : g).reduce((x, y) => Number(y.preco) < Number(x.preco) ? y : x)
       const principal = g.find(a => !/\b4g\b/i.test(a.modelo)) || g[0]
@@ -960,7 +960,7 @@ export default function Admin() {
       supabase.from('aparelhos').select('*'),
     ])
     const listaProdutos = (prods || []) as { id: string; modelo: string; chave?: string; cor?: string; ultima_lista?: string }[]
-    const listaAparelhos = (aps || []) as { id: string; modelo: string; chave?: string; cores?: string[]; fotos?: Record<string, string[]>; custo?: number; ultima_lista?: string; precos_cor?: Record<string, number> | null; fornecedor?: string | null; ofertas?: Ofertas | null; disponivel?: boolean }[]
+    const listaAparelhos = (aps || []) as { id: string; modelo: string; chave?: string; cores?: string[]; fotos?: Record<string, string[]>; custo?: number; ultima_lista?: string; precos_cor?: Record<string, number> | null; fornecedor?: string | null; ofertas?: Ofertas | null; disponivel?: boolean; na_loja?: boolean | null }[]
     const nomeFornecedor = fornecedorLista.trim() || null
 
     let feitos = 0
@@ -991,6 +991,11 @@ export default function Admin() {
         }
         // Negociação (custo e preço de venda). Mesmo dia: fica o menor custo e soma as cores
         const ap = (listaAparelhos.find(a => a.disponivel !== false && chaveComparar(a.chave || a.modelo) === chaveComparar(i.chave)) || listaAparelhos.find(a => chaveComparar(a.chave || a.modelo) === chaveComparar(i.chave)))
+        // Celular "Tenho na loja": preço travado, a lista não mexe nele
+        if (ap?.na_loja) {
+          await supabase.from('aparelhos').update({ disponivel: true, ultima_lista: agora }).eq('id', ap.id)
+          feitos++; setAplicandoLista({ feitos, total }); continue
+        }
         const mesmoDia = !!ap && vistoHoje(ap.ultima_lista)
         const custo = mesmoDia && ap?.custo != null ? Math.min(Number(ap.custo), i.custo) : i.custo
         // Fornecedor do preço que ficou (o mais barato do dia)
@@ -1063,15 +1068,16 @@ export default function Admin() {
 
   async function prepararFinalizarDia() {
     const [{ data: prods }, { data: aps }] = await Promise.all([
-      supabase.from('produtos_catalogo').select('id, marca, modelo, origem, disponivel, ultima_lista'),
-      supabase.from('aparelhos').select('id, modelo, chave, disponivel, ultima_lista'),
+      supabase.from('produtos_catalogo').select('*'),
+      supabase.from('aparelhos').select('*'),
     ])
     const lista: Saida[] = []
-    ;((prods || []) as { id: string; marca: string; modelo: string; origem?: string; disponivel?: boolean; ultima_lista?: string }[])
-      .filter(p => p.origem === 'lista' && p.disponivel !== false && !vistoHoje(p.ultima_lista))
+    // Os marcados "na loja" nunca saem
+    ;((prods || []) as { id: string; marca: string; modelo: string; origem?: string; disponivel?: boolean; ultima_lista?: string; na_loja?: boolean | null }[])
+      .filter(p => p.origem === 'lista' && !p.na_loja && p.disponivel !== false && !vistoHoje(p.ultima_lista))
       .forEach(p => lista.push({ tipo: 'produto', id: p.id, nome: `${p.marca} ${p.modelo}`, marcado: true }))
-    ;((aps || []) as { id: string; modelo: string; chave?: string; disponivel?: boolean; ultima_lista?: string }[])
-      .filter(a => a.chave && a.disponivel !== false && !vistoHoje(a.ultima_lista))
+    ;((aps || []) as { id: string; modelo: string; chave?: string; disponivel?: boolean; ultima_lista?: string; na_loja?: boolean | null }[])
+      .filter(a => a.chave && !a.na_loja && a.disponivel !== false && !vistoHoje(a.ultima_lista))
       .forEach(a => lista.push({ tipo: 'aparelho', id: a.id, nome: `${a.modelo} (Negociação)`, marcado: true }))
     if (lista.length === 0) { alert('Tudo certo! Todos os aparelhos das listas apareceram hoje.'); return }
     setSaidas(lista)
@@ -1350,7 +1356,7 @@ export default function Admin() {
           <div style={formContainer}>
             <h2 style={formTitle}>💰 Preços da lista</h2>
             {(() => {
-              const antigos = todos.filter(a => !vistoHoje(a.ultima_lista))
+              const antigos = todos.filter(a => !a.na_loja && !vistoHoje(a.ultima_lista))
               return antigos.length > 0 && (
                 <button type="button" onClick={() => tirarListasAntigas(antigos.map(a => a.id))}
                   style={{ width: '100%', background: 'rgba(255,200,0,0.08)', border: '1px solid #ffc800', color: '#ffc800', borderRadius: 14, padding: '12px', fontSize: 15, fontWeight: 800, marginBottom: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -1381,7 +1387,7 @@ export default function Admin() {
                   <p style={{ color: '#ff6600', fontWeight: 800, letterSpacing: 2, fontSize: 13, textAlign: 'center', margin: '18px 0 8px', textTransform: 'uppercase' }}>{g.marca}</p>
                   <div style={{ border: '1px solid #222', borderRadius: 16, overflow: 'hidden' }}>
                     {g.itens.map((ap, k) => (
-                      <CartaoAparelho key={ap.id} ap={ap} listaAntiga={!vistoHoje(ap.ultima_lista)} onUsarFornecedor={ap.id.startsWith('loja-') ? undefined : f => usarFornecedor(ap, f)}
+                      <CartaoAparelho key={ap.id} ap={ap} listaAntiga={!ap.na_loja && !vistoHoje(ap.ultima_lista)} onUsarFornecedor={ap.id.startsWith('loja-') ? undefined : f => usarFornecedor(ap, f)}
                         onAlternarNaLoja={ap.id.startsWith('loja-') ? undefined : () => alternarNaLoja(ap)}
                         sanfona={{ aberto: precoAberto === ap.id, alternar: () => setPrecoAberto(precoAberto === ap.id ? null : ap.id), ultimo: k === g.itens.length - 1 }} />
                     ))}
