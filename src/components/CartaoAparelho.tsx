@@ -141,10 +141,10 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
   if (sanfona && !sanfona.aberto) {
     return (
       <div onClick={sanfona.alternar}
-        style={{ padding: '14px 16px 6px', background: '#111', borderBottom: sanfona.ultimo ? 'none' : '1px solid #1e1e1e', cursor: 'pointer', textAlign: 'left' }}>
+        style={{ padding: '14px 16px 6px', background: selecionado ? '#0f2417' : '#111', boxShadow: selecionado ? 'inset 4px 0 0 #25D366' : 'none', borderBottom: sanfona.ultimo ? 'none' : '1px solid #1e1e1e', cursor: 'pointer', textAlign: 'left' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: g ? 24 : 17, fontWeight: 800, color: '#fff', margin: 0 }}>{titulo}</p>
+          <p style={{ fontSize: g ? 24 : 17, fontWeight: 800, color: '#fff', margin: 0 }}>{titulo}{selecionado && <span style={{ marginLeft: 8, fontSize: g ? 12 : 10, background: '#25D366', color: '#000', borderRadius: 6, padding: '2px 6px', verticalAlign: 'middle' }}>ESCOLHIDO{corEscolhida ? ' · ' + corEscolhida : ''}</span>}</p>
           {detalhe && <p style={{ color: '#888', fontSize: g ? 16 : 12, margin: '2px 0 0' }}>{detalhe}</p>}
         </div>
         <div style={{ textAlign: 'right' }}>

@@ -421,6 +421,7 @@ export default function Negociacao() {
   // Tela que pergunta o lucro logo depois de fechar a venda
   const [pedeLucro, setPedeLucro] = useState<{ id: string; nome: string; modelo: string; cor: string; valor: number; aviso: string } | null>(null)
   const [lucroTxt, setLucroTxt] = useState('')
+  const [despesaTxt, setDespesaTxt] = useState('')
   const [salvandoLucroVenda, setSalvandoLucroVenda] = useState(false)
   const [lucrosEdit, setLucrosEdit] = useState<Record<string, string>>({})
   const [salvandoLucroId, setSalvandoLucroId] = useState<string | null>(null)
@@ -709,7 +710,6 @@ export default function Negociacao() {
   }, [entradas])
 
   function selecionarAparelho(a: Aparelho, cor = '') {
-    setBuscaModelo(a.modelo)
     setFornecedorNeg(null); setManualNeg(false)
     // Preço de venda vem do cadastro (custo do fornecedor + lucro); com cor, o preço daquela cor
     const v = cor && a.precos_cor?.[cor] != null ? a.precos_cor[cor] : a.preco
@@ -933,6 +933,7 @@ export default function Negociacao() {
       sugestao = Math.round(Number(a.preco) - Number(a.custo) + (v.valor - base))
     }
     setLucroTxt(sugestao != null ? String(sugestao) : '')
+    setDespesaTxt('')
     setPedeLucro({ ...v, aviso: aviso.trim() })
   }
 
@@ -940,7 +941,14 @@ export default function Negociacao() {
     if (!pedeLucro) return
     if (!lucroTxt.trim()) { alert('Digite o lucro ou toque em Depois'); return }
     setSalvandoLucroVenda(true)
-    const { error } = await supabase.from('negociacoes').update({ lucro: parseValor(lucroTxt) }).eq('id', pedeLucro.id)
+    // Lucro total = lucro do aparelho − despesa (película, capa, frete...). A despesa fica anotada nas observações
+    const despesa = despesaTxt.trim() ? parseValor(despesaTxt) : 0
+    const dados: Record<string, unknown> = { lucro: parseValor(lucroTxt) - despesa }
+    if (despesa > 0) {
+      const atual = clientes.find(c => c.id === pedeLucro.id)?.observacoes || ''
+      dados.observacoes = (atual ? atual + '\n' : '') + `💸 Despesa: ${fmt(despesa)} (lucro do aparelho ${fmt(parseValor(lucroTxt))})`
+    }
+    const { error } = await supabase.from('negociacoes').update(dados).eq('id', pedeLucro.id)
     setSalvandoLucroVenda(false)
     if (error) { alert('Erro ao salvar o lucro: ' + error.message); return }
     setPedeLucro(null)
@@ -1274,13 +1282,23 @@ export default function Negociacao() {
             <div style={{ background: '#0b0b0b', borderRadius: 12, padding: '10px 12px', display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#aaa', marginBottom: 12 }}>
               <span>Valor de venda</span><b style={{ color: '#25D366' }}>{fmt(pedeLucro.valor)}</b>
             </div>
-            <p style={{ color: '#ccc', fontSize: 14, margin: '0 0 6px', textAlign: 'left' }}>Quanto foi o lucro?</p>
+            <p style={{ color: '#ccc', fontSize: 14, margin: '0 0 6px', textAlign: 'left' }}>Lucro do aparelho</p>
             <div style={{ display: 'flex', alignItems: 'center', background: '#000', border: '2px solid #ff6600', borderRadius: 12, padding: '10px 14px', marginBottom: 6 }}>
               <span style={{ color: '#888', fontSize: 18, marginRight: 6 }}>R$</span>
               <input autoFocus inputMode="decimal" value={lucroTxt} onChange={e => setLucroTxt(e.target.value)} placeholder="0"
                 style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', outline: 'none', color: '#fff', fontSize: 24, fontWeight: 800, fontFamily: 'inherit' }} />
             </div>
             <p style={{ color: '#777', fontSize: 11, margin: '0 0 12px', textAlign: 'left' }}>Já vem com o lucro da lista (venda − custo). Mude se deu desconto.</p>
+            <p style={{ color: '#ccc', fontSize: 14, margin: '0 0 6px', textAlign: 'left' }}>Despesa desse aparelho <span style={{ color: '#777', fontSize: 12 }}>(película, capa, frete...)</span></p>
+            <div style={{ display: 'flex', alignItems: 'center', background: '#000', border: '1px solid #ff4d4d', borderRadius: 12, padding: '8px 14px', marginBottom: 12 }}>
+              <span style={{ color: '#ff4d4d', fontSize: 16, marginRight: 6 }}>− R$</span>
+              <input inputMode="decimal" value={despesaTxt} onChange={e => setDespesaTxt(e.target.value)} placeholder="0"
+                style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', outline: 'none', color: '#ff4d4d', fontSize: 20, fontWeight: 800, fontFamily: 'inherit' }} />
+            </div>
+            <div style={{ background: '#0f2417', border: '1px solid #25D366', borderRadius: 12, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <span style={{ color: '#ccc', fontSize: 14 }}>Lucro total</span>
+              <b style={{ color: '#25D366', fontSize: 24 }}>{fmt((lucroTxt.trim() ? parseValor(lucroTxt) : 0) - (despesaTxt.trim() ? parseValor(despesaTxt) : 0))}</b>
+            </div>
             {pedeLucro.aviso && <p style={{ color: '#888', fontSize: 12, margin: '0 0 12px', whiteSpace: 'pre-line' }}>{pedeLucro.aviso}</p>}
             <button type="button" onClick={registrarLucroVenda} disabled={salvandoLucroVenda}
               style={{ width: '100%', background: '#25D366', color: '#000', border: 'none', borderRadius: 12, padding: 13, fontSize: 16, fontWeight: 800, marginBottom: 8, cursor: 'pointer', fontFamily: 'inherit' }}>{salvandoLucroVenda ? 'Salvando...' : 'Registrar lucro'}</button>
@@ -1392,17 +1410,7 @@ export default function Negociacao() {
             </div>
             <div style={s.section}>
               <h3 style={s.sectionTitle}>Aparelho</h3>
-              {aparelhoSelecionado ? (
-                <div key={aparelhoSelecionado.id}>
-                  <CartaoAparelho ap={apNeg!} selecionado corEscolhida={form.cor || undefined}
-                    onEscolherCor={escolherCorNegociacao} custoEscondido listaAntiga={false}
-                    fornecedorUsado={fornecedorNeg} onUsarFornecedor={usarFornecedorNeg} />
-                  <button type="button" onClick={() => { setForm({ ...form, modelo: '', cor: '' }); setBuscaModelo(''); setFornecedorNeg(null) }}
-                    style={{ width: '100%', background: '#151515', border: '1px solid #333', color: '#ccc', borderRadius: 12, padding: 11, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 12 }}>
-                    ↺ Trocar celular
-                  </button>
-                </div>
-              ) : manualNeg ? (
+              {manualNeg && !aparelhoSelecionado ? (
                 <div style={{ marginBottom: 16 }}>
                   <label style={s.label}>Modelo (digitado)</label>
                   <input style={s.input} value={form.modelo} onChange={e => setForm({ ...form, modelo: e.target.value })} placeholder="Ex: iPhone 13 128GB" />
@@ -1414,11 +1422,16 @@ export default function Negociacao() {
                 const disponiveis = todosAparelhos.filter(a => a.disponivel !== false && a.preco != null)
                 const marcas = Array.from(new Set(disponiveis.map(marcaDoAparelho))).sort((a, b) => a.localeCompare(b, 'pt-BR'))
                 const termo = tirarAcento(buscaModelo.trim())
-                const mostrar = !!marcaNeg || !!termo
-                const lista = !mostrar ? [] : disponiveis
+                const mostrar = !!marcaNeg || !!termo || !!aparelhoSelecionado
+                let lista = !(marcaNeg || termo) ? [] : disponiveis
                   .filter(a => termo || (marcaNeg === 'Disponíveis' ? (a.naLoja || a.na_loja) : marcaDoAparelho(a) === marcaNeg))
                   .filter(a => !termo || tirarAcento(a.modelo).includes(termo))
                   .sort((a, b) => marcaDoAparelho(a).localeCompare(marcaDoAparelho(b), 'pt-BR') || a.modelo.localeCompare(b.modelo, 'pt-BR', { numeric: true }))
+                // O escolhido aparece sempre (ex: ao editar uma negociação)
+                if (aparelhoSelecionado && !lista.some(a => a.id === aparelhoSelecionado.id)) lista = [aparelhoSelecionado, ...lista]
+                // Tocar no modelo já escolhe (cor mais barata) e preenche o valor; a seta ▴ só minimiza
+                const corMaisBarata = (a: Aparelho) => a.cores.filter(c => a.precos_cor?.[c] != null)
+                  .sort((x, y) => Number(a.precos_cor![x]) - Number(a.precos_cor![y]))[0] || a.cores[0] || ''
                 return (
                   <div style={{ marginBottom: 8 }}>
                     <input style={s.input} value={buscaModelo} onChange={e => setBuscaModelo(e.target.value)} placeholder="🔍 Buscar modelo..." />
@@ -1456,9 +1469,13 @@ export default function Negociacao() {
                           <p style={{ color: '#ff6600', fontWeight: 800, letterSpacing: 2, fontSize: 13, textAlign: 'center', margin: '16px 0 8px', textTransform: 'uppercase' }}>{g.marca}</p>
                           <div style={{ border: '1px solid #222', borderRadius: 16, overflow: 'hidden' }}>
                             {g.itens.map((a, k) => (
-                              <CartaoAparelho key={a.id} ap={a} custoEscondido
-                                sanfona={{ aberto: abertoNeg === a.id, alternar: () => setAbertoNeg(abertoNeg === a.id ? null : a.id), ultimo: k === g.itens.length - 1 }}
-                                onEscolherCor={cor => { setAbertoNeg(null); selecionarAparelho(a, cor) }} />
+                              a.id === aparelhoSelecionado?.id
+                                ? <CartaoAparelho key={a.id} ap={apNeg!} custoEscondido selecionado corEscolhida={form.cor || undefined}
+                                    fornecedorUsado={fornecedorNeg} onUsarFornecedor={usarFornecedorNeg}
+                                    sanfona={{ aberto: abertoNeg === a.id, alternar: () => setAbertoNeg(abertoNeg === a.id ? null : a.id), ultimo: k === g.itens.length - 1 }}
+                                    onEscolherCor={escolherCorNegociacao} />
+                                : <CartaoAparelho key={a.id} ap={a} custoEscondido
+                                    sanfona={{ aberto: false, alternar: () => { selecionarAparelho(a, corMaisBarata(a)); setAbertoNeg(a.id) }, ultimo: k === g.itens.length - 1 }} />
                             ))}
                           </div>
                         </div>
