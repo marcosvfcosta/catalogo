@@ -644,7 +644,10 @@ export default function Admin() {
     const modelo = capaForm.modelo.trim()
     if (!modelo) { alert('Informe o modelo do celular'); return }
     setCapaSalvando(true)
-    const dados = { marca: capaForm.marca, modelo, foto_url: capaForm.foto_url || null, entrada: capaForm.entrada || null }
+    // Entrada do carregador definida sozinha pelo modelo (filtra cabos/carregadores no catálogo)
+    const iphone = /iphone\s*(\d+)/i.exec(modelo)
+    const entrada = capaForm.entrada || (iphone ? (Number(iphone[1]) >= 15 ? 'USB-C' : 'Lightning') : 'USB-C')
+    const dados = { marca: capaForm.marca, modelo, foto_url: capaForm.foto_url || null, entrada }
     if (capaEditandoId) {
       const { error } = await supabase.from('capas_modelos').update(dados).eq('id', capaEditandoId)
       setCapaSalvando(false)
@@ -1701,11 +1704,6 @@ export default function Admin() {
             <label style={labelStyle}>Modelo</label>
             <input style={inputStyle} placeholder="Ex: iPhone 17 Pro Max / 18 Pro Max" value={capaForm.modelo}
               onChange={e => setCapaForm({ ...capaForm, modelo: e.target.value })} />
-            <label style={labelStyle}>Entrada do carregador</label>
-            <select style={inputStyle} value={capaForm.entrada} onChange={e => setCapaForm({ ...capaForm, entrada: e.target.value })}>
-              <option value="">Selecione...</option>
-              {ENTRADAS.map(c => <option key={c}>{c}</option>)}
-            </select>
             <label style={labelStyle}>Foto do celular (só 1 · aparece na lista de modelos)</label>
             {seletorAjuste}
             <label style={uploadBox}>
