@@ -180,3 +180,6 @@ alter table public.negociacoes add column if not exists retorno_concluido_em tim
 alter table public.aparelhos add column if not exists fornecedor text;
 -- 16) Preços de todos os fornecedores do dia, por cor (Negociação → "Ver fornecedor")
 alter table public.aparelhos add column if not exists ofertas jsonb;
+
+-- 17) Histórico de custo por dia (selo "melhor preço da semana" no Admin)
+alter table public.aparelhos add column if not exists historico jsonb;

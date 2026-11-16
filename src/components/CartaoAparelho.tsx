@@ -17,6 +17,26 @@ function useTelaGrande() {
 // Custo e fornecedor: na Negociação ficam escondidos no olhinho (o cliente pode estar vendo a tela).
 
 export type Oferta = { f: string; cor: string; custo: number }
+// Histórico de custo: um registro por dia (o menor custo do dia e o fornecedor)
+export type DiaPreco = { d: string; c: number; f?: string | null }
+
+const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+const diaCurto = (d: string) => DIAS_SEMANA[new Date(d + 'T12:00:00').getDay()]
+
+// Últimos 7 dias e a situação do preço de hoje
+export function situacaoPreco(h: DiaPreco[] | null | undefined) {
+  const hoje = new Date().toLocaleDateString('sv-SE')
+  const corte = new Date(); corte.setDate(corte.getDate() - 6)
+  const semana = (h || []).filter(x => x.d >= corte.toLocaleDateString('sv-SE')).sort((a, b) => a.d.localeCompare(b.d))
+  const deHoje = semana.find(x => x.d === hoje)
+  if (!deHoje) return { semana, tipo: 'nada' as const }
+  const outros = semana.filter(x => x.d !== hoje)
+  if (!outros.length) return { semana, tipo: 'primeiro' as const }
+  const melhor = outros.reduce((a, b) => b.c < a.c ? b : a)
+  if (deHoje.c <= melhor.c) return { semana, tipo: 'melhor' as const }
+  return { semana, tipo: 'acima' as const, diff: deHoje.c - melhor.c, melhor }
+}
+
 export type AparelhoPreco = {
   id: string
   modelo: string
@@ -30,6 +50,7 @@ export type AparelhoPreco = {
   ofertas?: { dia: string; itens: Oferta[] } | null
   ultima_lista?: string | null
   na_loja?: boolean | null
+  historico?: DiaPreco[] | null
 }
 
 export const CORES_BOLINHA: Record<string, string> = {
@@ -111,14 +132,23 @@ type Props = {
   onUsarFornecedor?: (fornecedor: string) => void
   // Menu sanfona: fechado mostra só uma linha (modelo + preço); tocando abre
   onAlternarNaLoja?: () => void
+  mostrarHistorico?: boolean // só no Admin: selo de melhor preço da semana
   sanfona?: { aberto: boolean; alternar: () => void; ultimo?: boolean }
 }
 
-export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolherCor, onTocarCartao, custoEscondido, listaAntiga, fornecedorUsado, onUsarFornecedor, onAlternarNaLoja, sanfona }: Props) {
+export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolherCor, onTocarCartao, custoEscondido, listaAntiga, fornecedorUsado, onUsarFornecedor, onAlternarNaLoja, mostrarHistorico, sanfona }: Props) {
   const [verCusto, setVerCusto] = useState(!custoEscondido)
   const [verFornecedores, setVerFornecedores] = useState(false)
   const g = useTelaGrande()
   const [verCores, setVerCores] = useState(false)
+  const sit = situacaoPreco(ap.historico)
+  const seloPreco = sit.tipo === 'melhor'
+    ? <span style={{ display: 'inline-block', marginTop: 4, fontSize: g ? 12 : 10, fontWeight: 800, background: '#25D366', color: '#000', borderRadius: 6, padding: '2px 7px' }}>🏆 MELHOR PREÇO DA SEMANA</span>
+    : sit.tipo === 'acima'
+      ? <span style={{ display: 'inline-block', marginTop: 4, fontSize: g ? 12 : 10, fontWeight: 700, border: '1px solid #ffc800', color: '#ffc800', borderRadius: 6, padding: '1px 6px' }}>↑ {real(sit.diff)} acima do melhor ({diaCurto(sit.melhor.d)})</span>
+      : sit.tipo === 'primeiro'
+        ? <span style={{ display: 'inline-block', marginTop: 4, fontSize: g ? 12 : 10, border: '1px solid #555', color: '#888', borderRadius: 6, padding: '1px 6px' }}>1º dia na semana</span>
+        : null
   const { titulo, detalhe } = separarNome(ap.modelo)
   const fornecedorAtual = fornecedorUsado || ap.fornecedor || null
   const ofertas = ap.ofertas?.dia === diaDeHoje() ? ap.ofertas.itens : []
@@ -155,6 +185,7 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontSize: g ? 24 : 17, fontWeight: 800, color: '#fff', margin: 0 }}>{titulo}{selecionado && <span style={{ marginLeft: 8, fontSize: g ? 12 : 10, background: '#25D366', color: '#000', borderRadius: 6, padding: '2px 6px', verticalAlign: 'middle' }}>ESCOLHIDO{corEscolhida ? ' · ' + corEscolhida : ''}</span>}</p>
           {detalhe && <p style={{ color: '#888', fontSize: g ? 16 : 12, margin: '2px 0 0' }}>{detalhe}</p>}
+          {mostrarHistorico && seloPreco}
         </div>
         <div style={{ textAlign: 'right' }}>
           {variosPrecos && <p style={{ color: '#888', fontSize: g ? 13 : 10, margin: 0 }}>a partir de</p>}
@@ -218,6 +249,36 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
         </>
       )}
 
+      {mostrarHistorico && sit.semana.length > 0 && (() => {
+        const mx = Math.max(...sit.semana.map(x => x.c)), mn = Math.min(...sit.semana.map(x => x.c))
+        const melhor = sit.semana.find(x => x.c === mn)!
+        const hoje = sit.semana.find(x => x.d === new Date().toLocaleDateString('sv-SE'))
+        return (
+          <div onClick={e => e.stopPropagation()} style={{ marginTop: 12, background: '#0b0b0b', borderRadius: 12, padding: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ flex: 1, color: '#aaa', fontSize: 12 }}>Custo nos últimos 7 dias</span>
+              {seloPreco}
+            </div>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', height: 96 }}>
+              {sit.semana.map(x => {
+                const h = mx === mn ? 50 : 14 + 50 * (x.c - mn) / (mx - mn), b = x.c === mn
+                return (
+                  <div key={x.d} style={{ flex: 1, textAlign: 'center', minWidth: 0 }}>
+                    <div style={{ fontSize: 10, color: b ? '#25D366' : '#aaa' }}>{Math.round(x.c)}</div>
+                    <div style={{ height: h, background: b ? '#25D366' : '#333', borderRadius: '4px 4px 0 0' }} />
+                    <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>{diaCurto(x.d)}</div>
+                    <div style={{ fontSize: 9, color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{x.f || ''}</div>
+                  </div>
+                )
+              })}
+            </div>
+            <p style={{ margin: '10px 0 0', fontSize: 13, color: '#ccc' }}>
+              {hoje && <>Hoje: <b style={{ color: '#ff4d4d' }}>{real(hoje.c)}</b> · </>}
+              Melhor: <b style={{ color: '#25D366' }}>{real(melhor.c)}</b> ({diaCurto(melhor.d)}{melhor.f ? ', ' + melhor.f : ''})
+            </p>
+          </div>
+        )
+      })()}
       {onAlternarNaLoja && (
         <button type="button" onClick={e => { e.stopPropagation(); onAlternarNaLoja() }}
           style={{ width: '100%', marginTop: 12, background: ap.na_loja ? '#25D366' : 'none', color: ap.na_loja ? '#000' : '#25D366', border: '1px solid #25D366', borderRadius: 12, padding: g ? 14 : 11, fontSize: g ? 17 : 15, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>

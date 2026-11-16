@@ -3,7 +3,7 @@ import { carregarFotosCatalogo, completarFotos, type ComFotos } from '../lib/fot
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { recortarProduto } from '../lib/recortarProduto'
-import CartaoAparelho, { marcaDoAparelho, precosComFornecedor, listaValida } from '../components/CartaoAparelho'
+import CartaoAparelho, { marcaDoAparelho, precosComFornecedor, listaValida, type DiaPreco } from '../components/CartaoAparelho'
 import AssistenteIA from './AssistenteIA'
 import VitrineAdmin from './VitrineAdmin'
 
@@ -64,6 +64,7 @@ type Aparelho = {
   disponivel?: boolean | null
   fornecedor?: string | null
   ofertas?: Ofertas | null
+  historico?: DiaPreco[] | null
   ultima_lista?: string | null
   na_loja?: boolean | null
 }
@@ -974,7 +975,7 @@ export default function Admin() {
       supabase.from('aparelhos').select('*'),
     ])
     const listaProdutos = (prods || []) as { id: string; modelo: string; chave?: string; cor?: string; ultima_lista?: string }[]
-    const listaAparelhos = (aps || []) as { id: string; modelo: string; chave?: string; cores?: string[]; fotos?: Record<string, string[]>; custo?: number; ultima_lista?: string; precos_cor?: Record<string, number> | null; fornecedor?: string | null; ofertas?: Ofertas | null; disponivel?: boolean; na_loja?: boolean | null }[]
+    const listaAparelhos = (aps || []) as { id: string; modelo: string; chave?: string; cores?: string[]; fotos?: Record<string, string[]>; custo?: number; ultima_lista?: string; precos_cor?: Record<string, number> | null; fornecedor?: string | null; ofertas?: Ofertas | null; disponivel?: boolean; na_loja?: boolean | null; historico?: DiaPreco[] | null }[]
     const nomeFornecedor = fornecedorLista.trim() || null
 
     let feitos = 0
@@ -982,6 +983,7 @@ export default function Admin() {
     let semColunaCor = false
     let semColunaForn = false
     let semColunaOfertas = false
+    let semColunaHist = false
     let comPrecoPorCor = 0
     for (const i of selecionados) {
       try {
@@ -1034,7 +1036,10 @@ export default function Admin() {
             itensOferta.push({ f: nomeFornecedor, cor: c, custo: Number(v) })
           }
         }
-        const dadosAp: Record<string, unknown> = { modelo: ap?.modelo || i.nome, marca: i.marca, memoria: i.memoria, cores, custo, preco, precos_cor: precosCor, fornecedor, ofertas: { dia: hoje, itens: itensOferta }, chave: ap?.chave || i.chave, disponivel: true, ultima_lista: agora }
+        // Histórico: menor custo de cada dia (guarda 14 dias) para o selo de melhor preço da semana
+        const corteHist = new Date(); corteHist.setDate(corteHist.getDate() - 13)
+        const historico = [...(ap?.historico || []).filter(x => x.d !== hoje && x.d >= corteHist.toLocaleDateString('sv-SE')), { d: hoje, c: custo, f: fornecedor }]
+        const dadosAp: Record<string, unknown> = { modelo: ap?.modelo || i.nome, marca: i.marca, memoria: i.memoria, cores, custo, preco, precos_cor: precosCor, fornecedor, ofertas: { dia: hoje, itens: itensOferta }, historico, chave: ap?.chave || i.chave, disponivel: true, ultima_lista: agora }
         // Tenta salvar; se faltar alguma coluna nova no Supabase (SQL não rodado), tira ela e tenta de novo
         for (let tentativa = 0; tentativa < 4; tentativa++) {
           const r = ap
@@ -1045,6 +1050,7 @@ export default function Admin() {
           if (msg.includes('precos_cor')) { semColunaCor = true; delete dadosAp.precos_cor; continue }
           if (msg.includes('fornecedor')) { semColunaForn = true; delete dadosAp.fornecedor; continue }
           if (msg.includes('ofertas')) { semColunaOfertas = true; delete dadosAp.ofertas; continue }
+          if (msg.includes('historico')) { semColunaHist = true; delete dadosAp.historico; continue }
           throw r.error
         }
       } catch (e) {
@@ -1062,6 +1068,7 @@ export default function Admin() {
         ? '\n\n⚠️ O PREÇO POR COR NÃO FOI SALVO: falta rodar no Supabase (SQL Editor) a linha:\nalter table public.aparelhos add column if not exists precos_cor jsonb;\nDepois cole a lista de novo.'
         : comPrecoPorCor ? `\n\n🎨 ${comPrecoPorCor} aparelho(s) com preço diferente por cor. Na Negociação o valor muda ao tocar na cor.` : '')
       + (semColunaForn ? '\n\n⚠️ O FORNECEDOR NÃO FOI SALVO: falta criar no Supabase a coluna "fornecedor" (tipo text) na tabela aparelhos.' : '')
+      + (semColunaHist ? '\n\n⚠️ O HISTÓRICO DE PREÇO (melhor preço da semana) NÃO FOI SALVO: falta criar no Supabase a coluna "historico" (tipo jsonb) na tabela aparelhos.' : '')
       + (semColunaOfertas ? '\n\n⚠️ A LISTA DE FORNECEDORES NÃO FOI SALVA: falta criar no Supabase a coluna "ofertas" (tipo jsonb) na tabela aparelhos.' : ''))
     setItensLista(null)
     setTextoLista('')
@@ -1402,7 +1409,7 @@ export default function Admin() {
                   <div style={{ border: '1px solid #222', borderRadius: 16, overflow: 'hidden' }}>
                     {g.itens.map((ap, k) => (
                       <CartaoAparelho key={ap.id} ap={ap} listaAntiga={!ap.na_loja && !vistoHoje(ap.ultima_lista)} onUsarFornecedor={ap.id.startsWith('loja-') ? undefined : f => usarFornecedor(ap, f)}
-                        onAlternarNaLoja={ap.id.startsWith('loja-') ? undefined : () => alternarNaLoja(ap)}
+                        onAlternarNaLoja={ap.id.startsWith('loja-') ? undefined : () => alternarNaLoja(ap)} mostrarHistorico
                         sanfona={{ aberto: precoAberto === ap.id, alternar: () => setPrecoAberto(precoAberto === ap.id ? null : ap.id), ultimo: k === g.itens.length - 1 }} />
                     ))}
                   </div>
