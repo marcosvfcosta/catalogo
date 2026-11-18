@@ -1694,7 +1694,8 @@ export default function Admin() {
               : filtroProdutos === 'indisponiveis' ? !p.disponivel
               : filtroProdutos === 'semfoto' ? !p.foto_url
               : true
-            ).map(p => (
+            ).sort((a, b) => Number(!!b.disponivel) - Number(!!a.disponivel)) // disponíveis em cima
+            .map(p => (
               <div key={p.id} style={produtoCard}>
                 {p.foto_url ? (
                   <img src={p.foto_url} alt={p.modelo} style={{ width: 65, height: 65, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
