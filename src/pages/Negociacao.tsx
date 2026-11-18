@@ -736,6 +736,12 @@ export default function Negociacao() {
     carregarAparelhos()
   }
 
+  // Tocou de novo no escolhido (fechado): desmarca e zera o valor pra começar outra negociação
+  function desmarcarAparelho() {
+    setFornecedorNeg(null); setAbertoNeg(null)
+    setForm({ ...form, modelo: '', cor: '', valor_aparelho: '' })
+  }
+
   function selecionarAparelho(a: Aparelho, cor = '') {
     setFornecedorNeg(null); setManualNeg(false)
     // Preço de venda vem do cadastro (custo do fornecedor + lucro); com cor, o preço daquela cor
@@ -1578,7 +1584,7 @@ export default function Negociacao() {
                                 ? <CartaoAparelho key={a.id} ap={{ ...apNeg!, na_loja: !!(apNeg!.naLoja || apNeg!.na_loja) }} custoEscondido selecionado corEscolhida={form.cor || undefined}
                                     onAlternarNaLoja={apNeg!.naLoja || apNeg!.na_loja ? () => tirarDaLoja(a) : undefined}
                                     fornecedorUsado={fornecedorNeg} onUsarFornecedor={usarFornecedorNeg}
-                                    sanfona={{ aberto: abertoNeg === a.id, alternar: () => setAbertoNeg(abertoNeg === a.id ? null : a.id), ultimo: k === g.itens.length - 1 }}
+                                    sanfona={{ aberto: abertoNeg === a.id, alternar: () => abertoNeg === a.id ? setAbertoNeg(null) : desmarcarAparelho(), ultimo: k === g.itens.length - 1 }}
                                     onEscolherCor={escolherCorNegociacao} />
                                 : <CartaoAparelho key={a.id} ap={a} custoEscondido
                                     sanfona={{ aberto: false, alternar: () => { selecionarAparelho(a, corMaisBarata(a)); setAbertoNeg(a.id) }, ultimo: k === g.itens.length - 1 }} />
