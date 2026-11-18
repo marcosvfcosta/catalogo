@@ -257,6 +257,17 @@ function lerCache(): CacheCatalogo | null {
 }
 const CACHE = typeof window !== 'undefined' ? lerCache() : null
 
+// Onde o cliente parou (filtro, produto aberto e rolagem): ao voltar pro catálogo, continua dali
+const CHAVE_ONDE = 'mm-onde'
+type Onde = { busca?: string; categoria?: string | null; marca?: string | null; especial?: FiltroEspecial; produto?: string | null; rolagem?: number }
+const ONDE: Onde = (() => { try { return JSON.parse(localStorage.getItem(CHAVE_ONDE) || '{}') || {} } catch { return {} } })()
+
+// Produtos da sacola guardados no aparelho: mesmo se sair da lista do dia, continuam na sacola
+const CHAVE_SACOLA_ITENS = 'mm-sacola-itens'
+function lerSacolaItens(): Record<string, Produto> {
+  try { const v = JSON.parse(localStorage.getItem(CHAVE_SACOLA_ITENS) || '{}'); return v && typeof v === 'object' ? v : {} } catch { return {} }
+}
+
 function lerSacola(): string[] {
   try { const v = JSON.parse(localStorage.getItem(CHAVE_SACOLA) || '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
 }
@@ -325,18 +336,18 @@ function App() {
   const [marcas, setMarcas] = useState<ItemVitrine[]>(CACHE?.marcas || [])
   const [carregando, setCarregando] = useState(!CACHE)
   const [menuAberto, setMenuAberto] = useState(false)
-  const [busca, setBusca] = useState('')
-  const [categoriaAtiva, setCategoriaAtiva] = useState<string | null>(null)
-  const [marcaAtiva, setMarcaAtiva] = useState<string | null>(null)
-  const [filtroEspecial, setFiltroEspecial] = useState<FiltroEspecial>(null)
+  const [busca, setBusca] = useState(ONDE.busca || '')
+  const [categoriaAtiva, setCategoriaAtiva] = useState<string | null>(ONDE.categoria || null)
+  const [marcaAtiva, setMarcaAtiva] = useState<string | null>(ONDE.marca || null)
+  const [filtroEspecial, setFiltroEspecial] = useState<FiltroEspecial>(ONDE.especial || null)
   const [heroIndex, setHeroIndex] = useState(0)
   const [selecionado, setSelecionado] = useState<Produto | null>(null)
-  useVoltarDeslizando(selecionado ? () => window.history.back() : null)
   const [fotosDetalhe, setFotosDetalhe] = useState<{ url: string; cor: string | null }[]>([])
   const [corEscolhida, setCorEscolhida] = useState<string | null>(null)
   const galeriaRef = useRef<HTMLDivElement>(null)
   const [fotoIndex, setFotoIndex] = useState(0)
   const [sacola, setSacola] = useState<string[]>(lerSacola)
+  const [sacolaItens, setSacolaItens] = useState<Record<string, Produto>>(lerSacolaItens)
   const [sacolaAberta, setSacolaAberta] = useState(false)
   const [aviso, setAviso] = useState('')
   const [modelos, setModelos] = useState<ModeloCelular[]>(CACHE?.modelos || [])
@@ -352,6 +363,12 @@ function App() {
   const [categoriaAcesa, setCategoriaAcesa] = useState<string | null>(null)
   const toqueInicio = useRef<number | null>(null)
   const topoRef = useRef<HTMLDivElement>(null)
+  // Arrastar da beirada esquerda: fecha a sacola, sai do produto ou dos filtros
+  useVoltarDeslizando(
+    sacolaAberta ? () => setSacolaAberta(false)
+    : selecionado ? () => window.history.back()
+    : (meuCelular || busca.trim() || categoriaAtiva || marcaAtiva || filtroEspecial) ? () => { limparFiltros(); window.scrollTo({ top: 0, behavior: 'smooth' }) }
+    : null)
 
   useEffect(() => {
     Promise.all([
@@ -402,6 +419,47 @@ function App() {
     try { localStorage.setItem(CHAVE_SACOLA, JSON.stringify(sacola)) } catch { /* sem armazenamento */ }
   }, [sacola])
 
+  // Guarda uma cópia de cada produto da sacola (nome, foto, preço) pra ela não esvaziar com o passar dos dias
+  useEffect(() => {
+    setSacolaItens(prev => {
+      const novo: Record<string, Produto> = {}
+      for (const id of sacola) {
+        const atual = produtos.find(p => p.id === id)
+        if (atual) novo[id] = atual; else if (prev[id]) novo[id] = prev[id]
+      }
+      try { localStorage.setItem(CHAVE_SACOLA_ITENS, JSON.stringify(novo)) } catch { /* sem armazenamento */ }
+      return novo
+    })
+  }, [sacola, produtos])
+
+  // Salva onde parou (filtros, produto aberto, rolagem)
+  useEffect(() => {
+    const salvar = () => {
+      try {
+        localStorage.setItem(CHAVE_ONDE, JSON.stringify({
+          busca, categoria: categoriaAtiva, marca: marcaAtiva, especial: filtroEspecial,
+          produto: selecionado?.id || null, rolagem: selecionado ? (ONDE.rolagem || 0) : window.scrollY,
+        }))
+      } catch { /* sem armazenamento */ }
+    }
+    salvar()
+    let t: number | undefined
+    const aoRolar = () => { if (selecionado) return; clearTimeout(t); t = window.setTimeout(() => { ONDE.rolagem = window.scrollY; salvar() }, 250) }
+    window.addEventListener('scroll', aoRolar, { passive: true })
+    document.addEventListener('visibilitychange', salvar)
+    return () => { window.removeEventListener('scroll', aoRolar); document.removeEventListener('visibilitychange', salvar); clearTimeout(t) }
+  }, [busca, categoriaAtiva, marcaAtiva, filtroEspecial, selecionado])
+
+  // Ao abrir de novo: reabre o produto e volta pra mesma altura da página
+  const restaurado = useRef(false)
+  useEffect(() => {
+    if (restaurado.current || !produtos.length) return
+    restaurado.current = true
+    const p = ONDE.produto ? produtos.find(x => x.id === ONDE.produto) : null
+    if (p) { abrirProduto(p); return }
+    if (ONDE.rolagem) setTimeout(() => window.scrollTo(0, ONDE.rolagem || 0), 120)
+  }, [produtos])
+
   // Cupom: do link (?cupom=X) ou o que já estava salvo → confere se ainda vale
   useEffect(() => {
     let codigo = ''
@@ -447,7 +505,7 @@ function App() {
   }, [banners.length, heroIndex, selecionado])
 
   // ─── Sacola ──────────────────────────────────────
-  const itensSacola = sacola.map(id => produtos.find(p => p.id === id)).filter(Boolean) as Produto[]
+  const itensSacola = sacola.map(id => produtos.find(p => p.id === id) || sacolaItens[id]).filter(Boolean) as Produto[]
   const naSacola = (id: string) => sacola.includes(id)
 
   function mostrarAviso(t: string) {
