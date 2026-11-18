@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from './supabase'
+import { baseModelo } from './lib/fotosCatalogo'
 import VitrineHero from './components/VitrineHero'
 
 // ─── Tipos ─────────────────────────────────────────
@@ -24,6 +25,7 @@ type Produto = {
   preco?: number | null
   preco_antigo?: number | null
   mostrar_preco?: boolean | null
+  fotoDe?: string // foto emprestada de outro cadastro do mesmo modelo (celular que veio da lista)
   tipo?: string | null
   compativel?: string[] | null
   conector?: string | null
@@ -274,9 +276,29 @@ const IconeWhats = ({ tamanho = 20 }: { tamanho?: number }) => (
 const ehCelular = (p: { categoria?: string | null }) => semAcento(p.categoria || '').includes('celular')
 const soCelulares = <T extends { categoria?: string | null }>(l: T[]) => SO_CELULARES ? l.filter(ehCelular) : l
 
+// Celular que veio da lista não tem foto: usa a do mesmo modelo já cadastrado (ignora GB, RAM, 4G/5G, CPO)
+function emprestarFotos(lista: Produto[]): Produto[] {
+  const comFoto = new Map<string, Produto>()
+  for (const p of lista) {
+    if (!p.foto_url) continue
+    const b = baseModelo(p.modelo)
+    if (b && !comFoto.has(b)) comFoto.set(b, p)
+  }
+  const bases = Array.from(comFoto.keys())
+  return lista.map(p => {
+    if (p.foto_url) return p
+    const b = baseModelo(p.modelo)
+    if (!b) return p
+    const chave = comFoto.has(b) ? b
+      : bases.filter(x => x.length >= 3 && /\d/.test(x) && (b.endsWith(x) || (x.endsWith(b) && b.length >= 3 && /\d/.test(b)))).sort((x, y) => y.length - x.length)[0]
+    const fonte = chave ? comFoto.get(chave) : undefined
+    return fonte ? { ...p, foto_url: fonte.foto_url, foto_cor: fonte.foto_cor, fotoDe: fonte.id } : p
+  })
+}
+
 function App() {
   const navigate = useNavigate()
-  const [produtos, setProdutos] = useState<Produto[]>(soCelulares(CACHE?.produtos || []))
+  const [produtos, setProdutos] = useState<Produto[]>(emprestarFotos(soCelulares(CACHE?.produtos || [])))
   const [banners, setBanners] = useState<Banner[]>(CACHE?.banners || [])
   const [categorias, setCategorias] = useState<ItemVitrine[]>((CACHE?.categorias || []).filter(c => !SO_CELULARES || semAcento(c.nome).includes('celular')))
   const [marcas, setMarcas] = useState<ItemVitrine[]>(CACHE?.marcas || [])
@@ -327,7 +349,7 @@ function App() {
       const falhou = !!p.error
       if (!falhou || !CACHE) {
         setModelos(novosModelos); setCategorias(novasCategorias.filter(c => !SO_CELULARES || semAcento(c.nome).includes('celular'))); setMarcas(novasMarcas)
-        setProdutos(soCelulares(novosProdutos)); setBanners(novosBanners)
+        setProdutos(emprestarFotos(soCelulares(novosProdutos))); setBanners(novosBanners)
       }
       setCarregando(false)
       if (!falhou) {
@@ -434,8 +456,9 @@ function App() {
     setSelecionado(p); setFotoIndex(0); setFotosDetalhe(capa); setSacolaAberta(false); setCorEscolhida(corInicial || p.foto_cor || null)
     window.history.pushState({ produto: p.id }, '')
     window.scrollTo(0, 0)
-    const r1 = await supabase.from('produto_fotos').select('url, cor').eq('produto_id', p.id).order('ordem')
-    const data = r1.error ? (await supabase.from('produto_fotos').select('url').eq('produto_id', p.id).order('ordem')).data : r1.data
+    const idFotos = p.fotoDe || p.id
+    const r1 = await supabase.from('produto_fotos').select('url, cor').eq('produto_id', idFotos).order('ordem')
+    const data = r1.error ? (await supabase.from('produto_fotos').select('url').eq('produto_id', idFotos).order('ordem')).data : r1.data
     const extras = ((data || []) as { url: string; cor?: string | null }[]).map(f => ({ url: f.url, cor: f.cor || null }))
     const todas = [...capa, ...extras]
     setFotosDetalhe(todas)

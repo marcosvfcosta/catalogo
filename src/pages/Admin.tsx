@@ -974,10 +974,10 @@ export default function Admin() {
     const agora = new Date().toISOString()
 
     const [{ data: prods }, { data: aps }] = await Promise.all([
-      supabase.from('produtos_catalogo').select('id, modelo, chave, cor, ultima_lista'),
+      supabase.from('produtos_catalogo').select('id, modelo, chave, cor, ultima_lista, preco'),
       supabase.from('aparelhos').select('*'),
     ])
-    const listaProdutos = (prods || []) as { id: string; modelo: string; chave?: string; cor?: string; ultima_lista?: string }[]
+    const listaProdutos = (prods || []) as { id: string; modelo: string; chave?: string; cor?: string; ultima_lista?: string; preco?: number | null }[]
     const listaAparelhos = (aps || []) as { id: string; modelo: string; chave?: string; cores?: string[]; fotos?: Record<string, string[]>; custo?: number; ultima_lista?: string; precos_cor?: Record<string, number> | null; fornecedor?: string | null; ofertas?: Ofertas | null; disponivel?: boolean; na_loja?: boolean | null; historico?: DiaPreco[] | null }[]
     const nomeFornecedor = fornecedorLista.trim() || null
 
@@ -1000,19 +1000,31 @@ export default function Admin() {
           ? Array.from(new Set([...(prod.cor || '').split(',').map(c => c.trim()).filter(Boolean), ...i.cores]))
           : i.cores
         const cor = coresProd.join(', ')
+        let prodId = prod?.id || null
         if (prod) {
           await supabase.from('produtos_catalogo').update({ marca: i.marca, modelo: nomeCatalogo, cor, disponivel: true, chave: chaveCatalogo, origem: 'lista', ultima_lista: agora }).eq('id', prod.id)
         } else {
-          await supabase.from('produtos_catalogo').insert([{
+          const novo = await supabase.from('produtos_catalogo').insert([{
             categoria: 'Celulares', marca: i.marca, modelo: nomeCatalogo, memoria: '', cor,
             disponivel: true, chave: chaveCatalogo, origem: 'lista', ultima_lista: agora,
-          }])
+          }]).select('id')
+          prodId = (novo.data as { id: string }[] | null)?.[0]?.id || null
+          if (prodId) listaProdutos.push({ id: prodId, modelo: nomeCatalogo, chave: chaveCatalogo, cor, ultima_lista: agora, preco: null })
+        }
+        // Preço de venda no catálogo (o mesmo da Negociação; mesmo dia fica o menor). Custo nunca vai pro catálogo
+        const precoNoCatalogo = async (valor: number | null | undefined) => {
+          if (!prodId || valor == null) return
+          const atual = prod && vistoHoje(prod.ultima_lista) && prod.preco != null ? Number(prod.preco) : null
+          const final = atual != null ? Math.min(atual, Number(valor)) : Number(valor)
+          if (prod) prod.preco = final
+          await supabase.from('produtos_catalogo').update({ preco: final, mostrar_preco: true }).eq('id', prodId)
         }
         // Negociação (custo e preço de venda). Mesmo dia: fica o menor custo e soma as cores
         const ap = (listaAparelhos.find(a => a.disponivel !== false && chaveComparar(a.chave || a.modelo) === chaveComparar(i.chave)) || listaAparelhos.find(a => chaveComparar(a.chave || a.modelo) === chaveComparar(i.chave)))
         // Celular "Tenho na loja": preço travado, a lista não mexe nele
         if (ap?.na_loja) {
           await supabase.from('aparelhos').update({ disponivel: true, ultima_lista: agora }).eq('id', ap.id)
+          await precoNoCatalogo(ap.preco)
           feitos++; setAplicandoLista({ feitos, total }); continue
         }
         const mesmoDia = !!ap && vistoHoje(ap.ultima_lista)
@@ -1021,6 +1033,7 @@ export default function Admin() {
         const fornecedor = mesmoDia && ap?.custo != null && Number(ap.custo) <= i.custo ? (ap.fornecedor || null) : nomeFornecedor
         const lucro = lucroPorMemoria(i.memoria)
         const preco = custo + lucro
+        await precoNoCatalogo(preco)
         const cores = mesmoDia ? Array.from(new Set([...(ap?.cores || []), ...i.cores])) : i.cores
         // Preço de venda de cada cor (mesmo dia: fica o menor de cada cor)
         const precosCor: Record<string, number> = mesmoDia ? { ...(ap?.precos_cor || {}) } : {}
