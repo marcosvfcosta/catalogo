@@ -1,5 +1,6 @@
 import CartaoAparelho, { marcaDoAparelho, precosComFornecedor, listaValida } from '../components/CartaoAparelho'
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { lerCaixinha } from '../lib/lerCaixinha'
 import { completarFotos } from '../lib/fotosCatalogo'
@@ -295,28 +296,23 @@ function chaveParaBytes(base64: string) {
 export default function Negociacao() {
   const celular = useCelular()
   const s = estilos(celular)
-  // Tema claro/escuro (chavinha no topo). O claro inverte as cores da tela e "desinverte" fotos e bolinhas de cor
-  const [claro, setClaro] = useState(() => { try { return localStorage.getItem('neg-tema') === 'claro' } catch { return false } })
+  const navigate = useNavigate()
+  // Visual igual ao do catálogo (claro). Só cores e formato: contas, taxas e parcelas não mudam
   useEffect(() => {
     const raiz = document.documentElement
-    raiz.classList.toggle('neg-claro', claro)
-    try { localStorage.setItem('neg-tema', claro ? 'claro' : 'escuro') } catch { /* ok */ }
-    return () => raiz.classList.remove('neg-claro')
-  }, [claro])
-  const chaveTema = (
-    <button onClick={() => setClaro(!claro)} title={claro ? 'Tela escura' : 'Tela clara'} aria-label="Trocar tema"
-      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px', borderRadius: 20, border: '1px solid #333', background: '#111', cursor: 'pointer', flexShrink: 0 }}>
-      <span style={{ width: 26, height: 26, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, background: !claro ? '#ff6600' : 'transparent' }}>🌙</span>
-      <span style={{ width: 26, height: 26, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, background: claro ? '#ff6600' : 'transparent' }}>☀️</span>
-    </button>
-  )
-  const estiloTema = <style>{`
-    html.neg-claro { filter: invert(1) hue-rotate(180deg); background: #050505; }
-    html.neg-claro img, html.neg-claro video, html.neg-claro .sem-inverter,
-    html.neg-claro [style*="background: rgb(255, 102, 0)"],
-    html.neg-claro [style*="background: rgb(37, 211, 102)"],
-    html.neg-claro [style*="background: rgb(255, 200, 0)"] { filter: invert(1) hue-rotate(180deg); }
-  `}</style>
+    raiz.classList.remove('neg-claro')
+    raiz.classList.add('neg-cat')
+    return () => raiz.classList.remove('neg-cat')
+  }, [])
+  const chaveTema = null
+  const estiloTema = <style>{CSS_CATALOGO}</style>
+  // Logo: volta pro catálogo guardando os dados do cliente (o celular fica livre pra trocar)
+  const irProCatalogo = () => {
+    try {
+      localStorage.setItem('neg-rascunho', JSON.stringify({ nome: form.nome, telefone: form.telefone, instagram: form.instagram, vendedor: form.vendedor, valor_entrada: form.valor_entrada, observacoes: form.observacoes }))
+    } catch { /* ok */ }
+    navigate('/')
+  }
   const [aba, setAba] = useState<'negociacao' | 'clientes' | 'relatorios' | 'entradas' | 'retornos' | 'tabela' | 'admin'>('negociacao')
   const [tabelaTroca, setTabelaTroca] = useState<LinhaTroca[]>([])
   const [buscaTroca, setBuscaTroca] = useState('')
@@ -445,11 +441,19 @@ export default function Negociacao() {
   const [abertoNeg, setAbertoNeg] = useState<string | null>(null) // menu sanfona: qual modelo está aberto
   const [fornecedorNeg, setFornecedorNeg] = useState<string | null>(null) // trocou de fornecedor só nesta negociação
   const [manualNeg, setManualNeg] = useState(false) // modelo digitado (fora da lista)
-  const [form, setForm] = useState({
-    nome: '', telefone: '', instagram: '',
-    modelo: '', cor: '',
-    valor_aparelho: '', valor_entrada: '', lucro: '',
-    observacoes: '', vendedor: '',
+  const [form, setForm] = useState(() => {
+    const vazio = {
+      nome: '', telefone: '', instagram: '',
+      modelo: '', cor: '',
+      valor_aparelho: '', valor_entrada: '', lucro: '',
+      observacoes: '', vendedor: '',
+    }
+    // Voltou do catálogo: os dados do cliente continuam
+    try {
+      const r = localStorage.getItem('neg-rascunho')
+      if (r) { localStorage.removeItem('neg-rascunho'); return { ...vazio, ...JSON.parse(r) } }
+    } catch { /* ok */ }
+    return vazio
   })
 
   const [adminModelo, setAdminModelo] = useState('')
@@ -1330,7 +1334,7 @@ export default function Negociacao() {
       {celular && <style>{AJUSTE_CELULAR}</style>}
       <header style={s.header}>
         <button style={s.btnBack} onClick={() => { setClienteSelecionado(null); setMsgCaixa('') }}>← Voltar</button>
-        <div style={s.logo}><span style={s.logoM}>Marcos</span><span style={s.logoMag}>Magazine</span></div>
+        <div style={{ ...s.logo, cursor: 'pointer' }} onClick={irProCatalogo} title="Ir para o catálogo"><span style={s.logoM}>Marcos</span><span style={s.logoMag}>Magazine</span></div>
         {chaveTema}
       </header>
       {estiloTema}
@@ -1487,7 +1491,7 @@ export default function Negociacao() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: '100%' }}>
         <header style={s.header}>
           <button style={s.hamburger} onClick={() => setMenuAberto(!menuAberto)}>☰</button>
-          <div style={s.logo}><span style={s.logoM}>Marcos</span><span style={s.logoMag}>Magazine</span></div>
+          <div style={{ ...s.logo, cursor: 'pointer' }} onClick={irProCatalogo} title="Ir para o catálogo"><span style={s.logoM}>Marcos</span><span style={s.logoMag}>Magazine</span></div>
           {chaveTema}
           {estiloTema}
           <div style={s.abas}>
@@ -2411,90 +2415,109 @@ export default function Negociacao() {
   )
 }
 
+
+const ESCUROS = ['5, 5, 5', '8, 8, 8', '10, 10, 10', '11, 11, 11', '13, 13, 13', '15, 15, 15', '17, 17, 17', '20, 20, 20', '21, 21, 21', '24, 24, 24', '26, 26, 26', '28, 28, 28', '30, 30, 30', '34, 34, 34', '42, 42, 42']
+const BORDAS = ['26, 26, 26', '30, 30, 30', '34, 34, 34', '42, 42, 42', '51, 51, 51', '58, 42, 28', '68, 68, 68', '85, 85, 85']
+// Tudo que ainda tem cor escura escrita direto na tela vira o claro do catálogo (só aparência)
+const CSS_CATALOGO = `
+html.neg-cat, html.neg-cat body { background: #fff; }
+${ESCUROS.map(c => `html.neg-cat [style*="background: rgb(${c})"]`).join(', ')} { background: #f5f5f7 !important; }
+${BORDAS.map(c => `html.neg-cat [style*="solid rgb(${c})"]`).join(', ')} { border-color: #ececf0 !important; }
+html.neg-cat [style*="background: rgb(15, 36, 23)"] { background: #e9f9ef !important; }
+html.neg-cat [style*="background: rgb(42, 26, 14)"], html.neg-cat [style*="background: rgb(26, 15, 5)"] { background: #fff4ec !important; }
+html.neg-cat [style*="background: rgb(58, 0, 0)"], html.neg-cat [style*="background: rgb(42, 10, 10)"] { background: #fdecea !important; }
+html.neg-cat :is([style^="color: white"], [style*=" color: white"], [style^="color: rgb(255, 255, 255)"], [style*=" color: rgb(255, 255, 255)"], [style^="color: rgb(204, 204, 204)"], [style*=" color: rgb(204, 204, 204)"], [style^="color: rgb(221, 221, 221)"], [style*=" color: rgb(221, 221, 221)"]):not([style*="background: rgb(255, 102, 0)"]):not([style*="background: rgb(37, 211, 102)"]):not([style*="background: rgb(29, 29, 31)"]):not([style*="background: rgb(229, 51, 42)"]):not([style*="background: rgb(122, 17, 17)"]):not([style*="background: rgb(192, 57, 43)"]):not([style*="background: linear-gradient"]):not([style*="background: rgb(255, 68, 68)"]):not([style*="background: rgba(0, 0, 0"]) { color: #1d1d1f !important; }
+html.neg-cat :is([style^="color: rgb(170, 170, 170)"], [style*=" color: rgb(170, 170, 170)"]) { color: #6e6e73 !important; }
+html.neg-cat :is([style^="color: rgb(37, 211, 102)"], [style*=" color: rgb(37, 211, 102)"]):not([style*="background: rgb(15, 36, 23)"]) { color: #1a9a4f !important; }
+html.neg-cat :is([style^="color: rgb(255, 200, 0)"], [style*=" color: rgb(255, 200, 0)"]) { color: #b58300 !important; }
+html.neg-cat input, html.neg-cat textarea, html.neg-cat select { color: #1d1d1f; }
+html.neg-cat input::placeholder, html.neg-cat textarea::placeholder { color: #a1a1a6; }
+`
+
 const base: Record<string, React.CSSProperties> = {
   listaGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
-  page: { minHeight: '100vh', background: '#050505', color: 'white', fontFamily: 'Poppins, sans-serif', display: 'flex', overflowX: 'hidden', width: '100%', boxSizing: 'border-box' },
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 150 },
-  sidebar: { position: 'fixed', top: 0, width: 260, height: '100vh', background: '#0a0a0a', borderRight: '1px solid #1a1a1a', zIndex: 200, padding: '30px 0', transition: 'left 0.3s ease' },
-  sidebarLogo: { padding: '0 20px 25px', borderBottom: '1px solid #1a1a1a', marginBottom: 10 },
-  navItem: { padding: '14px 20px', cursor: 'pointer', fontSize: 16, color: '#ccc' },
+  page: { minHeight: '100vh', background: '#fff', color: '#1d1d1f', fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Poppins, sans-serif", display: 'flex', overflowX: 'hidden', width: '100%', boxSizing: 'border-box' },
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 150 },
+  sidebar: { position: 'fixed', top: 0, width: 260, height: '100vh', background: '#fff', borderRight: '1px solid #ececf0', zIndex: 200, padding: '30px 0', transition: 'left 0.3s ease' },
+  sidebarLogo: { padding: '0 20px 25px', borderBottom: '1px solid #ececf0', marginBottom: 10 },
+  navItem: { padding: '14px 20px', cursor: 'pointer', fontSize: 16, color: '#1d1d1f' },
   navAtivo: { color: '#ff6600', fontWeight: 700, background: 'rgba(255,102,0,0.07)' },
-  header: { display: 'flex', alignItems: 'center', gap: 16, padding: '16px 24px', background: '#080808', borderBottom: '1px solid #1a1a1a', position: 'sticky', top: 0, zIndex: 100 },
+  header: { display: 'flex', alignItems: 'center', gap: 16, padding: '14px 24px', background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid #ececf0', position: 'sticky', top: 0, zIndex: 100 },
   hamburger: { border: 'none', background: 'none', color: '#ff6600', fontSize: 28, cursor: 'pointer' },
   logo: { lineHeight: 1, marginRight: 'auto' },
-  logoM: { color: '#ff6600', fontSize: 28, fontWeight: 900, fontFamily: 'Nunito, sans-serif', display: 'block' },
+  logoM: { color: '#ff6600', fontSize: 28, fontWeight: 800, letterSpacing: -0.5, fontFamily: 'Nunito, sans-serif', display: 'block' },
   logoMag: { color: '#ff6600', fontSize: 13, fontWeight: 700, fontFamily: 'Nunito, sans-serif', display: 'block', textAlign: 'right', opacity: 0.85 },
   abas: { display: 'flex', gap: 8, overflowX: 'auto' },
-  abaAtiva: { padding: '10px 18px', borderRadius: 10, border: 'none', background: '#ff6600', color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 },
-  abaInativa: { padding: '10px 18px', borderRadius: 10, border: '1px solid #333', background: 'none', color: '#888', cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 },
-  caixaAvisos: { background: '#0f0f0f', border: '1px solid #2a2a2a', borderRadius: 14, padding: 12, minWidth: 0, flex: '1 1 260px', maxWidth: 420 },
+  abaAtiva: { padding: '10px 18px', borderRadius: 20, border: 'none', background: '#1d1d1f', color: 'white', fontWeight: 600, cursor: 'pointer', fontSize: 15, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 },
+  abaInativa: { padding: '10px 18px', borderRadius: 20, border: 'none', background: '#f5f5f7', color: '#1d1d1f', fontWeight: 600, cursor: 'pointer', fontSize: 15, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 },
+  caixaAvisos: { background: '#f5f5f7', border: '1px solid #ececf0', borderRadius: 14, padding: 12, minWidth: 0, flex: '1 1 260px', maxWidth: 420 },
   avisoEntrada: { position: 'fixed', top: 12, left: '50%', transform: 'translate(-50%, 0)', zIndex: 3000, width: 'min(560px, calc(100vw - 24px))', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 12px 12px 16px', borderRadius: 18, background: 'linear-gradient(135deg, #ff6600, #e04e00)', boxShadow: '0 14px 40px rgba(255,102,0,0.35)', animation: 'mmDesce .35s ease' },
   avisoVer: { padding: '10px 16px', borderRadius: 12, border: 'none', background: '#fff', color: '#ff6600', fontWeight: 800, fontSize: 14, cursor: 'pointer' },
   avisoFechar: { width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.2)', color: '#fff', cursor: 'pointer' },
   zoomFundo: { position: 'fixed', inset: 0, zIndex: 3100, background: 'rgba(0,0,0,0.92)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 16 },
-  zoomBtn: { padding: '10px 16px', borderRadius: 12, border: '1px solid #444', background: '#1a1a1a', color: '#fff', fontSize: 14, cursor: 'pointer' },
+  zoomBtn: { padding: '10px 16px', borderRadius: 12, border: '1px solid #444', background: '#1d1d1f', color: '#fff', fontSize: 14, cursor: 'pointer' },
   badgeNovas: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 20, height: 20, padding: '0 6px', borderRadius: 10, background: '#ff6600', color: 'white', fontSize: 11, fontWeight: 800, marginLeft: 6 },
   content: { padding: '28px 20px', maxWidth: 1100, width: '100%', margin: '0 auto', boxSizing: 'border-box' },
-  pageTitle: { fontSize: 28, fontWeight: 900, color: '#ff6600', fontFamily: 'Nunito, sans-serif', marginBottom: 6 },
-  pageSubtitle: { color: '#666', fontSize: 14, marginBottom: 28 },
-  section: { background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 16, padding: 24, marginBottom: 20 },
-  sectionTitle: { fontSize: 16, fontWeight: 700, color: '#fff', marginBottom: 16 },
+  pageTitle: { fontSize: 30, fontWeight: 800, color: '#1d1d1f', letterSpacing: -0.6, marginBottom: 4 },
+  pageSubtitle: { color: '#6e6e73', fontSize: 15, marginBottom: 22 },
+  section: { background: '#fff', border: '1px solid #ececf0', borderRadius: 22, padding: 22, marginBottom: 16 },
+  sectionTitle: { fontSize: 19, fontWeight: 800, color: '#1d1d1f', marginBottom: 14, borderLeft: '5px solid #ff6600', paddingLeft: 10, lineHeight: 1.1, textAlign: 'left' },
   formGrid2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 },
   formGrid3: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 },
-  label: { display: 'block', color: '#aaa', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
-  input: { width: '100%', padding: '13px 14px', borderRadius: 10, border: '1px solid #2a2a2a', background: '#0a0a0a', color: 'white', fontSize: 15, outline: 'none', boxSizing: 'border-box' },
-  inputPrefix: { display: 'flex', alignItems: 'center', border: '1px solid #2a2a2a', borderRadius: 10, overflow: 'hidden', background: '#0a0a0a' },
-  prefix: { padding: '13px 14px', color: '#ff6600', fontWeight: 700, background: '#111', borderRight: '1px solid #2a2a2a', whiteSpace: 'nowrap' },
-  resumoBox: { background: 'rgba(255,102,0,0.08)', border: '1px solid rgba(255,102,0,0.3)', borderRadius: 10, padding: '14px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' },
-  resumoLabel: { color: '#ff6600', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 },
-  resumoValor: { color: '#ff6600', fontSize: 24, fontWeight: 900 },
+  label: { display: 'block', color: '#6e6e73', fontSize: 13, fontWeight: 600, marginBottom: 6 },
+  input: { width: '100%', padding: '14px 16px', borderRadius: 14, border: '1px solid #f5f5f7', background: '#f5f5f7', color: '#1d1d1f', fontSize: 16, outline: 'none', boxSizing: 'border-box' },
+  inputPrefix: { display: 'flex', alignItems: 'center', border: '1px solid #f5f5f7', borderRadius: 14, overflow: 'hidden', background: '#f5f5f7' },
+  prefix: { padding: '13px 4px 13px 16px', color: '#1d1d1f', fontWeight: 700, background: '#f5f5f7', whiteSpace: 'nowrap' },
+  resumoBox: { background: '#fff4ec', border: 'none', borderRadius: 18, padding: '14px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' },
+  resumoLabel: { color: '#ff6600', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4, textAlign: 'center' },
+  resumoValor: { color: '#1d1d1f', fontSize: 26, fontWeight: 800, textAlign: 'center' },
   parcelasGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
-  parcelaCard: { background: '#0a0a0a', borderRadius: 10, padding: '12px 16px', cursor: 'pointer' },
-  parcelaAtiva: { background: 'rgba(255,102,0,0.1)' },
-  resumoFinal: { background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 16, padding: 24, marginBottom: 20, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, alignItems: 'center' },
+  parcelaCard: { background: '#f5f5f7', borderRadius: 14, padding: '12px 16px', cursor: 'pointer' },
+  parcelaAtiva: { background: '#fff4ec' },
+  resumoFinal: { background: '#fff', border: '1px solid #ececf0', borderRadius: 22, padding: 24, marginBottom: 20, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, alignItems: 'center' },
   resumoItem: { display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 4 },
-  resumoItemLabel: { color: '#666', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
-  resumoItemValor: { color: 'white', fontSize: 18, fontWeight: 700 },
+  resumoItemLabel: { color: '#6e6e73', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
+  resumoItemValor: { color: '#1d1d1f', fontSize: 18, fontWeight: 800 },
   botoesRow: { display: 'flex', gap: 16, alignItems: 'flex-start', marginTop: 8, marginBottom: 40, flexWrap: 'wrap' },
-  btnLimpar: { padding: '13px 20px', borderRadius: 12, border: '1px solid #333', background: 'none', color: '#888', cursor: 'pointer', fontSize: 15, whiteSpace: 'nowrap' },
-  btnPendente: { padding: '14px 28px', borderRadius: 12, border: 'none', background: '#ffc800', color: '#000', fontWeight: 700, cursor: 'pointer', fontSize: 15 },
-  btnFechar: { padding: '14px 28px', borderRadius: 12, border: 'none', background: '#25D366', color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: 15 },
-  btnAlterar: { padding: '14px 28px', borderRadius: 12, border: 'none', background: '#ff6600', color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: 15 },
-  btnDesistiram: { padding: '14px 24px', borderRadius: 12, border: '1px solid #ff3333', background: '#3a0000', color: '#ff6666', fontWeight: 700, cursor: 'pointer', fontSize: 15 },
-  btnBack: { padding: '10px 18px', borderRadius: 10, border: '1px solid #333', background: 'none', color: '#ccc', cursor: 'pointer', fontSize: 14 },
-  btnExcluir: { padding: '14px 24px', borderRadius: 12, border: '1px solid #ff3333', background: '#7a1111', color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: 15 },
+  btnLimpar: { padding: '13px 20px', borderRadius: 26, border: '1px solid #ececf0', background: '#fff', color: '#6e6e73', cursor: 'pointer', fontSize: 15, whiteSpace: 'nowrap' },
+  btnPendente: { padding: '14px 28px', borderRadius: 26, border: '2px solid #1d1d1f', background: '#fff', color: '#1d1d1f', fontWeight: 800, cursor: 'pointer', fontSize: 15 },
+  btnFechar: { padding: '14px 28px', borderRadius: 26, border: 'none', background: '#1d1d1f', color: 'white', fontWeight: 800, cursor: 'pointer', fontSize: 15 },
+  btnAlterar: { padding: '14px 28px', borderRadius: 26, border: 'none', background: '#ff6600', color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: 15 },
+  btnDesistiram: { padding: '14px 24px', borderRadius: 26, border: '1px solid #e5332a', background: '#fff', color: '#e5332a', fontWeight: 700, cursor: 'pointer', fontSize: 15 },
+  btnBack: { padding: '10px 18px', borderRadius: 20, border: 'none', background: '#f5f5f7', color: '#1d1d1f', cursor: 'pointer', fontSize: 14 },
+  btnExcluir: { padding: '14px 24px', borderRadius: 26, border: 'none', background: '#e5332a', color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: 15 },
   erro: { color: '#ff4444', fontSize: 12, marginTop: 4 },
   filtrosRow: { display: 'flex', gap: 10, marginBottom: 24, flexWrap: 'wrap' },
-  filtroBtn: { padding: '8px 18px', borderRadius: 20, border: '1px solid #333', background: 'none', color: '#888', cursor: 'pointer', fontSize: 14 },
-  filtroBtnAtivo: { padding: '8px 18px', borderRadius: 20, border: '1px solid #ff6600', background: 'rgba(255,102,0,0.15)', color: '#ff6600', cursor: 'pointer', fontSize: 14, fontWeight: 700 },
+  filtroBtn: { padding: '8px 18px', borderRadius: 20, border: 'none', background: '#f5f5f7', color: '#1d1d1f', cursor: 'pointer', fontSize: 14 },
+  filtroBtnAtivo: { padding: '8px 18px', borderRadius: 20, border: '1px solid #1d1d1f', background: '#1d1d1f', color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 700 },
   buscaIcone: { position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 16, pointerEvents: 'none' },
-  buscaLimpar: { position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', width: 28, height: 28, borderRadius: '50%', border: 'none', background: '#222', color: '#aaa', fontSize: 18, cursor: 'pointer', lineHeight: 1 },
+  buscaLimpar: { position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', width: 28, height: 28, borderRadius: '50%', border: 'none', background: '#e5e5ea', color: '#6e6e73', fontSize: 18, cursor: 'pointer', lineHeight: 1 },
   clientesGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 },
-  clienteCard: { background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 14, padding: 20, cursor: 'pointer' },
-  clienteNome: { fontSize: 18, fontWeight: 700, color: 'white', marginBottom: 4 },
-  clienteModelo: { fontSize: 14, color: '#aaa', marginBottom: 4 },
-  clienteTel: { fontSize: 13, color: '#666' },
+  clienteCard: { background: '#fff', border: '1px solid #ececf0', borderRadius: 20, padding: 20, cursor: 'pointer' },
+  clienteNome: { fontSize: 18, fontWeight: 800, color: '#1d1d1f', marginBottom: 4 },
+  clienteModelo: { fontSize: 14, color: '#6e6e73', marginBottom: 4 },
+  clienteTel: { fontSize: 13, color: '#6e6e73' },
   statusBadge: { padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700 },
-  interesseBox: { display: 'flex', flexDirection: 'column', gap: 2, marginTop: 12, padding: '10px 12px', borderRadius: 10, background: 'rgba(255,102,0,0.08)', border: '1px solid rgba(255,102,0,0.35)' },
-  tagEntrada: { padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#1a1a1a', color: '#ccc', border: '1px solid #2a2a2a' },
-  entradaBanner: { display: 'flex', alignItems: 'flex-start', gap: 16, background: 'rgba(255,102,0,0.08)', border: '1px solid #ff6600', borderRadius: 16, padding: 18, marginBottom: 20 },
+  interesseBox: { display: 'flex', flexDirection: 'column', gap: 2, marginTop: 12, padding: '10px 12px', borderRadius: 14, background: '#fff4ec', border: 'none' },
+  tagEntrada: { padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#f5f5f7', color: '#1d1d1f', border: 'none' },
+  entradaBanner: { display: 'flex', alignItems: 'flex-start', gap: 16, background: '#fff4ec', border: '1px solid #ffd2b0', borderRadius: 20, padding: 18, marginBottom: 20 },
   detalheContainer: { padding: '28px 20px', maxWidth: 900, margin: '0 auto', boxSizing: 'border-box' },
-  detalheTitle: { fontSize: 28, fontWeight: 900, color: '#ff6600', fontFamily: 'Nunito, sans-serif', marginBottom: 24 },
+  detalheTitle: { fontSize: 28, fontWeight: 800, color: '#1d1d1f', letterSpacing: -0.5, marginBottom: 20 },
   detalheGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 },
-  detalheCard: { background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 12, padding: 16 },
-  detalheLabel: { color: '#666', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
-  detalheValor: { color: 'white', fontSize: 16, fontWeight: 600 },
-  sugestoesBox: { position: 'absolute', top: '100%', left: 0, right: 0, background: '#111', border: '1px solid #333', borderRadius: 10, zIndex: 50, overflow: 'hidden' },
-  sugestaoItem: { padding: '12px 16px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1a1a1a' },
+  detalheCard: { background: '#f5f5f7', border: 'none', borderRadius: 16, padding: 16 },
+  detalheLabel: { color: '#6e6e73', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
+  detalheValor: { color: '#1d1d1f', fontSize: 16, fontWeight: 700 },
+  sugestoesBox: { position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #ececf0', borderRadius: 14, zIndex: 50, overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' },
+  sugestaoItem: { padding: '12px 16px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ececf0' },
   relGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginBottom: 20 },
-  relCard: { background: '#0f0f0f', borderRadius: 16, padding: 28, textAlign: 'center' },
+  relCard: { background: '#f5f5f7', borderRadius: 22, padding: 28, textAlign: 'center' },
   relIcon: { fontSize: 40, marginBottom: 12 },
-  relNumero: { fontSize: 56, fontWeight: 900, color: 'white', fontFamily: 'Nunito, sans-serif', lineHeight: 1, marginBottom: 8 },
-  relLabel: { color: '#888', fontSize: 14, fontWeight: 600 },
-  vendedorCard: { background: '#0f0f0f', borderRadius: 14, padding: '18px 20px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' },
+  relNumero: { fontSize: 56, fontWeight: 800, color: '#1d1d1f', lineHeight: 1, marginBottom: 8 },
+  relLabel: { color: '#6e6e73', fontSize: 14, fontWeight: 600 },
+  vendedorCard: { background: '#f5f5f7', borderRadius: 20, padding: '18px 20px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' },
   vendedorPos: { width: 40, height: 40, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 14, flexShrink: 0 },
   vendedorStats: { display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center' },
   vendedorStat: { display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 64 },
-  vendedorStatNum: { color: 'white', fontWeight: 900, fontSize: 18 },
-  vendedorStatLabel: { color: '#666', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.3 },
+  vendedorStatNum: { color: '#1d1d1f', fontWeight: 900, fontSize: 18 },
+  vendedorStatLabel: { color: '#6e6e73', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.3 },
 }
