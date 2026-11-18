@@ -90,7 +90,9 @@ export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promis
     const coresFundo = normalOk ? coresNormais : soPontas ? coresPontas : []
     // Fundo bem branco: tolerância menor, pra não "comer" produto branco (cabo, carregador, fone)
     const fundoBranco = coresFundo.length > 0 && Math.min(...coresFundo[0]) > 236
-    const TOL = soPontas ? 22 : fundoBranco ? 22 : TOLERANCIA
+    // Fundo branco puríssimo (foto de site): tolerância ainda menor, pra não "morder" celular branco
+    const brancoTotal = coresFundo.length > 0 && Math.min(...coresFundo[0]) > 248
+    const TOL = soPontas ? 22 : brancoTotal ? 12 : fundoBranco ? 22 : TOLERANCIA
     const dist = (i: number) => distDe(coresFundo, i)
     const bordasLisas = normalOk || soPontas
 
@@ -113,6 +115,16 @@ export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promis
       const mx = Math.min(mascaraIA.w - 1, Math.floor(x * mascaraIA.w / w))
       const my = Math.min(mascaraIA.h - 1, Math.floor(y * mascaraIA.h / h))
       return encolhida![my * mascaraIA.w + mx]
+    } : null
+
+    // Máscara da IA sem encolher e suavizada (bilinear): usada só pra PROTEGER o produto de ser apagado.
+    // Assim a borda do celular branco não sai "mordida"
+    const iaCheia = mascaraIA ? (x: number, y: number) => {
+      const { w: mw, h: mh, dados: md } = mascaraIA
+      const fx = Math.min(mw - 1, Math.max(0, (x + 0.5) * mw / w - 0.5)), fy = Math.min(mh - 1, Math.max(0, (y + 0.5) * mh / h - 0.5))
+      const x0 = Math.floor(fx), y0 = Math.floor(fy), x1 = Math.min(mw - 1, x0 + 1), y1 = Math.min(mh - 1, y0 + 1)
+      const ax = fx - x0, ay = fy - y0
+      return (md[y0 * mw + x0] * (1 - ax) + md[y0 * mw + x1] * ax) * (1 - ay) + (md[y1 * mw + x0] * (1 - ax) + md[y1 * mw + x1] * ax) * ay
     } : null
 
     const fundo = new Uint8Array(w * h) // 1 = fundo
@@ -250,11 +262,11 @@ export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promis
       }
 
       // A IA reconheceu como produto: nunca apaga (resolve produto branco em fundo branco)
-      if (ia) {
+      if (iaCheia) {
         for (let p = 0; p < w * h; p++) {
           if (!fundo[p]) continue
           const x = p % w, y = (p - x) / w
-          if (ia(x, y) > 0.5) fundo[p] = 0
+          if (iaCheia(x, y) > 0.4) fundo[p] = 0
         }
       }
 
