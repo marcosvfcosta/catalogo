@@ -1109,7 +1109,8 @@ export default function Negociacao() {
     const maisBarata = a.cores.filter(c => a.precos_cor?.[c] != null).sort((x, y) => Number(a.precos_cor![x]) - Number(a.precos_cor![y]))[0] || ''
     const cor = a.cores.find(c => tirarAcento(c) === tirarAcento(corPedida)) || maisBarata
     setAba('negociacao')
-    setMarcaNeg(marcaDoAparelho(a))
+    // Mostra só o escolhido (fechado), sem abrir a lista da marca
+    setMarcaNeg(''); setBuscaModelo(''); setAbertoNeg(null)
     selecionarAparelho(a, cor)
   }, [aparelhos])
   const coresDisponiveis = aparelhoSelecionado?.cores || []
