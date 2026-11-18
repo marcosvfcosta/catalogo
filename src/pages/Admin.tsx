@@ -1733,14 +1733,22 @@ export default function Admin() {
 
       <div style={abasContainer}>
         <button style={aba === 'cadastrar' ? abaAtiva : abaInativa} onClick={() => setAba('cadastrar')}>+ Cadastrar</button>
-        <button style={aba === 'lista' ? abaAtiva : abaInativa} onClick={() => setAba('lista')}>📦 ({produtos.length})</button>
         <button style={aba === 'capas' ? abaAtiva : abaInativa} onClick={() => { setAba('capas'); setCapaAberta(null) }}>📱 Capas</button>
         <button style={aba === 'aparelhos' ? abaAtiva : abaInativa} onClick={() => setAba('aparelhos')}>🤝</button>
-        <button style={aba === 'precos' ? abaAtiva : abaInativa} onClick={() => { setAba('precos'); carregarAparelhos() }}>💰 Preços</button>
+        <button style={aba === 'precos' || aba === 'lista' ? abaAtiva : abaInativa} onClick={() => { setAba('precos'); carregarAparelhos() }}>💰 Preços</button>
         <button style={aba === 'hero' ? abaAtiva : abaInativa} onClick={() => setAba('hero')}>🖼 Hero</button>
         <button style={aba === 'vitrine' ? abaAtiva : abaInativa} onClick={() => setAba('vitrine')}>🏷 Vitrine</button>
         <button style={aba === 'ia' ? abaAtiva : abaInativa} onClick={() => setAba('ia')}>🤖 IA</button>
       </div>
+
+      {(aba === 'precos' || aba === 'lista') && (
+        <div style={{ display: 'flex', gap: 8, padding: '14px 16px 0', maxWidth: 700, margin: '0 auto' }}>
+          {([['precos', '💰 Lista do dia'], ['lista', `📦 Todos os produtos (${produtos.length})`]] as const).map(([v, t]) => (
+            <button key={v} type="button" onClick={() => { setAba(v); if (v === 'precos') carregarAparelhos() }}
+              style={{ flex: 1, background: aba === v ? '#ff6600' : '#151515', color: aba === v ? '#fff' : '#ccc', border: '1px solid ' + (aba === v ? '#ff6600' : '#333'), borderRadius: 14, padding: '11px 8px', fontSize: 14, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>{t}</button>
+          ))}
+        </div>
+      )}
 
       {aba === 'precos' && (() => {
         // Preços da lista no mesmo visual da conferência: separado por marca, foco no modelo e no valor final
