@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { carregarFotosCatalogo, completarFotos, type ComFotos } from '../lib/fotosCatalogo'
+import { baseModelo, carregarFotosCatalogo, completarFotos, type ComFotos } from '../lib/fotosCatalogo'
 import { chaveVariante, memoriaDe, nomeSemMemoria } from '../lib/variantes'
 import { useVoltarDeslizando } from '../lib/voltarDeslizando'
 import { useNavigate } from 'react-router-dom'
@@ -917,6 +917,50 @@ export default function Admin() {
     carregarProdutos()
   }
 
+  // Tira os celulares cadastrados à mão: antes passa as fotos (e marcações) pro celular igual que veio da lista
+  const [limpandoManuais, setLimpandoManuais] = useState(false)
+  async function limparManuais() {
+    type P = Produto & { origem?: string | null; na_loja?: boolean | null; foto_cor?: string | null; descricao?: string | null }
+    const todos = produtos as P[]
+    const ehCel = (p: P) => (p.categoria || '').toLowerCase().includes('celular')
+    const manuais = todos.filter(p => ehCel(p) && p.origem !== 'lista' && !p.na_loja)
+    const daLista = todos.filter(p => p.origem === 'lista')
+    const comPar = manuais.filter(m => daLista.some(l => baseModelo(l.modelo) === baseModelo(m.modelo)))
+    const semPar = manuais.length - comPar.length
+    if (!comPar.length) { alert('Nenhum cadastro manual tem um celular igual vindo da lista pra receber as fotos.'); return }
+    if (!confirm(`Apagar ${comPar.length} celular(es) cadastrados à mão?\n\nAntes, as fotos deles passam pro mesmo modelo que veio da lista.` + (semPar ? `\n\n${semPar} ficam (o modelo não está em nenhuma lista, apagar perderia a foto).` : '') + (todos.some(p => ehCel(p) && p.origem !== 'lista' && p.na_loja) ? '\n\nOs marcados "na loja" ficam.' : ''))) return
+    setLimpandoManuais(true)
+    try {
+      const ids = comPar.map(m => m.id)
+      const { data: fotosRows } = await supabase.from('produto_fotos').select('*').in('produto_id', [...ids, ...daLista.map(l => l.id)])
+      const fotos = (fotosRows || []) as { produto_id: string; url: string; ordem?: number; cor?: string | null }[]
+      for (const l of daLista) {
+        const doMesmo = comPar.filter(m => baseModelo(m.modelo) === baseModelo(l.modelo))
+        if (!doMesmo.length) continue
+        const fonte = doMesmo.find(m => m.foto_url) || doMesmo[0]
+        const dados: Record<string, unknown> = {}
+        if (!l.foto_url && fonte.foto_url) { dados.foto_url = fonte.foto_url; dados.foto_cor = fonte.foto_cor || null }
+        if (!(l as P).descricao && fonte.descricao) dados.descricao = fonte.descricao
+        for (const f of ['destaque', 'lancamento', 'promocao', 'mais_procurado'] as const) if (doMesmo.some(m => m[f]) && !l[f]) dados[f] = true
+        if (Object.keys(dados).length) await supabase.from('produtos_catalogo').update(dados).eq('id', l.id)
+        // Fotos extras (galeria) que ainda não estão nele
+        const jaTem = new Set(fotos.filter(f => f.produto_id === l.id).map(f => f.url))
+        const novas = fotos.filter(f => doMesmo.some(m => m.id === f.produto_id) && !jaTem.has(f.url))
+          .filter((f, i, arr) => arr.findIndex(x => x.url === f.url) === i)
+        if (novas.length) {
+          const linhas = novas.map((f, i) => ({ produto_id: l.id, url: f.url, ordem: jaTem.size + i + 1, cor: f.cor ?? null }))
+          const ins = await supabase.from('produto_fotos').insert(linhas)
+          if (ins.error) await supabase.from('produto_fotos').insert(linhas.map(({ cor: _c, ...x }) => x))
+        }
+      }
+      await supabase.from('produto_fotos').delete().in('produto_id', ids)
+      const { error } = await supabase.from('produtos_catalogo').delete().in('id', ids)
+      if (error) { alert('Erro ao apagar: ' + error.message); return }
+      alert(`✅ Pronto! ${ids.length} cadastro(s) manual(is) apagados e as fotos passaram pros celulares da lista.`)
+      carregarProdutos()
+    } finally { setLimpandoManuais(false) }
+  }
+
   async function excluirProduto(id: string) {
     if (!confirm('Deseja excluir este produto?')) return
     await supabase.from('produto_fotos').delete().eq('produto_id', id)
@@ -1736,6 +1780,10 @@ export default function Admin() {
       {aba === 'lista' && (
         <div style={formContainer}>
           <h2 style={formTitle}>Produtos cadastrados</h2>
+          <button type="button" onClick={limparManuais} disabled={limpandoManuais}
+            style={{ width: '100%', background: 'rgba(255,200,0,0.08)', border: '1px solid #ffc800', color: '#ffc800', borderRadius: 14, padding: 12, fontSize: 15, fontWeight: 800, marginBottom: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+            {limpandoManuais ? 'Passando as fotos e apagando...' : '🧹 Tirar celulares cadastrados à mão (passa as fotos pros da lista)'}
+          </button>
           <input style={{ ...inputStyle, marginBottom: 10 }} placeholder="🔍 Buscar modelo (ex: 17 pro max)" value={buscaProduto} onChange={e => setBuscaProduto(e.target.value)} />
           <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 6, marginBottom: 8 }}>
             {['', ...Array.from(new Set(produtos.map(p => (p.marca || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR'))].map(m => (
