@@ -55,7 +55,7 @@ const PARCELAS = 18
 // Por enquanto o catálogo mostra só celulares (acessórios, capinhas etc. ficam ocultos). false = mostra tudo
 const SO_CELULARES = true
 // Foto montada do topo (3 celulares juntos). Vazio = usa as fotos dos celulares cadastrados
-const FOTO_LANCAMENTO = '/hero/iphones-lancamento.webp?v=2'
+const FOTO_LANCAMENTO = '/hero/iphones-lancamento.webp?v=3'
 const TEMA_VITRINE = false // false = visual branco premium (estilo loja Apple); true = vitrine de pedra escura
 const CLASSE_TEMA = TEMA_VITRINE ? ' tema-vitrine' : ''
 const STORAGE = 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public'
