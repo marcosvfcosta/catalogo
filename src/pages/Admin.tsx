@@ -263,6 +263,8 @@ export default function Admin() {
   const [resumoHoje, setResumoHoje] = useState<{ vistos: number; faltando: number } | null>(null)
   const [aplicandoLista, setAplicandoLista] = useState<{ feitos: number; total: number } | null>(null)
   const [filtroProdutos, setFiltroProdutos] = useState<'todos' | 'disponiveis' | 'indisponiveis' | 'semfoto'>('todos')
+  const [buscaProduto, setBuscaProduto] = useState('')
+  const [marcaProduto, setMarcaProduto] = useState('')
 
   // ─── Capas ───
   const [capasModelos, setCapasModelos] = useState<CapaModelo[]>([])
@@ -1714,6 +1716,13 @@ export default function Admin() {
       {aba === 'lista' && (
         <div style={formContainer}>
           <h2 style={formTitle}>Produtos cadastrados</h2>
+          <input style={{ ...inputStyle, marginBottom: 10 }} placeholder="🔍 Buscar modelo (ex: 17 pro max)" value={buscaProduto} onChange={e => setBuscaProduto(e.target.value)} />
+          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 6, marginBottom: 8 }}>
+            {['', ...Array.from(new Set(produtos.map(p => (p.marca || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR'))].map(m => (
+              <button key={m || 'todas'} onClick={() => setMarcaProduto(m)}
+                style={{ ...(marcaProduto === m ? filtroAtivo : filtroInativo), flex: '0 0 auto' }}>{m || 'Todas as marcas'}</button>
+            ))}
+          </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
             {(() => { const gs = gruposDeProdutos(produtos); return [
               ['todos', `Todos (${gs.length})`],
@@ -1732,7 +1741,13 @@ export default function Admin() {
           {produtos.length === 0 ? (
             <p style={{ color: '#666', textAlign: 'center', padding: 40 }}>Nenhum produto ainda.</p>
           ) : (
-            gruposDeProdutos(produtos).filter(g =>
+            gruposDeProdutos(produtos.filter(p => {
+              if (marcaProduto && (p.marca || '').trim() !== marcaProduto) return false
+              const termo = buscaProduto.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+              if (!termo) return true
+              const alvo = `${p.marca} ${p.modelo} ${p.memoria || ''} ${p.cor || ''}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+              return termo.split(/\s+/).every(w => alvo.includes(w))
+            })).filter(g =>
               filtroProdutos === 'disponiveis' ? g.some(p => p.disponivel)
               : filtroProdutos === 'indisponiveis' ? g.some(p => !p.disponivel)
               : filtroProdutos === 'semfoto' ? !g.some(p => p.foto_url)
