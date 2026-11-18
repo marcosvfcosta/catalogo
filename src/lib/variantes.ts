@@ -22,14 +22,15 @@ export function nomeSemMemoria(nome: string) {
   return (nome || '')
     .replace(/\b\d+(?:[.,]\d+)?\s*(gb|tb)\b(\s*(de\s*)?ram)?/gi, ' ')
     .replace(/\bram\b/gi, ' ')
+    .replace(/\b4g\b/gi, ' ')
     .replace(/\s*[·|-]\s*$/, '')
     .replace(/\s{2,}/g, ' ')
     .trim()
 }
 
-// Chave do grupo: marca + nome sem memória (4G/5G continuam separando)
+// Chave do grupo: marca + nome sem memória. "4G" é o mesmo aparelho; só "5G" separa
 export function chaveVariante(marca: string | null | undefined, nome: string) {
-  return tirarAcento(marca || '') + '|' + tirarAcento(nomeSemMemoria(nome)).replace(/[^a-z0-9]/g, '')
+  return tirarAcento(marca || '') + '|' + tirarAcento(nomeSemMemoria(nome)).replace(/\b4g\b/g, ' ').replace(/[^a-z0-9]/g, '')
 }
 
 // Agrupa e ordena por memória (menor primeiro)

@@ -614,7 +614,23 @@ function App() {
   const mostrarBarraCelular = !SO_CELULARES && (!filtrando || grupoDaCategoria !== null)
 
   // Mesmo celular com GB diferente vira um cartão só (a memória escolhe na página do produto)
-  const gruposMemoria = useMemo(() => agruparVariantes(produtos.filter(ehCelular), p => p.marca, p => p.modelo, p => p.memoria), [produtos])
+  const gruposMemoria = useMemo(() => {
+    const g = agruparVariantes(produtos.filter(ehCelular), p => p.marca, p => p.modelo, p => p.memoria)
+    // Mesma memória cadastrada 2x (ex: "A07 128GB" e "A07 128GB 4GB RAM 4G"): fica só um, o mais barato
+    for (const [k, lista] of g) {
+      const porMem = new Map<string, Produto>()
+      for (const p of lista) {
+        const m = memoriaDe(p.modelo, p.memoria)?.rotulo || p.id
+        const atual = porMem.get(m)
+        const melhor = !atual ? p
+          : precoVisivel(p) && (!precoVisivel(atual) || precoFinal(p) < precoFinal(atual)) ? p
+          : (!atual.foto_url && p.foto_url && !precoVisivel(atual)) ? p : atual
+        porMem.set(m, melhor)
+      }
+      g.set(k, lista.filter(p => [...porMem.values()].includes(p)))
+    }
+    return g
+  }, [produtos])
   const variantesDe = (p: Produto) => ehCelular(p) ? (gruposMemoria.get(chaveVariante(p.marca, p.modelo)) || [p]) : [p]
   function agrupar(lista: Produto[]) {
     const vistos = new Set<string>()
@@ -625,7 +641,7 @@ function App() {
       if (vistos.has(k)) continue
       vistos.add(k)
       const g = variantesDe(p)
-      if (g.length < 2) { saida.push(p); continue }
+      if (g.length < 2) { saida.push(g[0] || p); continue }
       // Aparece o mais barato do grupo (o "a partir de")
       const comPreco = g.filter(precoVisivel)
       saida.push(comPreco.length ? comPreco.reduce((a, b) => precoFinal(b) < precoFinal(a) ? b : a) : p)
