@@ -328,8 +328,10 @@ export default function Admin() {
   async function carregarAparelhos() {
     const { data } = await supabase.from('aparelhos').select('*').order('modelo')
     const lista = (data || []) as Aparelho[]
-    if (await juntarDuplicados(lista)) return carregarAparelhos()
+    // Ordem importa: primeiro tira o que é de lista vencida, pra preço velho não se misturar com o de hoje
     if (await zerarListaVencida(lista)) return carregarAparelhos()
+    if (await juntarDuplicados(lista)) return carregarAparelhos()
+    if (await recalcularPeloDia(lista)) return carregarAparelhos()
     sincronizarPrecosCatalogo(lista)
     setAparelhos(lista)
     carregarFotosCatalogo().then(setFotosCat).catch(() => {})
@@ -378,6 +380,30 @@ export default function Admin() {
     return !error
   }
 
+  // Preço sempre do dia: refaz custo, preço e preço de cada cor só com as ofertas dos fornecedores de hoje
+  async function recalcularPeloDia(lista: Aparelho[]) {
+    const hoje = diaHoje()
+    let mudou = false
+    for (const a of lista) {
+      if (a.na_loja || a.disponivel === false || a.ofertas?.dia !== hoje || !a.ofertas.itens.length) continue
+      const lucro = lucroPorMemoria(a.memoria || a.modelo)
+      const itens = a.ofertas.itens
+      const melhor = itens.reduce((x, y) => y.custo < x.custo ? y : x)
+      const precosCor: Record<string, number> = {}
+      for (const o of itens) { const v = o.custo + lucro; if (precosCor[o.cor] == null || v < precosCor[o.cor]) precosCor[o.cor] = v }
+      const cores = Array.from(new Set(itens.map(o => o.cor)))
+      // Só conserta preço "impossível" pra hoje (mais barato que qualquer fornecedor de hoje, ou cor que ninguém mandou hoje).
+      // Se você escolheu outro fornecedor de propósito (mais caro), fica como está
+      const velho = Number(a.custo) < melhor.custo
+        || (a.cores || []).some(c => !cores.includes(c))
+        || Object.entries(a.precos_cor || {}).some(([c, v]) => precosCor[c] == null || Number(v) < precosCor[c])
+      if (!velho) continue
+      const { error } = await supabase.from('aparelhos').update({ custo: melhor.custo, preco: melhor.custo + lucro, precos_cor: precosCor, cores, fornecedor: melhor.f }).eq('id', a.id)
+      if (!error) mudou = true
+    }
+    return mudou
+  }
+
   // Mesmo aparelho cadastrado 2x (ex: "Galaxy A07 128GB" e "Galaxy A07 128GB 4G"):
   // junta num só (menor preço de cada cor, todas as cores e fornecedores) e tira o outro
   async function juntarDuplicados(lista: Aparelho[]) {
@@ -388,7 +414,9 @@ export default function Admin() {
       grupos.set(k, [...(grupos.get(k) || []), a])
     }
     let mudou = false
-    for (const g of grupos.values()) {
+    for (const g0 of grupos.values()) {
+      // Só junta o que veio em lista de hoje (o de ontem fica de fora, não leva preço velho)
+      const g = g0.filter(a => listaValida(a.ultima_lista))
       if (g.length < 2 || g.some(a => a.na_loja)) continue // o da loja tem preço travado: não mexe
       const comPreco = g.filter(a => a.preco != null)
       const barato = (comPreco.length ? comPreco : g).reduce((x, y) => Number(y.preco) < Number(x.preco) ? y : x)
