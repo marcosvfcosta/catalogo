@@ -25,6 +25,9 @@ type Produto = {
   preco?: number | null
   preco_antigo?: number | null
   mostrar_preco?: boolean | null
+  origem?: string | null
+  ultima_lista?: string | null
+  na_loja?: boolean | null
   fotoDe?: string // foto emprestada de outro cadastro do mesmo modelo (celular que veio da lista)
   tipo?: string | null
   compativel?: string[] | null
@@ -274,7 +277,17 @@ const IconeWhats = ({ tamanho = 20 }: { tamanho?: number }) => (
 )
 
 const ehCelular = (p: { categoria?: string | null }) => semAcento(p.categoria || '').includes('celular')
-const soCelulares = <T extends { categoria?: string | null }>(l: T[]) => SO_CELULARES ? l.filter(ehCelular) : l
+// Celular da lista de ontem some às 10h (precisa colar a lista do dia); os "na loja" ficam
+function listaEmDia(p: { origem?: string | null; ultima_lista?: string | null; na_loja?: boolean | null }) {
+  if (p.origem !== 'lista' || p.na_loja) return true
+  if (!p.ultima_lista) return false
+  const agora = new Date()
+  const inicio = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate())
+  if (agora.getHours() < 10) inicio.setDate(inicio.getDate() - 1)
+  return new Date(p.ultima_lista) >= inicio
+}
+const soCelulares = <T extends { categoria?: string | null; origem?: string | null; ultima_lista?: string | null; na_loja?: boolean | null }>(l: T[]) =>
+  (SO_CELULARES ? l.filter(ehCelular) : l).filter(listaEmDia)
 
 // Celular que veio da lista não tem foto: usa a do mesmo modelo já cadastrado (ignora GB, RAM, 4G/5G, CPO)
 function emprestarFotos(lista: Produto[]): Produto[] {
