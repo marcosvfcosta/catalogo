@@ -297,9 +297,10 @@ const soCelulares = <T extends { categoria?: string | null; origem?: string | nu
   (SO_CELULARES ? l.filter(ehCelular) : l).filter(listaEmDia)
 
 // Celular que veio da lista não tem foto: usa a do mesmo modelo já cadastrado (ignora GB, RAM, 4G/5G, CPO)
-function emprestarFotos(lista: Produto[]): Produto[] {
+function emprestarFotos(lista: Produto[], fontes: Produto[] = lista): Produto[] {
   const comFoto = new Map<string, Produto>()
-  for (const p of lista) {
+  // Disponíveis primeiro; depois os indisponíveis (a foto continua valendo mesmo se aquela memória saiu da lista)
+  for (const p of [...fontes].sort((a, b) => Number(b.disponivel !== false) - Number(a.disponivel !== false))) {
     if (!p.foto_url) continue
     const b = baseModelo(p.modelo)
     if (b && !comFoto.has(b)) comFoto.set(b, p)
@@ -370,7 +371,7 @@ function App() {
       const falhou = !!p.error
       if (!falhou || !CACHE) {
         setModelos(novosModelos); setCategorias(novasCategorias.filter(c => !SO_CELULARES || semAcento(c.nome).includes('celular'))); setMarcas(novasMarcas)
-        setProdutos(emprestarFotos(soCelulares(novosProdutos))); setBanners(novosBanners)
+        setProdutos(emprestarFotos(soCelulares(novosProdutos), (p.data || []) as Produto[])); setBanners(novosBanners)
       }
       setCarregando(false)
       if (!falhou) {
