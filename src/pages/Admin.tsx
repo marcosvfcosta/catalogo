@@ -1696,7 +1696,7 @@ export default function Admin() {
               : true
             ).sort((a, b) => Number(!!b.disponivel) - Number(!!a.disponivel)) // disponíveis em cima
             .map(p => (
-              <div key={p.id} style={produtoCard}>
+              <div key={p.id} style={{ ...produtoCard, cursor: 'pointer' }} onClick={() => { setEditando(p); carregarFotosEdicao(p.id) }}>
                 {p.foto_url ? (
                   <img src={p.foto_url} alt={p.modelo} style={{ width: 65, height: 65, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
                 ) : (
@@ -1723,8 +1723,8 @@ export default function Admin() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-                  <button style={btnEditar} onClick={() => { setEditando(p); carregarFotosEdicao(p.id) }}>✏️</button>
-                  <button style={btnExcluir} onClick={() => excluirProduto(p.id)}>🗑</button>
+                  <button style={btnEditar} onClick={e => { e.stopPropagation(); setEditando(p); carregarFotosEdicao(p.id) }}>✏️</button>
+                  <button style={btnExcluir} onClick={e => { e.stopPropagation(); excluirProduto(p.id) }}>🗑</button>
                 </div>
               </div>
             ))
