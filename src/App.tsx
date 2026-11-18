@@ -1291,9 +1291,6 @@ function App() {
               <section className="mm-lanc com-foto">
                 <span className="mm-lanc-tag">Lançamento</span>
                 <h1>{TOPO_NOME}</h1>
-                <div className="mm-lanc-botoes">
-                  <button className="mm-lanc-btn" onClick={() => abrirWhatsApp(`Olá! Tenho interesse no ${TOPO_NOME}.`)}>Comprar</button>
-                </div>
                 <img className="mm-lanc-unica" src={FOTO_LANCAMENTO!} alt={TOPO_NOME} />
               </section>
             )
