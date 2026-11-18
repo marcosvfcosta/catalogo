@@ -52,6 +52,8 @@ const PARCELAS = 18
 // ─── Visual do catálogo ───
 // true  = visual "Vitrine" (parede cinza, prateleiras de acrílico)
 // false = visual antigo (branco, estilo iPlace). Para voltar, é só trocar para false e publicar.
+// Por enquanto o catálogo mostra só celulares (acessórios, capinhas etc. ficam ocultos). false = mostra tudo
+const SO_CELULARES = true
 const TEMA_VITRINE = false // false = visual branco premium (estilo loja Apple); true = vitrine de pedra escura
 const CLASSE_TEMA = TEMA_VITRINE ? ' tema-vitrine' : ''
 const STORAGE = 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public'
@@ -267,11 +269,14 @@ const IconeWhats = ({ tamanho = 20 }: { tamanho?: number }) => (
   <svg width={tamanho} height={tamanho} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.2 2.2 2.2 0 0 0 .2-1.2c-.1-.1-.2-.2-.4-.3Z" /></svg>
 )
 
+const ehCelular = (p: { categoria?: string | null }) => semAcento(p.categoria || '').includes('celular')
+const soCelulares = <T extends { categoria?: string | null }>(l: T[]) => SO_CELULARES ? l.filter(ehCelular) : l
+
 function App() {
   const navigate = useNavigate()
-  const [produtos, setProdutos] = useState<Produto[]>(CACHE?.produtos || [])
+  const [produtos, setProdutos] = useState<Produto[]>(soCelulares(CACHE?.produtos || []))
   const [banners, setBanners] = useState<Banner[]>(CACHE?.banners || [])
-  const [categorias, setCategorias] = useState<ItemVitrine[]>(CACHE?.categorias || [])
+  const [categorias, setCategorias] = useState<ItemVitrine[]>((CACHE?.categorias || []).filter(c => !SO_CELULARES || semAcento(c.nome).includes('celular')))
   const [marcas, setMarcas] = useState<ItemVitrine[]>(CACHE?.marcas || [])
   const [carregando, setCarregando] = useState(!CACHE)
   const [menuAberto, setMenuAberto] = useState(false)
@@ -319,8 +324,8 @@ function App() {
       const novosBanners = (h.data || []) as Banner[]
       const falhou = !!p.error
       if (!falhou || !CACHE) {
-        setModelos(novosModelos); setCategorias(novasCategorias); setMarcas(novasMarcas)
-        setProdutos(novosProdutos); setBanners(novosBanners)
+        setModelos(novosModelos); setCategorias(novasCategorias.filter(c => !SO_CELULARES || semAcento(c.nome).includes('celular'))); setMarcas(novasMarcas)
+        setProdutos(soCelulares(novosProdutos)); setBanners(novosBanners)
       }
       setCarregando(false)
       if (!falhou) {
@@ -556,7 +561,7 @@ function App() {
     if (c.includes('capa') || c.includes('capinha')) return 'capa'
     return null
   })()
-  const mostrarBarraCelular = !filtrando || grupoDaCategoria !== null
+  const mostrarBarraCelular = !SO_CELULARES && (!filtrando || grupoDaCategoria !== null)
 
   const resultados = useMemo(() => {
     const termo = semAcento(busca)
@@ -834,7 +839,7 @@ function App() {
           <button onClick={() => aplicarFiltro({ categoria: 'Celulares' })}>📱 Celulares</button>
           <button onClick={() => navigate('/comparar')}><span className="mm-com-icone"><IconeVs tamanho={18} /> Comparar celulares</span></button>
           <button onClick={() => navigate('/entrada')}>⇄ Avaliar meu usado</button>
-          <button onClick={() => navigate('/capas')}>🛡 Capinhas</button>
+          {!SO_CELULARES && <button onClick={() => navigate('/capas')}>🛡 Capinhas</button>}
           <button onClick={() => { setMenuAberto(false); setSacolaAberta(true) }}>🛍 Minha sacola{sacola.length ? ` (${sacola.length})` : ''}</button>
           {ehIpad && <button className="mm-menu-destaque" onClick={() => navigate('/negociacao')}>💼 Negociação</button>}
           <hr />
@@ -1082,7 +1087,7 @@ function App() {
           )}
 
           {/* ─── Categorias ─── */}
-          <div className="mm-categorias">
+          {!SO_CELULARES && <div className="mm-categorias">
             {categorias.map(c => (
               <button key={c.nome} className={categoriaAcesa === c.nome ? 'mm-categoria acesa' : 'mm-categoria'}
                 onClick={() => {
@@ -1095,7 +1100,7 @@ function App() {
                 {c.nome}
               </button>
             ))}
-          </div>
+          </div>}
 
           {/* ─── Vantagens ─── */}
           <div className="mm-beneficios">
