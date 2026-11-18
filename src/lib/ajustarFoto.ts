@@ -32,24 +32,6 @@ function paraArquivo(canvas: HTMLCanvasElement, nomeBase: string): Promise<File>
   })
 }
 
-// Cresce (dilata) uma máscara 0/1 num quadrado de raio R
-function crescer(m: Uint8Array, w: number, h: number, R: number) {
-  const a = new Uint8Array(w * h), b = new Uint8Array(w * h)
-  for (let y = 0; y < h; y++) {
-    let ult = -1e9
-    for (let x = 0; x < w; x++) { if (m[y * w + x]) ult = x; if (x - ult <= R) a[y * w + x] = 1 }
-    ult = 1e9
-    for (let x = w - 1; x >= 0; x--) { if (m[y * w + x]) ult = x; if (ult - x <= R) a[y * w + x] = 1 }
-  }
-  for (let x = 0; x < w; x++) {
-    let ult = -1e9
-    for (let y = 0; y < h; y++) { if (a[y * w + x]) ult = y; if (y - ult <= R) b[y * w + x] = 1 }
-    ult = 1e9
-    for (let y = h - 1; y >= 0; y--) { if (a[y * w + x]) ult = y; if (ult - y <= R) b[y * w + x] = 1 }
-  }
-  return b
-}
-
 export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promise<FotoAjustada> {
   try {
     const img = await carregarImagem(original)
@@ -108,9 +90,7 @@ export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promis
     const coresFundo = normalOk ? coresNormais : soPontas ? coresPontas : []
     // Fundo bem branco: tolerância menor, pra não "comer" produto branco (cabo, carregador, fone)
     const fundoBranco = coresFundo.length > 0 && Math.min(...coresFundo[0]) > 236
-    // Fundo branco puríssimo (foto de site): tolerância ainda menor, pra não "morder" celular branco
-    const brancoTotal = coresFundo.length > 0 && Math.min(...coresFundo[0]) > 248
-    const TOL = soPontas ? 22 : brancoTotal ? 12 : fundoBranco ? 22 : TOLERANCIA
+    const TOL = soPontas ? 22 : fundoBranco ? 22 : TOLERANCIA
     const dist = (i: number) => distDe(coresFundo, i)
     const bordasLisas = normalOk || soPontas
 
@@ -135,16 +115,6 @@ export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promis
       return encolhida![my * mascaraIA.w + mx]
     } : null
 
-    // Máscara da IA sem encolher e suavizada (bilinear): usada só pra PROTEGER o produto de ser apagado.
-    // Assim a borda do celular branco não sai "mordida"
-    const iaCheia = mascaraIA ? (x: number, y: number) => {
-      const { w: mw, h: mh, dados: md } = mascaraIA
-      const fx = Math.min(mw - 1, Math.max(0, (x + 0.5) * mw / w - 0.5)), fy = Math.min(mh - 1, Math.max(0, (y + 0.5) * mh / h - 0.5))
-      const x0 = Math.floor(fx), y0 = Math.floor(fy), x1 = Math.min(mw - 1, x0 + 1), y1 = Math.min(mh - 1, y0 + 1)
-      const ax = fx - x0, ay = fy - y0
-      return (md[y0 * mw + x0] * (1 - ax) + md[y0 * mw + x1] * ax) * (1 - ay) + (md[y1 * mw + x0] * (1 - ax) + md[y1 * mw + x1] * ax) * ay
-    } : null
-
     const fundo = new Uint8Array(w * h) // 1 = fundo
     if (!bordasLisas && ia) {
       // Fundo com cenário: usa só a IA (borda suave pela própria máscara)
@@ -162,21 +132,9 @@ export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promis
       let ini = 0, fim = 0
       // Em fundo branco o "pintar" só avança por degraus suaves: na borda do produto (contorno/sombra) ele para
       const lum = (p: number) => px[p * 4] * 0.3 + px[p * 4 + 1] * 0.59 + px[p * 4 + 2] * 0.11
-      // Fundo branco: o contorno do produto (qualquer risquinho de cor/sombra) vira "parede" que o pintar não atravessa.
-      // A parede é engrossada 1 ponto pra fechar falhas do contorno: celular branco não é mais "mordido"
-      let parede: Uint8Array | null = null
-      if (fundoBranco) {
-        const risco = new Uint8Array(w * h)
-        for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
-          const p = y * w + x, l = lum(p)
-          if (Math.abs(l - lum(p - 1)) > 4 || Math.abs(l - lum(p + 1)) > 4 || Math.abs(l - lum(p - w)) > 4 || Math.abs(l - lum(p + w)) > 4) risco[p] = 1
-        }
-        parede = crescer(risco, w, h, 1)
-      }
       const tentar = (p: number, de = -1) => {
         if (fundo[p]) return
         if (dist(p * 4) >= TOL) return
-        if (parede && parede[p] && de >= 0) return
         if (fundoBranco && de >= 0 && Math.abs(lum(p) - lum(de)) > 5) return
         fundo[p] = 1; fila[fim++] = p
       }
@@ -291,24 +249,12 @@ export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promis
         marcarMiolo(false)
       }
 
-      // Fundo branco: fecha "mordidas" na beirada do produto (cresce o produto e encolhe de volta)
-      if (fundoBranco) {
-        const R = Math.max(3, Math.round(Math.min(w, h) * 0.012))
-        const produto = new Uint8Array(w * h)
-        for (let p = 0; p < w * h; p++) produto[p] = fundo[p] ? 0 : 1
-        const grande = crescer(produto, w, h, R)
-        const foraGrande = new Uint8Array(w * h)
-        for (let p = 0; p < w * h; p++) foraGrande[p] = grande[p] ? 0 : 1
-        const fechado = crescer(foraGrande, w, h, R) // fundo "de verdade" depois de fechar
-        for (let p = 0; p < w * h; p++) if (fundo[p] && !fechado[p]) fundo[p] = 0
-      }
-
       // A IA reconheceu como produto: nunca apaga (resolve produto branco em fundo branco)
-      if (iaCheia) {
+      if (ia) {
         for (let p = 0; p < w * h; p++) {
           if (!fundo[p]) continue
           const x = p % w, y = (p - x) / w
-          if (iaCheia(x, y) > 0.4) fundo[p] = 0
+          if (ia(x, y) > 0.5) fundo[p] = 0
         }
       }
 
