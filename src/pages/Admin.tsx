@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { carregarFotosCatalogo, completarFotos, type ComFotos } from '../lib/fotosCatalogo'
-import { chaveVariante, memoriaDe } from '../lib/variantes'
+import { chaveVariante, memoriaDe, nomeSemMemoria } from '../lib/variantes'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { recortarProduto } from '../lib/recortarProduto'
@@ -870,6 +870,29 @@ export default function Admin() {
     carregarProdutos()
   }
 
+  // Lista de produtos: o mesmo celular com GB diferente vira um cartão só
+  function gruposDeProdutos(lista: Produto[]) {
+    const ordem: Produto[][] = []
+    const mapa = new Map<string, Produto[]>()
+    for (const p of lista) {
+      const cel = (p.categoria || '').toLowerCase().includes('celular')
+      const k = cel ? chaveVariante(p.marca, p.modelo) : 'id:' + p.id
+      const g = mapa.get(k)
+      if (g) g.push(p); else { const n = [p]; mapa.set(k, n); ordem.push(n) }
+    }
+    for (const g of ordem) g.sort((a, b) => (memoriaDe(a.modelo, a.memoria)?.valor || 0) - (memoriaDe(b.modelo, b.memoria)?.valor || 0))
+    return ordem
+  }
+
+  async function excluirGrupo(g: Produto[]) {
+    if (g.length === 1) return excluirProduto(g[0].id)
+    if (!confirm(`Excluir as ${g.length} versões (${g.map(p => memoriaDe(p.modelo, p.memoria)?.rotulo || p.modelo).join(', ')})?`)) return
+    const ids = g.map(p => p.id)
+    await supabase.from('produto_fotos').delete().in('produto_id', ids)
+    await supabase.from('produtos_catalogo').delete().in('id', ids)
+    carregarProdutos()
+  }
+
   async function excluirProduto(id: string) {
     if (!confirm('Deseja excluir este produto?')) return
     await supabase.from('produto_fotos').delete().eq('produto_id', id)
@@ -1690,12 +1713,12 @@ export default function Admin() {
         <div style={formContainer}>
           <h2 style={formTitle}>Produtos cadastrados</h2>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-            {([
-              ['todos', `Todos (${produtos.length})`],
-              ['disponiveis', `Disponíveis (${produtos.filter(p => p.disponivel).length})`],
-              ['indisponiveis', `Indisponíveis (${produtos.filter(p => !p.disponivel).length})`],
-              ['semfoto', `Sem foto (${produtos.filter(p => !p.foto_url).length})`],
-            ] as const).map(([k, l]) => (
+            {(() => { const gs = gruposDeProdutos(produtos); return [
+              ['todos', `Todos (${gs.length})`],
+              ['disponiveis', `Disponíveis (${gs.filter(g => g.some(p => p.disponivel)).length})`],
+              ['indisponiveis', `Indisponíveis (${gs.filter(g => g.some(p => !p.disponivel)).length})`],
+              ['semfoto', `Sem foto (${gs.filter(g => !g.some(p => p.foto_url)).length})`],
+            ] as const })().map(([k, l]) => (
               <button key={k} onClick={() => setFiltroProdutos(k)} style={filtroProdutos === k ? filtroAtivo : filtroInativo}>{l}</button>
             ))}
           </div>
@@ -1707,26 +1730,42 @@ export default function Admin() {
           {produtos.length === 0 ? (
             <p style={{ color: '#666', textAlign: 'center', padding: 40 }}>Nenhum produto ainda.</p>
           ) : (
-            produtos.filter(p =>
-              filtroProdutos === 'disponiveis' ? p.disponivel
-              : filtroProdutos === 'indisponiveis' ? !p.disponivel
-              : filtroProdutos === 'semfoto' ? !p.foto_url
+            gruposDeProdutos(produtos).filter(g =>
+              filtroProdutos === 'disponiveis' ? g.some(p => p.disponivel)
+              : filtroProdutos === 'indisponiveis' ? g.some(p => !p.disponivel)
+              : filtroProdutos === 'semfoto' ? !g.some(p => p.foto_url)
               : true
-            ).sort((a, b) => Number(!!b.disponivel) - Number(!!a.disponivel)) // disponíveis em cima
-            .map(p => (
-              <div key={p.id} style={{ ...produtoCard, cursor: 'pointer' }} onClick={() => { setEditando(p); carregarFotosEdicao(p.id) }}>
+            ).sort((a, b) => Number(b.some(p => p.disponivel)) - Number(a.some(p => p.disponivel))) // disponíveis em cima
+            .map(g => {
+              const p = g.find(x => x.foto_url) || g[0]
+              const varios = g.length > 1
+              const disponivel = g.some(x => x.disponivel)
+              const cores = Array.from(new Set(g.flatMap(x => (x.cor || '').split(/[,/;]| e /).map(c => c.trim()).filter(Boolean))))
+              const editar = (x: Produto) => { setEditando(x); carregarFotosEdicao(x.id) }
+              return (
+              <div key={g[0].id} style={{ ...produtoCard, cursor: 'pointer' }} onClick={() => editar(p)}>
                 {p.foto_url ? (
                   <img src={p.foto_url} alt={p.modelo} style={{ width: 65, height: 65, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
                 ) : (
                   <div style={semFoto}>📱</div>
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.25, wordBreak: 'break-word' }}>{p.marca} {p.modelo}</p>
-                  <p style={{ color: '#aaa', fontSize: 12 }}>{p.categoria} {p.memoria ? '· ' + p.memoria : ''}</p>
-                  <p style={{ fontSize: 11, color: p.disponivel ? '#25D366' : '#ff4444' }}>{p.disponivel ? '● Disponível' : '● Indisponível'}</p>
-                  {p.cor && (
+                  <p style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.25, wordBreak: 'break-word' }}>{p.marca} {varios ? nomeSemMemoria(p.modelo) : p.modelo}</p>
+                  <p style={{ color: '#aaa', fontSize: 12 }}>{p.categoria} {!varios && p.memoria ? '· ' + p.memoria : ''}</p>
+                  {varios && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 6, margin: '6px 0 2px' }}>
+                      {g.map(x => (
+                        <button key={x.id} type="button" onClick={e => { e.stopPropagation(); editar(x) }}
+                          style={{ background: '#151515', border: '1px solid ' + (x.disponivel ? '#25D366' : '#ff4444'), color: x.disponivel ? '#25D366' : '#ff8888', borderRadius: 10, padding: '5px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          {memoriaDe(x.modelo, x.memoria)?.rotulo || x.modelo}{x.foto_url ? ' 📷' : ''}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <p style={{ fontSize: 11, color: disponivel ? '#25D366' : '#ff4444' }}>{disponivel ? '● Disponível' : '● Indisponível'}</p>
+                  {cores.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 10px', marginTop: 4 }}>
-                      {p.cor.split(/[,/;]| e /).map(c => c.trim()).filter(Boolean).map(c => (
+                      {cores.map(c => (
                         <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#aaa' }}>
                           <i style={{ width: 9, height: 9, borderRadius: '50%', background: CORES_BOLINHA[c] || '#888', border: '1px solid #555' }} />{c}
                         </span>
@@ -1734,18 +1773,19 @@ export default function Admin() {
                     </div>
                   )}
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
-                    {p.destaque && <span style={tagStyle}>☆ Destaque</span>}
-                    {p.lancamento && <span style={tagStyle}>🚀 Lançamento</span>}
-                    {p.promocao && <span style={tagStyle}>🏷 Promoção</span>}
-                    {p.mais_procurado && <span style={tagStyle}>🔥 Mais Procurado</span>}
+                    {g.some(x => x.destaque) && <span style={tagStyle}>☆ Destaque</span>}
+                    {g.some(x => x.lancamento) && <span style={tagStyle}>🚀 Lançamento</span>}
+                    {g.some(x => x.promocao) && <span style={tagStyle}>🏷 Promoção</span>}
+                    {g.some(x => x.mais_procurado) && <span style={tagStyle}>🔥 Mais Procurado</span>}
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-                  <button style={btnEditar} onClick={e => { e.stopPropagation(); setEditando(p); carregarFotosEdicao(p.id) }}>✏️</button>
-                  <button style={btnExcluir} onClick={e => { e.stopPropagation(); excluirProduto(p.id) }}>🗑</button>
+                  <button style={btnEditar} onClick={e => { e.stopPropagation(); editar(p) }}>✏️</button>
+                  <button style={btnExcluir} onClick={e => { e.stopPropagation(); excluirGrupo(g) }}>🗑</button>
                 </div>
               </div>
-            ))
+              )
+            })
           )}
         </div>
       )}
