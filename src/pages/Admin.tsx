@@ -338,14 +338,15 @@ export default function Admin() {
   // Catálogo mostra o mesmo preço de venda da Negociação nos celulares que vieram da lista (custo nunca vai)
   async function sincronizarPrecosCatalogo(lista: Aparelho[]) {
     // Preço de cada cor também vai (a cor mais cara aparece mais cara no catálogo)
-    const r1 = await supabase.from('produtos_catalogo').select('id, chave, modelo, preco, mostrar_preco, precos_cor').eq('origem', 'lista')
-    const comColunaCor = !r1.error
-    const dadosCat: unknown[] | null = comColunaCor ? r1.data : (await supabase.from('produtos_catalogo').select('id, chave, modelo, preco, mostrar_preco').eq('origem', 'lista')).data
-    const prods = (dadosCat || []) as { id: string; chave?: string | null; modelo: string; preco?: number | null; mostrar_preco?: boolean | null; precos_cor?: Record<string, number> | null }[]
+    // Todos os celulares do catálogo (da lista e os cadastrados à mão) pegam o preço da lista do dia
+    const r1 = await supabase.from('produtos_catalogo').select('*')
+    const comColunaCor = !r1.error && (r1.data || []).some(x => 'precos_cor' in (x as object))
+    const prods = ((r1.data || []) as { id: string; chave?: string | null; modelo: string; memoria?: string | null; categoria?: string | null; origem?: string | null; na_loja?: boolean | null; preco?: number | null; mostrar_preco?: boolean | null; precos_cor?: Record<string, number> | null }[])
+      .filter(p => !p.na_loja && (p.origem === 'lista' || (p.categoria || '').toLowerCase().includes('celular')))
     const disponiveis = lista.filter(a => a.disponivel !== false && a.preco != null && a.chave)
     let mudou = 0
     for (const p of prods) {
-      const k = chaveComparar(p.chave || p.modelo)
+      const k = p.origem === 'lista' ? chaveComparar(p.chave || p.modelo) : chaveComparar(`${p.modelo} ${p.memoria || ''}`)
       const iguais = disponiveis.filter(a => chaveComparar(a.chave!) === k)
       if (!iguais.length) continue
       const preco = Math.min(...iguais.map(a => Number(a.preco)))
