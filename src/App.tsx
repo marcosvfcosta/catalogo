@@ -1281,11 +1281,22 @@ function App() {
               </div>
             </section>
           )}
-          {!TEMA_VITRINE && celularesVitrine.length > 0 ? (() => {
+          {!TEMA_VITRINE && (celularesVitrine.length > 0 || (FOTO_LANCAMENTO && !carregando)) ? (() => {
             const do18 = produtos.filter(p => MODELO_TOPO.test(p.modelo))
             const topo18 = do18.length ? (do18.filter(precoVisivel).sort((a, b) => precoFinal(a) - precoFinal(b))[0] || do18[0]) : null
             const [principal0, ...resto] = celularesVitrine
             const principal = topo18 || principal0
+            // Sem celular disponível (lista zerada ou vencida): a foto do lançamento continua, sem preço
+            if (!principal) return (
+              <section className="mm-lanc com-foto">
+                <span className="mm-lanc-tag">Lançamento</span>
+                <h1>{TOPO_NOME}</h1>
+                <div className="mm-lanc-botoes">
+                  <button className="mm-lanc-btn" onClick={() => abrirWhatsApp(`Olá! Tenho interesse no ${TOPO_NOME}.`)}>Comprar</button>
+                </div>
+                <img className="mm-lanc-unica" src={FOTO_LANCAMENTO!} alt={TOPO_NOME} />
+              </section>
+            )
             const fotos = [resto[0], principal, resto[1]].filter(Boolean) as Produto[]
             return (
               <section className={FOTO_LANCAMENTO ? 'mm-lanc com-foto' : 'mm-lanc'}>
