@@ -1683,9 +1683,8 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 .mm .mm-beneficios-detalhe p { font-size: 12.5px; }
 .mm .mm-beneficios-detalhe div.mm-beneficio-on { background: #fff4ec; box-shadow: inset 0 0 0 2px var(--laranja); }
 .mm .mm-beneficio-fundo { position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,0.35); animation: mmFade .2s ease; }
-.mm .mm-beneficio-folha { position: fixed; left: 0; right: 0; bottom: 0; z-index: 71; max-width: 560px; margin: 0 auto; background: #fff; border-radius: 24px 24px 0 0; padding: 18px 18px calc(22px + env(safe-area-inset-bottom)); box-shadow: 0 -10px 40px rgba(0,0,0,0.15); animation: mmSobe .3s ease; max-height: 90vh; overflow-y: auto; }
-@keyframes mmSobe { from { transform: translateY(40px); opacity: 0; } }
-@keyframes mmFade { from { opacity: 0; } }
+.mm .mm-beneficio-folha { position: fixed; left: 0; right: 0; bottom: 0; z-index: 71; max-width: 560px; margin: 0 auto; background: #fff; border-radius: 24px 24px 0 0; padding: 18px 18px calc(22px + env(safe-area-inset-bottom)); box-shadow: 0 -10px 40px rgba(0,0,0,0.15); animation: mmBeneficioSobe .3s ease; max-height: 90vh; overflow-y: auto; }
+@keyframes mmBeneficioSobe { from { transform: translateY(40px); opacity: 0; } }
 .mm .mm-beneficio-topo { display: flex; align-items: center; justify-content: space-between; }
 .mm .mm-beneficio-topo h3 { font-size: 22px; font-weight: 800; letter-spacing: -0.4px; color: var(--tinta); }
 .mm .mm-beneficio-topo button { width: 32px; height: 32px; border-radius: 50%; background: var(--cinza); color: #6e6e73; font-size: 15px; }
