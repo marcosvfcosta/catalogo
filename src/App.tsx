@@ -341,6 +341,18 @@ function emprestarFotos(lista: Produto[], fontes: Produto[] = lista): Produto[] 
 
 function App() {
   const navigate = useNavigate()
+  // Fotos de cada cor (todas, carregadas uma vez) e a cor que está aparecendo em cada cartão da grade
+  const [fotosCores, setFotosCores] = useState<Record<string, { url: string; cor: string }[]>>({})
+  const [corCard, setCorCard] = useState<Record<string, number>>({})
+  useEffect(() => {
+    supabase.from('produto_fotos').select('produto_id, url, cor').order('ordem').then(({ data }) => {
+      const m: Record<string, { url: string; cor: string }[]> = {}
+      for (const f of (data || []) as { produto_id: string; url: string; cor: string | null }[]) {
+        if (f.cor) (m[f.produto_id] ||= []).push({ url: f.url, cor: f.cor })
+      }
+      setFotosCores(m)
+    })
+  }, [])
   const [produtos, setProdutos] = useState<Produto[]>(emprestarFotos(soCelulares(CACHE?.produtos || [])))
   const [banners, setBanners] = useState<Banner[]>(CACHE?.banners || [])
   const [categorias, setCategorias] = useState<ItemVitrine[]>((CACHE?.categorias || []).filter(c => !SO_CELULARES || semAcento(c.nome).includes('celular')))
@@ -826,11 +838,28 @@ function App() {
     const varios = vars.length > 1
     const precosDiferentes = (varios && new Set(vars.filter(precoVisivel).map(precoFinal)).size > 1)
       || new Set(Object.values(p.precos_cor || {})).size > 1
+    // Grade: arrasta a foto pro lado e troca a cor (uma foto por cor de hoje)
+    const slides = grade ? cores.map(c => {
+      const daCor = (f: { cor: string }) => semAcento(f.cor) === semAcento(c.nome)
+      const url = (fotosCores[p.id] || []).find(daCor)?.url || (p.fotoDe ? (fotosCores[p.fotoDe] || []).find(daCor)?.url : undefined)
+        || (p.foto_url && p.foto_cor && semAcento(p.foto_cor) === semAcento(c.nome) ? p.foto_url : undefined)
+      return url ? { cor: c.nome, url } : null
+    }).filter(Boolean) as { cor: string; url: string }[] : []
+    const carrossel = slides.length > 1
+    const iCor = Math.min(corCard[p.id] || 0, Math.max(0, slides.length - 1))
+    const corAtual = carrossel ? slides[iCor].cor : null
     return (
-      <div key={p.id} className={grade ? 'mm-card mm-card-grade' : 'mm-card'} onClick={() => abrirProduto(p)}>
+      <div key={p.id} className={grade ? 'mm-card mm-card-grade' : 'mm-card'} onClick={() => abrirProduto(p, corAtual)}>
         <div className="mm-card-foto">
           {selo && <span className="mm-selo" style={{ background: selo.c }}>{selo.t}</span>}
-          {p.foto_url ? <img src={p.foto_url} alt={p.modelo} loading="lazy" /> : <span className="mm-sem-foto">{p.marca}</span>}
+          {carrossel ? (
+            <div className="mm-card-carrossel" onScroll={e => {
+              const el = e.currentTarget, i = Math.round(el.scrollLeft / el.clientWidth)
+              if (i !== iCor) setCorCard(m => ({ ...m, [p.id]: i }))
+            }}>
+              {slides.map(f => <div key={f.url}><img src={f.url} alt={`${p.modelo} ${f.cor}`} loading="lazy" /></div>)}
+            </div>
+          ) : p.foto_url ? <img src={p.foto_url} alt={p.modelo} loading="lazy" /> : <span className="mm-sem-foto">{p.marca}</span>}
         </div>
         <b className="mm-card-nome">{varios ? nomeSemMemoria(p.modelo) : p.modelo}</b>
         <small className="mm-card-info">{varios ? vars.map(v => memoriaDe(v.modelo, v.memoria)?.rotulo).filter(Boolean).join(' · ') : [p.memoria, p.condicao].filter(Boolean).join(' · ') || p.marca}</small>
@@ -838,7 +867,7 @@ function App() {
         <PrecoProduto p={p} />
         {precoVisivel(p) && !p.tipo && <small className="mm-card-parc">ou <b>{PARCELAS}x de {reais(parcela18(precoFinal(p)))}</b></small>}
         <div className="mm-cores">
-          {cores.map(c => <i key={c.nome} title={c.nome} style={{ background: c.hex }} />)}
+          {cores.map(c => <i key={c.nome} title={c.nome} className={corAtual && semAcento(corAtual) === semAcento(c.nome) ? 'on' : ''} style={{ background: c.hex }} />)}
         </div>
         <button className={dentro ? 'mm-btn-sacola dentro' : 'mm-btn-sacola'} onClick={e => { e.stopPropagation(); alternarSacola(p) }}>
           {dentro ? '✓ Na sacola' : <><IconeSacola tamanho={18} /> Adicionar</>}
@@ -1559,6 +1588,10 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 .mm .mm-card-info { color: #6e6e73; font-size: 14px; margin-top: 3px; }
 .mm .mm-cores { display: flex; gap: 5px; margin: 8px 0 12px; min-height: 13px; flex-wrap: wrap; }
 .mm .mm-cores i { width: 13px; height: 13px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.12); }
+.mm .mm-cores i.on { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--laranja); }
+.mm .mm-card-carrossel { position: absolute; inset: 0; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.mm .mm-card-carrossel::-webkit-scrollbar { display: none; }
+.mm .mm-card-carrossel > div { flex: 0 0 100%; scroll-snap-align: center; display: flex; align-items: center; justify-content: center; }
 .mm .mm-btn-sacola { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; background: var(--tinta); color: #fff; border-radius: 20px; padding: 11px 6px; font-size: 15px; font-weight: 700; margin-top: auto; transition: background .2s; }
 .mm .mm-btn-sacola.dentro { background: #fff1e6; color: var(--laranja); }
 .mm .mm-card-fantasma { height: 300px; background: linear-gradient(90deg, #f3f3f5, #fafafa, #f3f3f5); background-size: 200% 100%; animation: mmBrilhoCarregando 1.2s infinite; border: none; }
