@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { carregarFotosCatalogo, completarFotos, type ComFotos } from '../lib/fotosCatalogo'
+import { chaveVariante, memoriaDe } from '../lib/variantes'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { recortarProduto } from '../lib/recortarProduto'
@@ -213,6 +214,7 @@ export default function Admin() {
   const [aba, setAba] = useState<'cadastrar' | 'lista' | 'capas' | 'aparelhos' | 'hero' | 'vitrine' | 'ia' | 'precos'>('cadastrar')
   const [marcaPreco, setMarcaPreco] = useState('Todos')
   const [precoAberto, setPrecoAberto] = useState<string | null>(null)
+  const [memAdmin, setMemAdmin] = useState<Record<string, string>>({}) // memória escolhida em cada modelo (Preços)
   const [uploadandoHero, setUploadandoHero] = useState(false)
   const [editando, setEditando] = useState<Produto | null>(null)
   const [heroImagens, setHeroImagens] = useState<HeroImagem[]>([])
@@ -1442,11 +1444,27 @@ export default function Admin() {
                 <div key={g.marca}>
                   <p style={{ color: '#ff6600', fontWeight: 800, letterSpacing: 2, fontSize: 13, textAlign: 'center', margin: '18px 0 8px', textTransform: 'uppercase' }}>{g.marca}</p>
                   <div style={{ border: '1px solid #222', borderRadius: 16, overflow: 'hidden' }}>
-                    {g.itens.map((ap, k) => (
-                      <CartaoAparelho key={ap.id} ap={ap} listaAntiga={!ap.na_loja && !vistoHoje(ap.ultima_lista)} onUsarFornecedor={ap.id.startsWith('loja-') ? undefined : f => usarFornecedor(ap, f)}
-                        onAlternarNaLoja={ap.id.startsWith('loja-') ? undefined : () => alternarNaLoja(ap)} mostrarHistorico
-                        sanfona={{ aberto: precoAberto === ap.id, alternar: () => setPrecoAberto(precoAberto === ap.id ? null : ap.id), ultimo: k === g.itens.length - 1 }} />
-                    ))}
+                    {(() => {
+                      // Mesmo modelo com GB diferente: uma linha só, com botões de memória
+                      const linhas: Aparelho[][] = []
+                      const porChave = new Map<string, Aparelho[]>()
+                      for (const a of g.itens) {
+                        const ch = chaveVariante(marcaDoAparelho(a), a.modelo)
+                        const l = porChave.get(ch)
+                        if (l) l.push(a); else { const nova = [a]; porChave.set(ch, nova); linhas.push(nova) }
+                      }
+                      for (const l of linhas) l.sort((x, y) => (memoriaDe(x.modelo)?.valor || 0) - (memoriaDe(y.modelo)?.valor || 0))
+                      return linhas.map((l, k) => {
+                        const ap = l.find(x => x.id === precoAberto) || l.find(x => x.id === memAdmin[chaveVariante(marcaDoAparelho(x), x.modelo)]) || l[0]
+                        const memorias = l.length > 1 ? l.map(x => ({ id: x.id, rotulo: memoriaDe(x.modelo)?.rotulo || x.modelo, preco: x.preco != null ? Number(x.preco) : null })) : undefined
+                        return (
+                          <CartaoAparelho key={l[0].id} ap={ap} listaAntiga={!ap.na_loja && !vistoHoje(ap.ultima_lista)} onUsarFornecedor={ap.id.startsWith('loja-') ? undefined : f => usarFornecedor(ap, f)}
+                            onAlternarNaLoja={ap.id.startsWith('loja-') ? undefined : () => alternarNaLoja(ap)} mostrarHistorico
+                            memorias={memorias} onEscolherMemoria={id => { setMemAdmin(m => ({ ...m, [chaveVariante(marcaDoAparelho(ap), ap.modelo)]: id })); setPrecoAberto(id) }}
+                            sanfona={{ aberto: l.some(x => x.id === precoAberto), alternar: () => setPrecoAberto(l.some(x => x.id === precoAberto) ? null : ap.id), ultimo: k === linhas.length - 1 }} />
+                        )
+                      })
+                    })()}
                   </div>
                 </div>
               ))
@@ -1703,7 +1721,7 @@ export default function Admin() {
                   <div style={semFoto}>📱</div>
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.marca} {p.modelo}</p>
+                  <p style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.25, wordBreak: 'break-word' }}>{p.marca} {p.modelo}</p>
                   <p style={{ color: '#aaa', fontSize: 12 }}>{p.categoria} {p.memoria ? '· ' + p.memoria : ''}</p>
                   <p style={{ fontSize: 11, color: p.disponivel ? '#25D366' : '#ff4444' }}>{p.disponivel ? '● Disponível' : '● Indisponível'}</p>
                   {p.cor && (
