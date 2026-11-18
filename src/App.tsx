@@ -341,16 +341,35 @@ function emprestarFotos(lista: Produto[], fontes: Produto[] = lista): Produto[] 
 
 function App() {
   const navigate = useNavigate()
-  // Fotos de cada cor (todas, carregadas uma vez) e a cor que está aparecendo em cada cartão da grade
-  const [fotosCores, setFotosCores] = useState<Record<string, { url: string; cor: string }[]>>({})
+  // Fotos de cada cor por modelo (todas as cadastradas, carregadas uma vez): o cartão vai passando as cores sozinho
+  const [fotosModelo, setFotosModelo] = useState<Record<string, Record<string, string>>>({})
   const [corCard, setCorCard] = useState<Record<string, number>>({})
+  const [giro, setGiro] = useState(0)
+  const arrastouCard = useRef(0)
+  const toqueCard = useRef<{ x: number; y: number } | null>(null)
   useEffect(() => {
-    supabase.from('produto_fotos').select('produto_id, url, cor').order('ordem').then(({ data }) => {
-      const m: Record<string, { url: string; cor: string }[]> = {}
-      for (const f of (data || []) as { produto_id: string; url: string; cor: string | null }[]) {
-        if (f.cor) (m[f.produto_id] ||= []).push({ url: f.url, cor: f.cor })
+    const t = window.setInterval(() => setGiro(g => g + 1), 2800)
+    return () => window.clearInterval(t)
+  }, [])
+  useEffect(() => {
+    Promise.all([
+      supabase.from('produtos_catalogo').select('id, modelo, memoria, foto_url, foto_cor'),
+      supabase.from('produto_fotos').select('produto_id, url, cor').order('ordem'),
+    ]).then(([pr, ft]) => {
+      const base = new Map<string, string>()
+      const m: Record<string, Record<string, string>> = {}
+      const guardar = (id: string, cor: string | null | undefined, url: string | null | undefined) => {
+        const b = base.get(id)
+        if (!b || !cor || !url) return
+        const k = semAcento(cor)
+        ;(m[b] ||= {})[k] ||= url
       }
-      setFotosCores(m)
+      for (const p of (pr.data || []) as { id: string; modelo: string; memoria?: string | null; foto_url?: string | null; foto_cor?: string | null }[]) {
+        base.set(p.id, baseModelo(`${p.modelo} ${p.memoria || ''}`))
+        guardar(p.id, p.foto_cor, p.foto_url)
+      }
+      for (const f of (ft.data || []) as { produto_id: string; url: string; cor: string | null }[]) guardar(f.produto_id, f.cor, f.url)
+      setFotosModelo(m)
     })
   }, [])
   const [produtos, setProdutos] = useState<Produto[]>(emprestarFotos(soCelulares(CACHE?.produtos || [])))
@@ -838,28 +857,33 @@ function App() {
     const varios = vars.length > 1
     const precosDiferentes = (varios && new Set(vars.filter(precoVisivel).map(precoFinal)).size > 1)
       || new Set(Object.values(p.precos_cor || {})).size > 1
-    // Grade: arrasta a foto pro lado e troca a cor (uma foto por cor de hoje)
-    const slides = grade ? cores.map(c => {
-      const daCor = (f: { cor: string }) => semAcento(f.cor) === semAcento(c.nome)
-      const url = (fotosCores[p.id] || []).find(daCor)?.url || (p.fotoDe ? (fotosCores[p.fotoDe] || []).find(daCor)?.url : undefined)
-        || (p.foto_url && p.foto_cor && semAcento(p.foto_cor) === semAcento(c.nome) ? p.foto_url : undefined)
+    // Uma foto por cor de hoje: passa sozinho e, na grade, dá pra arrastar com o dedo
+    const porCor = fotosModelo[baseModelo(`${p.modelo} ${p.memoria || ''}`)] || {}
+    const slides = cores.map(c => {
+      const url = porCor[semAcento(c.nome)] || (p.foto_url && p.foto_cor && semAcento(p.foto_cor) === semAcento(c.nome) ? p.foto_url : undefined)
       return url ? { cor: c.nome, url } : null
-    }).filter(Boolean) as { cor: string; url: string }[] : []
+    }).filter(Boolean) as { cor: string; url: string }[]
     const carrossel = slides.length > 1
-    const iCor = Math.min(corCard[p.id] || 0, Math.max(0, slides.length - 1))
-    const corAtual = carrossel ? slides[iCor].cor : null
+    const n = slides.length || 1
+    const iCor = ((corCard[p.id] ?? 0) + giro) % n
+    const atual = carrossel ? slides[iCor] : null
+    const corAtual = atual?.cor || null
     return (
-      <div key={p.id} className={grade ? 'mm-card mm-card-grade' : 'mm-card'} onClick={() => abrirProduto(p, corAtual)}>
-        <div className="mm-card-foto">
+      <div key={p.id} className={grade ? 'mm-card mm-card-grade' : 'mm-card'} onClick={() => { if (Date.now() - arrastouCard.current > 400) abrirProduto(p, corAtual) }}>
+        <div className="mm-card-foto"
+          onTouchStart={grade && carrossel ? e => { toqueCard.current = { x: e.touches[0].clientX, y: e.touches[0].clientY } } : undefined}
+          onTouchEnd={grade && carrossel ? e => {
+            const t = toqueCard.current; toqueCard.current = null
+            if (!t) return
+            const dx = e.changedTouches[0].clientX - t.x, dy = e.changedTouches[0].clientY - t.y
+            if (Math.abs(dx) < 30 || Math.abs(dx) < Math.abs(dy)) return
+            arrastouCard.current = Date.now()
+            setCorCard(m => ({ ...m, [p.id]: (m[p.id] ?? 0) + (dx < 0 ? 1 : n - 1) }))
+          } : undefined}>
           {selo && <span className="mm-selo" style={{ background: selo.c }}>{selo.t}</span>}
-          {carrossel ? (
-            <div className="mm-card-carrossel" onScroll={e => {
-              const el = e.currentTarget, i = Math.round(el.scrollLeft / el.clientWidth)
-              if (i !== iCor) setCorCard(m => ({ ...m, [p.id]: i }))
-            }}>
-              {slides.map(f => <div key={f.url}><img src={f.url} alt={`${p.modelo} ${f.cor}`} loading="lazy" /></div>)}
-            </div>
-          ) : p.foto_url ? <img src={p.foto_url} alt={p.modelo} loading="lazy" /> : <span className="mm-sem-foto">{p.marca}</span>}
+          {atual ? <img key={atual.url} className="mm-card-troca" src={atual.url} alt={`${p.modelo} ${atual.cor}`} />
+            : p.foto_url ? <img src={p.foto_url} alt={p.modelo} loading="lazy" /> : <span className="mm-sem-foto">{p.marca}</span>}
+          {carrossel && slides.slice(0, 4).map(f => <link key={f.url} rel="prefetch" href={f.url} />)}
         </div>
         <b className="mm-card-nome">{varios ? nomeSemMemoria(p.modelo) : p.modelo}</b>
         <small className="mm-card-info">{varios ? vars.map(v => memoriaDe(v.modelo, v.memoria)?.rotulo).filter(Boolean).join(' · ') : [p.memoria, p.condicao].filter(Boolean).join(' · ') || p.marca}</small>
@@ -1589,9 +1613,8 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 .mm .mm-cores { display: flex; gap: 5px; margin: 8px 0 12px; min-height: 13px; flex-wrap: wrap; }
 .mm .mm-cores i { width: 13px; height: 13px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.12); }
 .mm .mm-cores i.on { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--laranja); }
-.mm .mm-card-carrossel { position: absolute; inset: 0; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
-.mm .mm-card-carrossel::-webkit-scrollbar { display: none; }
-.mm .mm-card-carrossel > div { flex: 0 0 100%; scroll-snap-align: center; display: flex; align-items: center; justify-content: center; }
+.mm .mm-card-troca { animation: mmTrocaCor .45s ease; }
+@keyframes mmTrocaCor { from { opacity: 0; transform: scale(.97); } }
 .mm .mm-btn-sacola { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; background: var(--tinta); color: #fff; border-radius: 20px; padding: 11px 6px; font-size: 15px; font-weight: 700; margin-top: auto; transition: background .2s; }
 .mm .mm-btn-sacola.dentro { background: #fff1e6; color: var(--laranja); }
 .mm .mm-card-fantasma { height: 300px; background: linear-gradient(90deg, #f3f3f5, #fafafa, #f3f3f5); background-size: 200% 100%; animation: mmBrilhoCarregando 1.2s infinite; border: none; }
