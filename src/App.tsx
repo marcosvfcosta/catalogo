@@ -63,6 +63,11 @@ const PARCELAS = 18
 const SO_CELULARES = true
 // Foto montada do topo (3 celulares juntos). Vazio = usa as fotos dos celulares cadastrados
 const FOTO_LANCAMENTO = '/hero/iphones-lancamento.webp?v=4'
+// Topo do catálogo: sempre o iPhone 18 Pro Max (o mais barato das memórias), com texto fixo
+const MODELO_TOPO = /iphone\s*18\s*pro\s*max/i
+const TOPO_NOME = 'iPhone 18 Pro Max'
+const TOPO_FRASE = 'O iPhone mais avançado. Chegou na Marcos Magazine.'
+const TOPO_DETALHE = 'Pronta entrega · Parcele em até 18x · Seu usado vale como entrada'
 const TEMA_VITRINE = false // false = visual branco premium (estilo loja Apple); true = vitrine de pedra escura
 const CLASSE_TEMA = TEMA_VITRINE ? ' tema-vitrine' : ''
 const STORAGE = 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public'
@@ -1105,13 +1110,18 @@ function App() {
         <main>
           {/* ─── Abertura: parede de vitrine (ou o carrossel, se ainda não tiver celulares com foto) ─── */}
           {!TEMA_VITRINE && celularesVitrine.length > 0 ? (() => {
-            const [principal, ...resto] = celularesVitrine
+            const do18 = produtos.filter(p => MODELO_TOPO.test(p.modelo))
+            const topo18 = do18.length ? (do18.filter(precoVisivel).sort((a, b) => precoFinal(a) - precoFinal(b))[0] || do18[0]) : null
+            const [principal0, ...resto] = celularesVitrine
+            const principal = topo18 || principal0
             const fotos = [resto[0], principal, resto[1]].filter(Boolean) as Produto[]
             return (
               <section className={FOTO_LANCAMENTO ? 'mm-lanc com-foto' : 'mm-lanc'}>
-                <span className="mm-lanc-tag">{principal.lancamento ? 'Lançamento' : principal.destaque ? 'Destaque' : 'Novidade'}</span>
-                <h1>{principal.modelo}</h1>
-                {principal.memoria && <p className="mm-lanc-sub">{principal.memoria}{principal.cor ? ' · ' + coresDoProduto(principal.cor).map(c => c.nome).join(', ') : ''}</p>}
+                <span className="mm-lanc-tag">{topo18 ? 'Lançamento' : principal.lancamento ? 'Lançamento' : principal.destaque ? 'Destaque' : 'Novidade'}</span>
+                <h1>{topo18 ? TOPO_NOME : nomeSemMemoria(principal.modelo)}</h1>
+                {topo18
+                  ? <><p className="mm-lanc-sub">{TOPO_FRASE}</p><p className="mm-lanc-det">{TOPO_DETALHE}</p></>
+                  : principal.memoria && <p className="mm-lanc-sub">{principal.memoria}{principal.cor ? ' · ' + coresDoProduto(principal.cor).map(c => c.nome).join(', ') : ''}</p>}
                 {precoVisivel(principal) && (
                   <p className="mm-lanc-preco">a partir de <b>{reais(precoFinal(principal))}</b> ou {PARCELAS}x de {reais(parcela18(precoFinal(principal)))}</p>
                 )}
@@ -1597,6 +1607,7 @@ const CSS_PREMIUM = `
 .mm .mm-lanc-tag { color: var(--laranja); font-size: 14px; font-weight: 600; }
 .mm .mm-lanc h1 { font-size: clamp(34px, 9vw, 58px); font-weight: 700; letter-spacing: -1.5px; line-height: 1.05; margin: 6px 0 6px; color: var(--tinta); }
 .mm .mm-lanc-sub { color: #6e6e73; font-size: 17px; }
+.mm .mm-lanc-det { color: #6e6e73; font-size: 13px; margin-top: 6px; }
 .mm .mm-lanc-preco { margin-top: 10px; font-size: 15px; color: var(--tinta); }
 .mm .mm-lanc-preco b { font-size: 19px; }
 .mm .mm-lanc-botoes { display: flex; gap: 10px; justify-content: center; margin: 18px 0 22px; }
