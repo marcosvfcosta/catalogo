@@ -321,8 +321,9 @@ export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promis
         if (resto < w * h * 0.06 && !ia) return { arquivo: original, ajustou: false, semFundo: false }
       }
 
-      // Aplica transparência, com borda suave para não ficar serrilhado
-      for (let p = 0; p < w * h; p++) {
+      // Fundo branco: NÃO apaga nada (o catálogo já é branco e "mistura" o fundo da foto).
+      // Só usa o que achou pra recortar as sobras e centralizar: celular branco nunca sai mordido.
+      if (!fundoBranco) for (let p = 0; p < w * h; p++) {
         if (fundo[p]) { px[p * 4 + 3] = 0; continue }
         const x = p % w, y = (p - x) / w
         const vizFundo = (x > 0 && fundo[p - 1]) || (x < w - 1 && fundo[p + 1]) || (y > 0 && fundo[p - w]) || (y < h - 1 && fundo[p + w])
@@ -353,6 +354,7 @@ export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promis
     saida.width = TAMANHO_FINAL; saida.height = TAMANHO_FINAL
     const sctx = saida.getContext('2d')
     if (!sctx) return { arquivo: original, ajustou: false, semFundo: false }
+    if (fundoBranco) { sctx.fillStyle = '#fff'; sctx.fillRect(0, 0, TAMANHO_FINAL, TAMANHO_FINAL) }
     sctx.imageSmoothingEnabled = true
     sctx.imageSmoothingQuality = 'high'
     const util = TAMANHO_FINAL * (1 - MARGEM * 2)
