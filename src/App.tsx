@@ -54,6 +54,8 @@ const PARCELAS = 18
 // false = visual antigo (branco, estilo iPlace). Para voltar, é só trocar para false e publicar.
 // Por enquanto o catálogo mostra só celulares (acessórios, capinhas etc. ficam ocultos). false = mostra tudo
 const SO_CELULARES = true
+// Foto montada do topo (3 celulares juntos). Vazio = usa as fotos dos celulares cadastrados
+const FOTO_LANCAMENTO = '/hero/iphones-lancamento.webp'
 const TEMA_VITRINE = false // false = visual branco premium (estilo loja Apple); true = vitrine de pedra escura
 const CLASSE_TEMA = TEMA_VITRINE ? ' tema-vitrine' : ''
 const STORAGE = 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public'
@@ -1039,11 +1041,13 @@ function App() {
                   <button className="mm-lanc-btn" onClick={() => abrirWhatsApp(textoInteresse(principal))}>Comprar</button>
                   <button className="mm-lanc-btn contorno" onClick={() => abrirProduto(principal)}>Ver detalhes</button>
                 </div>
-                <div className={'mm-lanc-fotos n' + fotos.length}>
+                {FOTO_LANCAMENTO ? (
+                  <img className="mm-lanc-unica" src={FOTO_LANCAMENTO} alt={principal.modelo} onClick={() => abrirProduto(principal)} />
+                ) : <div className={'mm-lanc-fotos n' + fotos.length}>
                   {fotos.map(f => (
                     <img key={f.id} className={f.id === principal.id ? 'meio' : ''} src={f.foto_url!} alt={f.modelo} onClick={() => abrirProduto(f)} />
                   ))}
-                </div>
+                </div>}
               </section>
             )
           })() : TEMA_VITRINE && itensVitrine.length >= 3 ? (
@@ -1513,6 +1517,7 @@ const CSS_PREMIUM = `
 .mm .mm-lanc-fotos img { height: 78%; width: auto; max-width: 34%; object-fit: contain; mix-blend-mode: multiply; margin: 0 -10px; cursor: pointer; transition: transform .3s; }
 .mm .mm-lanc-fotos img.meio { height: 100%; max-width: 42%; z-index: 1; }
 .mm .mm-lanc-fotos.n1 img.meio { max-width: 70%; }
+.mm .mm-lanc-unica { width: 100%; max-width: 680px; height: auto; margin: 0 auto; cursor: pointer; animation: mmEntra .6s ease; }
 .mm .mm-beneficios { padding-top: 16px; }
 .mm .mm-card { border-radius: 20px; padding: 12px; }
 .mm .mm-card:hover { box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
