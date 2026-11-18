@@ -1349,6 +1349,15 @@ export default function Admin() {
   }
 
   // Aba Preços: tira (deixa indisponível) os aparelhos que não vieram em nenhuma lista de hoje
+  // Tira um celular da lista dos Preços e da Negociação (volta sozinho se vier numa lista nova)
+  async function tirarAparelho(ap: Aparelho) {
+    if (!confirm(`Tirar ${ap.modelo} dos Preços e da Negociação?\n\nSe ele vier numa lista nova, volta sozinho.`)) return
+    const { error } = await supabase.from('aparelhos').update({ disponivel: false, na_loja: false }).eq('id', ap.id)
+    if (error) { alert('Erro: ' + error.message); return }
+    setPrecoAberto(null)
+    carregarAparelhos()
+  }
+
   // Marca/desmarca o celular da lista como "tenho na loja" (aba Disponíveis)
   async function alternarNaLoja(ap: Aparelho) {
     const valor = !ap.na_loja
@@ -1651,6 +1660,7 @@ export default function Admin() {
                         return (
                           <CartaoAparelho key={l[0].id} ap={ap} listaAntiga={!ap.na_loja && !vistoHoje(ap.ultima_lista)} onUsarFornecedor={ap.id.startsWith('loja-') ? undefined : f => usarFornecedor(ap, f)}
                             onAlternarNaLoja={ap.id.startsWith('loja-') ? undefined : () => alternarNaLoja(ap)} mostrarHistorico
+                            onTirar={ap.id.startsWith('loja-') ? undefined : () => tirarAparelho(ap)}
                             memorias={memorias} onEscolherMemoria={id => { setMemAdmin(m => ({ ...m, [chaveVariante(marcaDoAparelho(ap), ap.modelo)]: id })); setPrecoAberto(id) }}
                             sanfona={{ aberto: l.some(x => x.id === precoAberto), alternar: () => setPrecoAberto(l.some(x => x.id === precoAberto) ? null : ap.id), ultimo: k === linhas.length - 1 }} />
                         )
