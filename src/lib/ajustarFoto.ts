@@ -254,7 +254,8 @@ export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promis
         for (let p = 0; p < w * h; p++) {
           if (!fundo[p]) continue
           const x = p % w, y = (p - x) / w
-          if (ia(x, y) > 0.5) fundo[p] = 0
+          // só com certeza alta: a IA "vaza" um brilho em volta do produto (0,6–0,85) que deixava pedaços do fundo
+          if (ia(x, y) > 0.9) fundo[p] = 0
         }
       }
 
