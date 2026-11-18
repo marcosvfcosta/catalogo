@@ -219,6 +219,8 @@ const precoFinal = (p: Produto) => cupomVale(p) ? Math.round((p.preco || 0) * (1
 
 // Parcela em 18x (mesma taxa da Negociação)
 const TAXA_18X = 19.45
+// Taxas da máquina (as mesmas da Negociação): crédito 1x a 18x
+const TAXAS_MAQUINA = [4.10, 5.37, 6.25, 7.13, 8.01, 8.89, 9.77, 10.65, 11.53, 12.41, 13.29, 14.17, 15.05, 15.93, 16.81, 17.69, 18.57, 19.45]
 const parcela18 = (valor: number) => valor / (1 - TAXA_18X / 100) / PARCELAS
 
 function PrecoProduto({ p, grande = false }: { p: Produto; grande?: boolean }) {
@@ -342,6 +344,7 @@ function App() {
   const [filtroEspecial, setFiltroEspecial] = useState<FiltroEspecial>(ONDE.especial || null)
   const [heroIndex, setHeroIndex] = useState(0)
   const [selecionado, setSelecionado] = useState<Produto | null>(null)
+  const [verParcelas, setVerParcelas] = useState(false)
   const [fotosDetalhe, setFotosDetalhe] = useState<{ url: string; cor: string | null }[]>([])
   const [corEscolhida, setCorEscolhida] = useState<string | null>(null)
   const galeriaRef = useRef<HTMLDivElement>(null)
@@ -927,7 +930,19 @@ function App() {
                 Enviar
               </button>
             </div>
-            <PrecoProduto p={p} grande />
+            <div className="mm-preco-toque" onClick={() => precoVisivel(p) && setVerParcelas(v => !v)}>
+              <PrecoProduto p={p} grande />
+              {precoVisivel(p) && <small className="mm-ver-parcelas">{verParcelas ? 'Esconder parcelas ▴' : `Ver parcelas de 1x a ${PARCELAS}x ▾`}</small>}
+            </div>
+            {verParcelas && precoVisivel(p) && (
+              <div className="mm-parcelas">
+                <div className="mm-parcela"><span>À vista</span><b>{reais(precoFinal(p))}</b></div>
+                {TAXAS_MAQUINA.map((t, i) => {
+                  const n = i + 1, total = precoFinal(p) / (1 - t / 100)
+                  return <div key={n} className="mm-parcela"><span>{n}x de <b>{reais(total / n)}</b></span><small>total {reais(total)}</small></div>
+                })}
+              </div>
+            )}
             {variantesDe(p).length > 1 && (
               <div className="mm-memorias">
                 {variantesDe(p).map(v => (
@@ -1728,6 +1743,12 @@ const CSS_PREMIUM = `
 .mm .mm-memorias button small { display: block; font-size: 12px; color: #6e6e73; margin-top: 2px; }
 .mm .mm-memorias button.on { border-color: var(--tinta); background: var(--tinta); color: #fff; }
 .mm .mm-memorias button.on small { color: #d2d2d7; }
+.mm .mm-preco-toque { cursor: pointer; }
+.mm .mm-ver-parcelas { display: inline-block; margin-top: 4px; color: var(--laranja); font-size: 13px; font-weight: 600; }
+.mm .mm-parcelas { margin-top: 10px; border: 1px solid var(--borda); border-radius: 14px; overflow: hidden; }
+.mm .mm-parcela { display: flex; justify-content: space-between; align-items: center; padding: 9px 14px; font-size: 14px; border-top: 1px solid var(--borda); }
+.mm .mm-parcela:first-child { border-top: none; background: #f5f5f7; }
+.mm .mm-parcela small { color: #6e6e73; font-size: 12px; }
 .mm .mm-marcas-topo { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 0 0 18px; margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
 .mm .mm-marcas-topo::-webkit-scrollbar { display: none; }
 .mm .mm-marcas-topo button { flex: 0 0 auto; width: 120px; height: 72px; scroll-snap-align: start; }
