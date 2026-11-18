@@ -52,7 +52,7 @@ const PARCELAS = 18
 // ─── Visual do catálogo ───
 // true  = visual "Vitrine" (parede cinza, prateleiras de acrílico)
 // false = visual antigo (branco, estilo iPlace). Para voltar, é só trocar para false e publicar.
-const TEMA_VITRINE = true
+const TEMA_VITRINE = false // false = visual branco premium (estilo loja Apple); true = vitrine de pedra escura
 const CLASSE_TEMA = TEMA_VITRINE ? ' tema-vitrine' : ''
 const STORAGE = 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public'
 const CHAVE_SACOLA = 'mm-sacola'
@@ -200,6 +200,10 @@ function lerCupom(): Cupom | null {
 // Cupom vale só em acessórios com preço
 const cupomVale = (p: Produto) => !!CUPOM && !!p.tipo && precoVisivel(p)
 const precoFinal = (p: Produto) => cupomVale(p) ? Math.round((p.preco || 0) * (1 - CUPOM!.pct / 100) * 100) / 100 : (p.preco || 0)
+
+// Parcela em 18x (mesma taxa da Negociação)
+const TAXA_18X = 19.45
+const parcela18 = (valor: number) => valor / (1 - TAXA_18X / 100) / PARCELAS
 
 function PrecoProduto({ p, grande = false }: { p: Produto; grande?: boolean }) {
   if (!precoVisivel(p)) return null
@@ -637,7 +641,7 @@ function App() {
   // ─── Pedaços da tela ─────────────────────────────
   const cartao = (p: Produto, grade = false) => {
     const cores = coresDoProduto(p.cor)
-    const selo = p.lancamento ? { t: 'LANÇAMENTO', c: '#1d1d1f' } : (p.promocao || temDesconto(p)) ? { t: 'OFERTA', c: '#e5332a' } : p.mais_procurado ? { t: 'TOP', c: '#ff6600' } : null
+    const selo = p.lancamento ? { t: 'Lançamento', c: '#ff6600' } : (p.promocao || temDesconto(p)) ? { t: 'Oferta', c: '#e5332a' } : p.mais_procurado ? { t: 'Mais vendido', c: '#ff6600' } : p.destaque ? { t: 'Destaque', c: '#0a8a3a' } : null
     const dentro = naSacola(p.id)
     return (
       <div key={p.id} className={grade ? 'mm-card mm-card-grade' : 'mm-card'} onClick={() => abrirProduto(p)}>
@@ -648,6 +652,7 @@ function App() {
         <b className="mm-card-nome">{p.modelo}</b>
         <small className="mm-card-info">{[p.memoria, p.condicao].filter(Boolean).join(' · ') || p.marca}</small>
         <PrecoProduto p={p} />
+        {precoVisivel(p) && !p.tipo && <small className="mm-card-parc">ou <b>{PARCELAS}x de {reais(parcela18(precoFinal(p)))}</b></small>}
         <div className="mm-cores">
           {cores.map(c => <i key={c.nome} title={c.nome} style={{ background: c.hex }} />)}
         </div>
@@ -739,7 +744,7 @@ function App() {
     ].filter(Boolean) as { icone: string; nome: string; valor: string }[]
     return (
       <div className={'mm' + CLASSE_TEMA}>
-        <style>{TEMA_VITRINE ? CSS + CSS_VITRINE : CSS}</style>
+        <style>{TEMA_VITRINE ? CSS + CSS_VITRINE : CSS + CSS_PREMIUM}</style>
         <header className="mm-topo mm-topo-detalhe">
           <button className="mm-voltar" onClick={fecharProduto}>‹ Voltar</button>
           <Logo onClick={irParaInicio} />
@@ -818,7 +823,7 @@ function App() {
 
   return (
     <div className={(sacola.length > 0 ? 'mm mm-com-barra' : 'mm') + CLASSE_TEMA}>
-      <style>{TEMA_VITRINE ? CSS + CSS_VITRINE : CSS}</style>
+      <style>{TEMA_VITRINE ? CSS + CSS_VITRINE : CSS + CSS_PREMIUM}</style>
 
       {/* Menu lateral */}
       {menuAberto && <div className="mm-fundo-menu" onClick={() => setMenuAberto(false)} />}
@@ -1014,7 +1019,29 @@ function App() {
       ) : (
         <main>
           {/* ─── Abertura: parede de vitrine (ou o carrossel, se ainda não tiver celulares com foto) ─── */}
-          {itensVitrine.length >= 3 ? (
+          {!TEMA_VITRINE && celularesVitrine.length > 0 ? (() => {
+            const [principal, ...resto] = celularesVitrine
+            const fotos = [resto[0], principal, resto[1]].filter(Boolean) as Produto[]
+            return (
+              <section className="mm-lanc">
+                <span className="mm-lanc-tag">{principal.lancamento ? 'Lançamento' : principal.destaque ? 'Destaque' : 'Novidade'}</span>
+                <h1>{principal.modelo}</h1>
+                {principal.memoria && <p className="mm-lanc-sub">{principal.memoria}{principal.cor ? ' · ' + coresDoProduto(principal.cor).map(c => c.nome).join(', ') : ''}</p>}
+                {precoVisivel(principal) && (
+                  <p className="mm-lanc-preco">a partir de <b>{reais(precoFinal(principal))}</b> ou {PARCELAS}x de {reais(parcela18(precoFinal(principal)))}</p>
+                )}
+                <div className="mm-lanc-botoes">
+                  <button className="mm-lanc-btn" onClick={() => abrirWhatsApp(textoInteresse(principal))}>Comprar</button>
+                  <button className="mm-lanc-btn contorno" onClick={() => abrirProduto(principal)}>Ver detalhes</button>
+                </div>
+                <div className={'mm-lanc-fotos n' + fotos.length}>
+                  {fotos.map(f => (
+                    <img key={f.id} className={f.id === principal.id ? 'meio' : ''} src={f.foto_url!} alt={f.modelo} onClick={() => abrirProduto(f)} />
+                  ))}
+                </div>
+              </section>
+            )
+          })() : TEMA_VITRINE && itensVitrine.length >= 3 ? (
             <VitrineHero
               itens={itensVitrine}
               onVerProduto={id => { const p = produtos.find(x => x.id === id); if (p) abrirProduto(p) }}
@@ -1041,7 +1068,14 @@ function App() {
             )}
           </section>
           )}
-          {itensVitrine.length < 3 && banners.length > 1 && (
+          {!TEMA_VITRINE && celularesVitrine.length > 0 && banner && (
+            <section className={banner.arte ? 'mm-hero mm-hero-arte' : 'mm-hero'} style={{ marginTop: 14 }}>
+              {banner.arte
+                ? <img key={banner.id} className="mm-hero-arte-img" src={banner.url} alt={banner.titulo || 'Banner'} onClick={cliqueBanner} />
+                : <img className="mm-hero-img" src={banner.url} alt={banner.titulo || 'Destaque'} onClick={cliqueBanner} />}
+            </section>
+          )}
+          {(TEMA_VITRINE ? itensVitrine.length < 3 : celularesVitrine.length === 0) && banners.length > 1 && (
             <div className="mm-pontos">
               {banners.map((b, i) => <i key={b.id} className={i === heroIndex % banners.length ? 'on' : ''} onClick={() => setHeroIndex(i)} />)}
             </div>
@@ -1458,6 +1492,33 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 `
 
 // ─── Visual "Vitrine": parede cinza fosca, prateleiras de acrílico e etiquetas escuras ───
+
+const CSS_PREMIUM = `
+.mm { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Poppins, sans-serif; }
+.mm .mm-lanc { background: #f5f5f7; text-align: center; padding: 34px 16px 0; overflow: hidden; }
+.mm .mm-lanc-tag { color: var(--laranja); font-size: 14px; font-weight: 600; }
+.mm .mm-lanc h1 { font-size: clamp(34px, 9vw, 58px); font-weight: 700; letter-spacing: -1.5px; line-height: 1.05; margin: 6px 0 6px; color: var(--tinta); }
+.mm .mm-lanc-sub { color: #6e6e73; font-size: 17px; }
+.mm .mm-lanc-preco { margin-top: 10px; font-size: 15px; color: var(--tinta); }
+.mm .mm-lanc-preco b { font-size: 19px; }
+.mm .mm-lanc-botoes { display: flex; gap: 10px; justify-content: center; margin: 18px 0 22px; }
+.mm .mm-lanc-btn { background: var(--tinta); color: #fff; border-radius: 999px; padding: 11px 24px; font-size: 15px; font-weight: 500; }
+.mm .mm-lanc-btn.contorno { background: transparent; color: var(--tinta); border: 1px solid var(--tinta); padding: 10px 22px; }
+.mm .mm-lanc-fotos { display: flex; justify-content: center; align-items: flex-end; height: 270px; }
+.mm .mm-lanc-fotos img { height: 78%; width: auto; max-width: 34%; object-fit: contain; mix-blend-mode: multiply; margin: 0 -10px; cursor: pointer; transition: transform .3s; }
+.mm .mm-lanc-fotos img.meio { height: 100%; max-width: 42%; z-index: 1; }
+.mm .mm-lanc-fotos.n1 img.meio { max-width: 70%; }
+.mm .mm-beneficios { padding-top: 16px; }
+.mm .mm-card { border-radius: 20px; padding: 12px; }
+.mm .mm-card:hover { box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
+.mm .mm-selo { color: var(--tinta) !important; background: #fff !important; font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.mm .mm-card-nome { font-weight: 600; letter-spacing: -0.2px; }
+.mm .mm-preco b { font-size: 21px; font-weight: 700; letter-spacing: -0.4px; }
+.mm .mm-card-parc { display: block; font-size: 12.5px; color: #6e6e73; margin: 2px 0 6px; }
+.mm .mm-card-parc b { color: var(--tinta); font-weight: 600; }
+.mm .mm-btn-sacola { border-radius: 999px; font-weight: 500; }
+.mm .mm-secao-topo h2 { letter-spacing: -0.6px; }
+`
 
 const CSS_VITRINE = `
 html, body { background: #0b0b0d !important; }
