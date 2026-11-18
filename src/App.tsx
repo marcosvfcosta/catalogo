@@ -55,7 +55,7 @@ const PARCELAS = 18
 // Por enquanto o catálogo mostra só celulares (acessórios, capinhas etc. ficam ocultos). false = mostra tudo
 const SO_CELULARES = true
 // Foto montada do topo (3 celulares juntos). Vazio = usa as fotos dos celulares cadastrados
-const FOTO_LANCAMENTO = '/hero/iphones-lancamento.webp?v=3'
+const FOTO_LANCAMENTO = '/hero/iphones-lancamento.webp?v=4'
 const TEMA_VITRINE = false // false = visual branco premium (estilo loja Apple); true = vitrine de pedra escura
 const CLASSE_TEMA = TEMA_VITRINE ? ' tema-vitrine' : ''
 const STORAGE = 'https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public'
@@ -1030,7 +1030,7 @@ function App() {
             const [principal, ...resto] = celularesVitrine
             const fotos = [resto[0], principal, resto[1]].filter(Boolean) as Produto[]
             return (
-              <section className="mm-lanc">
+              <section className={FOTO_LANCAMENTO ? 'mm-lanc com-foto' : 'mm-lanc'}>
                 <span className="mm-lanc-tag">{principal.lancamento ? 'Lançamento' : principal.destaque ? 'Destaque' : 'Novidade'}</span>
                 <h1>{principal.modelo}</h1>
                 {principal.memoria && <p className="mm-lanc-sub">{principal.memoria}{principal.cor ? ' · ' + coresDoProduto(principal.cor).map(c => c.nome).join(', ') : ''}</p>}
@@ -1517,7 +1517,10 @@ const CSS_PREMIUM = `
 .mm .mm-lanc-fotos img { height: 78%; width: auto; max-width: 34%; object-fit: contain; mix-blend-mode: multiply; margin: 0 -10px; cursor: pointer; transition: transform .3s; }
 .mm .mm-lanc-fotos img.meio { height: 100%; max-width: 42%; z-index: 1; }
 .mm .mm-lanc-fotos.n1 img.meio { max-width: 70%; }
-.mm .mm-lanc-unica { width: 100%; max-width: 520px; height: auto; margin: 0 auto; cursor: pointer; animation: mmEntra .6s ease; }
+.mm .mm-lanc.com-foto { background: linear-gradient(180deg, #e4e3ea 0%, #dddce4 100%); }
+.mm .mm-lanc-unica { width: calc(100% + 32px); max-width: 760px; height: auto; margin: 0 -16px; cursor: pointer; animation: mmEntra .6s ease;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%); mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%); }
+@media (min-width: 792px) { .mm .mm-lanc-unica { margin: 0 auto; } }
 .mm .mm-beneficios { padding-top: 16px; }
 .mm .mm-card { border-radius: 20px; padding: 12px; }
 .mm .mm-card:hover { box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
