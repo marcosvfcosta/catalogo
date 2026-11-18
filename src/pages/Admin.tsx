@@ -888,6 +888,14 @@ export default function Admin() {
     return ordem
   }
 
+  // Liga/desliga uma memória sem abrir a edição (✓ disponível / ✕ indisponível)
+  async function alternarDisponivel(p: Produto) {
+    const valor = !p.disponivel
+    const { error } = await supabase.from('produtos_catalogo').update({ disponivel: valor }).eq('id', p.id)
+    if (error) { alert('Erro: ' + error.message); return }
+    setProdutos(prev => prev.map(x => x.id === p.id ? { ...x, disponivel: valor } : x))
+  }
+
   async function excluirGrupo(g: Produto[]) {
     if (g.length === 1) return excluirProduto(g[0].id)
     if (!confirm(`Excluir as ${g.length} versões (${g.map(p => memoriaDe(p.modelo, p.memoria)?.rotulo || p.modelo).join(', ')})?`)) return
@@ -1772,10 +1780,16 @@ export default function Admin() {
                   {varios && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 6, margin: '6px 0 2px' }}>
                       {g.map(x => (
-                        <button key={x.id} type="button" onClick={e => { e.stopPropagation(); editar(x) }}
-                          style={{ background: '#151515', border: '1px solid ' + (x.disponivel ? '#25D366' : '#ff4444'), color: x.disponivel ? '#25D366' : '#ff8888', borderRadius: 10, padding: '5px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                          {memoriaDe(x.modelo, x.memoria)?.rotulo || x.modelo}{x.foto_url ? ' 📷' : ''}
-                        </button>
+                        <span key={x.id} style={{ display: 'inline-flex', border: '1px solid ' + (x.disponivel ? '#25D366' : '#ff4444'), borderRadius: 10, overflow: 'hidden' }}>
+                          <button type="button" onClick={e => { e.stopPropagation(); editar(x) }}
+                            style={{ background: '#151515', border: 'none', color: x.disponivel ? '#25D366' : '#ff8888', padding: '5px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                            {memoriaDe(x.modelo, x.memoria)?.rotulo || x.modelo}{x.foto_url ? ' 📷' : ''}
+                          </button>
+                          <button type="button" title={x.disponivel ? 'Deixar indisponível' : 'Deixar disponível'} onClick={e => { e.stopPropagation(); alternarDisponivel(x) }}
+                            style={{ background: x.disponivel ? 'rgba(37,211,102,0.15)' : 'rgba(255,68,68,0.15)', border: 'none', borderLeft: '1px solid ' + (x.disponivel ? '#25D366' : '#ff4444'), color: x.disponivel ? '#25D366' : '#ff8888', padding: '5px 9px', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+                            {x.disponivel ? '✓' : '✕'}
+                          </button>
+                        </span>
                       ))}
                     </div>
                   )}
