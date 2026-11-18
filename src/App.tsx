@@ -28,6 +28,7 @@ type Produto = {
   preco_antigo?: number | null
   mostrar_preco?: boolean | null
   origem?: string | null
+  precos_cor?: Record<string, number> | null
   ultima_lista?: string | null
   na_loja?: boolean | null
   fotoDe?: string // foto emprestada de outro cadastro do mesmo modelo (celular que veio da lista)
@@ -799,7 +800,8 @@ function App() {
     const dentro = naSacola(p.id)
     const vars = variantesDe(p)
     const varios = vars.length > 1
-    const precosDiferentes = varios && new Set(vars.filter(precoVisivel).map(precoFinal)).size > 1
+    const precosDiferentes = (varios && new Set(vars.filter(precoVisivel).map(precoFinal)).size > 1)
+      || new Set(Object.values(p.precos_cor || {})).size > 1
     return (
       <div key={p.id} className={grade ? 'mm-card mm-card-grade' : 'mm-card'} onClick={() => abrirProduto(p)}>
         <div className="mm-card-foto">
@@ -894,6 +896,9 @@ function App() {
   if (selecionado) {
     const p = selecionado
     const cores = coresDoProduto(p.cor)
+    // Preço da cor escolhida (cor mais cara = preço maior)
+    const precoDaCor = corEscolhida && p.precos_cor ? (p.precos_cor[corEscolhida] ?? Object.entries(p.precos_cor).find(([c]) => semAcento(c) === semAcento(corEscolhida))?.[1]) : undefined
+    const pCor: Produto = precoDaCor != null ? { ...p, preco: Number(precoDaCor) } : p
     const dentro = naSacola(p.id)
     const specs = [
       p.memoria && { icone: '💾', nome: 'Memória', valor: p.memoria },
@@ -931,14 +936,14 @@ function App() {
               </button>
             </div>
             <div className="mm-preco-toque" onClick={() => precoVisivel(p) && setVerParcelas(v => !v)}>
-              <PrecoProduto p={p} grande />
+              <PrecoProduto p={pCor} grande />
               {precoVisivel(p) && <small className="mm-ver-parcelas">{verParcelas ? 'Esconder parcelas ▴' : `Ver parcelas de 1x a ${PARCELAS}x ▾`}</small>}
             </div>
             {verParcelas && precoVisivel(p) && (
               <div className="mm-parcelas">
-                <div className="mm-parcela"><span>À vista</span><b>{reais(precoFinal(p))}</b></div>
+                <div className="mm-parcela"><span>À vista</span><b>{reais(precoFinal(pCor))}</b></div>
                 {TAXAS_MAQUINA.map((t, i) => {
-                  const n = i + 1, total = precoFinal(p) / (1 - t / 100)
+                  const n = i + 1, total = precoFinal(pCor) / (1 - t / 100)
                   return <div key={n} className="mm-parcela"><span>{n}x de <b>{reais(total / n)}</b></span><small>total {reais(total)}</small></div>
                 })}
               </div>

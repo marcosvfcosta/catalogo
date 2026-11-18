@@ -183,3 +183,6 @@ alter table public.aparelhos add column if not exists ofertas jsonb;
 
 -- 17) Histórico de custo por dia (selo "melhor preço da semana" no Admin)
 alter table public.aparelhos add column if not exists historico jsonb;
+
+-- 18) Preço de venda por cor no catálogo (cor mais cara aparece mais cara)
+alter table public.produtos_catalogo add column if not exists precos_cor jsonb;

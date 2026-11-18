@@ -337,8 +337,11 @@ export default function Admin() {
 
   // Catálogo mostra o mesmo preço de venda da Negociação nos celulares que vieram da lista (custo nunca vai)
   async function sincronizarPrecosCatalogo(lista: Aparelho[]) {
-    const { data } = await supabase.from('produtos_catalogo').select('id, chave, modelo, preco, mostrar_preco').eq('origem', 'lista')
-    const prods = (data || []) as { id: string; chave?: string | null; modelo: string; preco?: number | null; mostrar_preco?: boolean | null }[]
+    // Preço de cada cor também vai (a cor mais cara aparece mais cara no catálogo)
+    let res = await supabase.from('produtos_catalogo').select('id, chave, modelo, preco, mostrar_preco, precos_cor').eq('origem', 'lista')
+    let comColunaCor = true
+    if (res.error) { comColunaCor = false; res = await supabase.from('produtos_catalogo').select('id, chave, modelo, preco, mostrar_preco').eq('origem', 'lista') }
+    const prods = (res.data || []) as { id: string; chave?: string | null; modelo: string; preco?: number | null; mostrar_preco?: boolean | null; precos_cor?: Record<string, number> | null }[]
     const disponiveis = lista.filter(a => a.disponivel !== false && a.preco != null && a.chave)
     let mudou = 0
     for (const p of prods) {
@@ -346,8 +349,16 @@ export default function Admin() {
       const iguais = disponiveis.filter(a => chaveComparar(a.chave!) === k)
       if (!iguais.length) continue
       const preco = Math.min(...iguais.map(a => Number(a.preco)))
-      if (Number(p.preco) === preco && p.mostrar_preco) continue
-      const { error } = await supabase.from('produtos_catalogo').update({ preco, mostrar_preco: true }).eq('id', p.id)
+      const precosCor: Record<string, number> = {}
+      for (const a of iguais) for (const c of a.cores || []) {
+        const v = Number(a.precos_cor?.[c] ?? a.preco)
+        if (precosCor[c] == null || v < precosCor[c]) precosCor[c] = v
+      }
+      const corIgual = !comColunaCor || JSON.stringify(p.precos_cor || {}) === JSON.stringify(precosCor)
+      if (Number(p.preco) === preco && p.mostrar_preco && corIgual) continue
+      const dados: Record<string, unknown> = { preco, mostrar_preco: true }
+      if (comColunaCor) dados.precos_cor = precosCor
+      const { error } = await supabase.from('produtos_catalogo').update(dados).eq('id', p.id)
       if (!error) mudou++
     }
     if (mudou) carregarProdutos()
