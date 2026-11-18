@@ -72,7 +72,7 @@ type Aparelho = {
 }
 
 // Preços de todos os fornecedores do dia, por cor (para achar outro fornecedor quando o mais barato não tem)
-type Ofertas = { dia: string; itens: { f: string; cor: string; custo: number }[] }
+type Ofertas = { dia: string; itens: { f: string; cor: string; custo: number }[]; manual?: boolean }
 const diaHoje = () => new Date().toLocaleDateString('sv-SE') // AAAA-MM-DD no horário do aparelho
 
 type ItemLista = {
@@ -136,6 +136,7 @@ function chaveComparar(chaveOuNome: string | null | undefined) {
   let k = normalizar(chaveOuNome)
   const cpo = k.endsWith('cpo')
   if (cpo) k = k.slice(0, -3)
+  k = k.replace(/nfc/g, '') // com ou sem NFC é o mesmo aparelho
   if (/^(iphone|ipad)/.test(k)) k = k.replace(/\d+gbram/g, '').replace(/[45]g$/, '')
   else k = k.replace(/4g$/, '') // "4G" no fim é o mesmo aparelho; só "5G" separa
   return k + (cpo ? 'cpo' : '')
@@ -241,6 +242,7 @@ export default function Admin() {
   const [fotosAparelho, setFotosAparelho] = useState<Record<string, string[]>>({})
   const [uploadandoFotoAp, setUploadandoFotoAp] = useState<string | null>(null)
   const [editandoAparelho, setEditandoAparelho] = useState<Aparelho | null>(null)
+  const [novoAparelhoAberto, setNovoAparelhoAberto] = useState(false)
   const [salvandoAparelho, setSalvandoAparelho] = useState(false)
   const [apMemoria, setApMemoria] = useState('')
   const [apCusto, setApCusto] = useState('')
@@ -343,14 +345,18 @@ export default function Admin() {
     // Todos os celulares do catálogo (da lista e os cadastrados à mão) pegam o preço da lista do dia
     const r1 = await supabase.from('produtos_catalogo').select('*')
     const comColunaCor = !r1.error && (r1.data || []).some(x => 'precos_cor' in (x as object))
-    const prods = ((r1.data || []) as { id: string; chave?: string | null; modelo: string; memoria?: string | null; categoria?: string | null; origem?: string | null; na_loja?: boolean | null; preco?: number | null; mostrar_preco?: boolean | null; precos_cor?: Record<string, number> | null }[])
+    const prods = ((r1.data || []) as { id: string; chave?: string | null; modelo: string; memoria?: string | null; cor?: string | null; categoria?: string | null; origem?: string | null; na_loja?: boolean | null; preco?: number | null; mostrar_preco?: boolean | null; precos_cor?: Record<string, number> | null }[])
       .filter(p => !p.na_loja && (p.origem === 'lista' || (p.categoria || '').toLowerCase().includes('celular')))
     const disponiveis = lista.filter(a => a.disponivel !== false && a.preco != null && a.chave)
     let mudou = 0
     for (const p of prods) {
-      const k = p.origem === 'lista' ? chaveComparar(p.chave || p.modelo) : chaveComparar(`${p.modelo} ${p.memoria || ''}`)
-      const iguais = disponiveis.filter(a => chaveComparar(a.chave!) === k)
+      // CPO entra junto do mesmo modelo no catálogo
+      const semCpo = (t: string) => t.replace(/cpo$/, '')
+      const k = semCpo(p.origem === 'lista' ? chaveComparar(p.chave || p.modelo) : chaveComparar(`${p.modelo} ${p.memoria || ''}`))
+      const iguais = disponiveis.filter(a => semCpo(chaveComparar(a.chave!)) === k)
       if (!iguais.length) continue
+      // Cores desse GB: exatamente as que vieram nas listas de hoje
+      const cor = Array.from(new Set(iguais.flatMap(a => a.cores || []))).join(', ')
       const preco = Math.min(...iguais.map(a => Number(a.preco)))
       const precosCor: Record<string, number> = {}
       for (const a of iguais) for (const c of a.cores || []) {
@@ -358,8 +364,8 @@ export default function Admin() {
         if (precosCor[c] == null || v < precosCor[c]) precosCor[c] = v
       }
       const corIgual = !comColunaCor || JSON.stringify(p.precos_cor || {}) === JSON.stringify(precosCor)
-      if (Number(p.preco) === preco && p.mostrar_preco && corIgual) continue
-      const dados: Record<string, unknown> = { preco, mostrar_preco: true }
+      if (Number(p.preco) === preco && p.mostrar_preco && corIgual && (p.cor || '') === cor) continue
+      const dados: Record<string, unknown> = { preco, mostrar_preco: true, cor }
       if (comColunaCor) dados.precos_cor = precosCor
       const { error } = await supabase.from('produtos_catalogo').update(dados).eq('id', p.id)
       if (!error) mudou++
@@ -385,7 +391,7 @@ export default function Admin() {
     const hoje = diaHoje()
     let mudou = false
     for (const a of lista) {
-      if (a.na_loja || a.disponivel === false || a.ofertas?.dia !== hoje || !a.ofertas.itens.length) continue
+      if (a.na_loja || a.disponivel === false || a.ofertas?.dia !== hoje || a.ofertas.manual || !a.ofertas.itens.length) continue
       const lucro = lucroPorMemoria(a.memoria || a.modelo)
       const itens = a.ofertas.itens
       const melhor = itens.reduce((x, y) => y.custo < x.custo ? y : x)
@@ -1144,8 +1150,9 @@ export default function Admin() {
         const nome = montarNome(item)
         const chave = normalizar(nome)
         // Mesmo aparelho em outra linha com outro preço (ex: Branco mais caro): junta as cores e guarda o preço de cada cor
-        if (vistos.has(chave)) {
-          const ja = preparados.find(x => x.chave === chave)
+        // (com/sem NFC e 4G contam como o mesmo aparelho)
+        if (vistos.has(chaveComparar(chave))) {
+          const ja = preparados.find(x => chaveComparar(x.chave) === chaveComparar(chave))
           if (ja) {
             const porCor = { ...(ja.custos_cor || {}) }
             for (const c of item.cores) porCor[c] = porCor[c] != null ? Math.min(porCor[c], item.custo) : item.custo
@@ -1155,7 +1162,7 @@ export default function Admin() {
           }
           continue
         }
-        vistos.add(chave)
+        vistos.add(chaveComparar(chave))
         item.custos_cor = Object.fromEntries(item.cores.map(c => [c, item.custo]))
         const ap = (listaAparelhos.find(a => a.disponivel !== false && chaveComparar(a.chave || a.modelo) === chaveComparar(chave)) || listaAparelhos.find(a => chaveComparar(a.chave || a.modelo) === chaveComparar(chave)))
         const existeProduto = listaProdutos.some(p => chaveComparar(p.chave || p.modelo) === chaveComparar(chave))
@@ -1239,32 +1246,23 @@ export default function Admin() {
           await precoNoCatalogo(ap.preco)
           feitos++; setAplicandoLista({ feitos, total }); continue
         }
-        const mesmoDia = !!ap && vistoHoje(ap.ultima_lista)
-        const custo = mesmoDia && ap?.custo != null ? Math.min(Number(ap.custo), i.custo) : i.custo
-        // Fornecedor do preço que ficou (o mais barato do dia)
-        const fornecedor = mesmoDia && ap?.custo != null && Number(ap.custo) <= i.custo ? (ap.fornecedor || null) : nomeFornecedor
         const lucro = lucroPorMemoria(i.memoria)
-        const preco = custo + lucro
-        await precoNoCatalogo(preco)
-        const cores = mesmoDia ? Array.from(new Set([...(ap?.cores || []), ...i.cores])) : i.cores
-        // Preço de venda de cada cor (mesmo dia: fica o menor de cada cor)
-        const precosCor: Record<string, number> = mesmoDia ? { ...(ap?.precos_cor || {}) } : {}
-        for (const [c, v] of Object.entries(i.custos_cor || {})) {
-          const p = v + lucro
-          precosCor[c] = precosCor[c] != null ? Math.min(precosCor[c], p) : p
-        }
-        // Guarda o preço desse fornecedor em cada cor (só as do dia; as de ontem somem)
+        // Ofertas de hoje: cada fornecedor com o custo de cada cor. Se o mesmo fornecedor manda de novo, a nova substitui a dele
         const hoje = diaHoje()
-        const itensOferta = ap?.ofertas?.dia === hoje ? [...ap.ofertas.itens] : []
-        if (nomeFornecedor) {
-          const porCor = Object.keys(i.custos_cor || {}).length ? i.custos_cor! : Object.fromEntries(i.cores.map(c => [c, i.custo]))
-          for (const [c, v] of Object.entries(porCor)) {
-            const k = itensOferta.findIndex(o => o.cor === c && o.f.toLowerCase() === nomeFornecedor.toLowerCase())
-            if (k >= 0) itensOferta.splice(k, 1)
-            itensOferta.push({ f: nomeFornecedor, cor: c, custo: Number(v) })
-          }
-        }
-        // Histórico: menor custo de cada dia (guarda 14 dias) para o selo de melhor preço da semana
+        const forn = nomeFornecedor || 'Lista'
+        const itensOferta = (ap?.ofertas?.dia === hoje ? ap.ofertas.itens : []).filter(o => o.f.toLowerCase() !== forn.toLowerCase())
+        const porCor = Object.keys(i.custos_cor || {}).length ? i.custos_cor! : Object.fromEntries(i.cores.map(c => [c, i.custo]))
+        for (const [c, v] of Object.entries(porCor)) itensOferta.push({ f: forn, cor: c, custo: Number(v) })
+        // Tudo sai das ofertas de hoje: cores = as que vieram nas listas desse GB; preço de cada cor = a mais barata + lucro
+        const melhor = itensOferta.reduce((x, y) => y.custo < x.custo ? y : x)
+        const custo = melhor.custo
+        const fornecedor = melhor.f
+        const preco = custo + lucro
+        const cores = Array.from(new Set(itensOferta.map(o => o.cor)))
+        const precosCor: Record<string, number> = {}
+        for (const o of itensOferta) { const v = o.custo + lucro; if (precosCor[o.cor] == null || v < precosCor[o.cor]) precosCor[o.cor] = v }
+        await precoNoCatalogo(preco)
+        // Histórico: menor custo de cada dia (guarda 14 dias) para o selo de melhor preço da semana (só métrica)
         const corteHist = new Date(); corteHist.setDate(corteHist.getDate() - 13)
         const historico = [...(ap?.historico || []).filter(x => x.d !== hoje && x.d >= corteHist.toLocaleDateString('sv-SE')), { d: hoje, c: custo, f: fornecedor }]
         const dadosAp: Record<string, unknown> = { modelo: ap?.modelo || i.nome, marca: i.marca, memoria: i.memoria, cores, custo, preco, precos_cor: precosCor, fornecedor, ofertas: { dia: hoje, itens: itensOferta }, historico, chave: ap?.chave || i.chave, disponivel: true, ultima_lista: agora }
@@ -1303,6 +1301,27 @@ export default function Admin() {
     carregarProdutos()
     carregarAparelhos()
     carregarResumoHoje()
+  }
+
+  // ─── Zerar listas: tira preços/cores/fornecedores das listas pra mandar tudo de novo (fotos ficam) ───
+  async function zerarListasHoje() {
+    if (!confirm('Zerar as listas?\n\nTodos os celulares das listas saem dos Preços, da Negociação e do catálogo até você mandar as listas de novo.\nOs "Tenho na loja" e as fotos ficam.')) return
+    const { data: aps } = await supabase.from('aparelhos').select('id, chave, na_loja')
+    const ids = ((aps || []) as { id: string; chave?: string | null; na_loja?: boolean | null }[]).filter(a => a.chave && !a.na_loja).map(a => a.id)
+    const { data: prods } = await supabase.from('produtos_catalogo').select('id, na_loja').eq('origem', 'lista')
+    const prodIds = ((prods || []) as { id: string; na_loja?: boolean | null }[]).filter(p => !p.na_loja).map(p => p.id)
+    let erro = ''
+    for (let k = 0; k < ids.length; k += 100) {
+      const r = await supabase.from('aparelhos').update({ disponivel: false, ultima_lista: null, ofertas: null, precos_cor: {}, cores: [] }).in('id', ids.slice(k, k + 100))
+      if (r.error) erro = r.error.message
+    }
+    for (let k = 0; k < prodIds.length; k += 100) {
+      const r = await supabase.from('produtos_catalogo').update({ disponivel: false, ultima_lista: null }).in('id', prodIds.slice(k, k + 100))
+      if (r.error) erro = r.error.message
+    }
+    if (erro) alert('Deu erro ao zerar: ' + erro)
+    else alert(`✅ Listas zeradas (${ids.length} aparelho(s)). Pode mandar as listas de novo.`)
+    carregarProdutos(); carregarAparelhos(); carregarResumoHoje()
   }
 
   // ─── Finalizar o dia: indisponível o que não veio em NENHUMA lista de hoje ───
@@ -1402,6 +1421,16 @@ export default function Admin() {
     setApPreco(custo ? String(custo + lucroPorMemoria(memoria)).replace('.', ',') : '')
   }
 
+  function abrirEdicaoAparelho(ap: Aparelho) {
+    setNovoAparelhoAberto(false)
+    setEditandoAparelho(ap)
+    setApMemoria(ap.memoria || '')
+    setApCusto(ap.custo != null ? String(ap.custo).replace('.', ',') : '')
+    setApPreco(ap.preco != null ? String(ap.preco).replace('.', ',') : '')
+    setApPrecosCor(Object.fromEntries(Object.entries(ap.precos_cor || {}).map(([c, v]) => [c, String(v).replace('.', ',')])))
+    window.scrollTo(0, 0)
+  }
+
   async function salvarAparelho() {
     const modelo = editandoAparelho ? editandoAparelho.modelo : novoModelo.trim()
     const cores = editandoAparelho ? editandoAparelho.cores : coresSelecionadas
@@ -1414,7 +1443,10 @@ export default function Admin() {
       .filter(([c, v]) => cores.includes(c) && num(v) != null).map(([c, v]) => [c, num(v) as number]))
     const extras = { memoria: apMemoria || null, custo: num(apCusto), preco: num(apPreco), precos_cor: precosCor, disponivel: true }
     if (editandoAparelho) {
-      await supabase.from('aparelhos').update({ modelo, cores, fotos, ...extras }).eq('id', editandoAparelho.id)
+      // Editou à mão um aparelho da lista de hoje: sua edição vale até chegar uma lista nova dele
+      const of = editandoAparelho.ofertas
+      const marcaManual = of && of.dia === diaHoje() ? { ofertas: { ...of, manual: true } } : {}
+      await supabase.from('aparelhos').update({ modelo, cores, fotos, ...extras, ...marcaManual }).eq('id', editandoAparelho.id)
       setEditandoAparelho(null)
     } else {
       await supabase.from('aparelhos').insert([{ modelo, cores, fotos, ...extras }])
@@ -1423,6 +1455,7 @@ export default function Admin() {
       setFotosAparelho({})
     }
     setApMemoria(''); setApCusto(''); setApPreco(''); setApPrecosCor({})
+    setNovoAparelhoAberto(false)
     setSalvandoAparelho(false)
     carregarAparelhos()
   }
@@ -1459,6 +1492,106 @@ export default function Admin() {
       <input type="checkbox" checked={ajusteAuto} onChange={e => alternarAjuste(e.target.checked)} style={{ accentColor: '#25D366', width: 16, height: 16 }} />
       🪄 Recortar fotos automaticamente com IA grátis (deixa só o produto)
     </label>
+  )
+
+  // Editor do aparelho (Negociação): usado dentro de 💰 Preços
+  const formAparelho = (
+          <div style={{ background: '#0a0a0a', border: '1px solid #222', borderRadius: 14, padding: 16, marginBottom: 24 }}>
+            <p style={{ color: '#ff6600', fontWeight: 700, fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
+              {editandoAparelho ? '✏️ Editando: ' + editandoAparelho.modelo : '+ Novo aparelho'}
+            </p>
+            <label style={labelStyle}>Modelo</label>
+            <input
+              style={inputStyle}
+              placeholder="Ex: iPhone 16 Pro Max"
+              value={editandoAparelho ? editandoAparelho.modelo : novoModelo}
+              onChange={e => editandoAparelho ? setEditandoAparelho({ ...editandoAparelho, modelo: e.target.value }) : setNovoModelo(e.target.value)}
+            />
+            <label style={labelStyle}>Cores disponíveis</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+              {Array.from(new Set([...CORES_LISTA, ...coresAtivas])).map(cor => {
+                const sel = coresAtivas.includes(cor)
+                return (
+                  <button key={cor} onClick={() => toggleCorAdmin(cor)} title={cor} style={{
+                    width: 32, height: 32, borderRadius: '50%', border: sel ? '3px solid #ff6600' : '2px solid #333',
+                    background: CORES_HEX[cor], cursor: 'pointer', padding: 0,
+                    boxShadow: sel ? '0 0 0 2px #ff6600' : 'none', flexShrink: 0,
+                    outline: 'none', transition: 'all 0.15s'
+                  }} />
+                )
+              })}
+            </div>
+            {coresAtivas.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={labelStyle}>Fotos por cor</label>
+                {seletorAjuste}
+                {coresAtivas.map(cor => (
+                  <div key={cor} style={{ marginBottom: 14, background: '#111', borderRadius: 10, padding: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <div style={{ width: 18, height: 18, borderRadius: '50%', background: CORES_HEX[cor], border: '1px solid #333', flexShrink: 0 }} />
+                      <span style={{ color: '#ccc', fontSize: 13, fontWeight: 600 }}>{cor}</span>
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#1a1a1a', border: '1px dashed #333', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', color: '#aaa', fontSize: 12, marginBottom: 6 }}>
+                      {uploadandoFotoAp === cor && enviandoFotos ? `⏳ Enviando ${enviandoFotos.feitas} de ${enviandoFotos.total}...` : '📷 Adicionar fotos'}
+                      <input type="file" accept="image/*" style={{ display: 'none' }}
+                        multiple onChange={e => { const fs = Array.from(e.target.files || []) as File[]; e.target.value = ''; uploadFotosAparelho(cor, fs) }} />
+                    </label>
+                    {(fotosAtivas[cor] || []).length > 0 && (
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {(fotosAtivas[cor] || []).map((url, i) => (
+                          <div key={i} style={{ position: 'relative' }}>
+                            <img src={url} style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8, border: '1px solid #333' }} />
+                            <button onClick={() => removerFotoAparelho(cor, url)}
+                              style={{ position: 'absolute', top: -4, right: -4, background: '#7a1111', border: 'none', color: 'white', borderRadius: '50%', width: 18, height: 18, cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <label style={labelStyle}>Armazenamento</label>
+                <select style={inputStyle} value={apMemoria} onChange={e => atualizarCustoAparelho(apCusto, e.target.value)}>
+                  <option value="">Selecione...</option>
+                  {MEMORIAS.map(m => <option key={m}>{m}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Custo (fornecedor)</label>
+                <input style={inputStyle} inputMode="decimal" placeholder="0,00" value={apCusto} onChange={e => atualizarCustoAparelho(e.target.value, apMemoria)} />
+              </div>
+            </div>
+            <label style={labelStyle}>💰 Preço de venda {apMemoria && apCusto ? <span style={{ color: '#25D366', textTransform: 'none', letterSpacing: 0 }}>(custo + R$ {lucroPorMemoria(apMemoria)})</span> : null}</label>
+            <input style={{ ...inputStyle, borderColor: '#1f5c37', fontWeight: 700, color: '#25D366' }} inputMode="decimal" placeholder="Calculado automaticamente"
+              value={apPreco} onChange={e => setApPreco(e.target.value)} />
+            {coresAtivas.length > 1 && (
+              <div style={{ ...tagsBox, marginBottom: 10 }}>
+                <p style={tagsTitle}>🎨 Preço por cor (opcional — se uma cor for mais cara)</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {coresAtivas.map(c => (
+                    <div key={c}>
+                      <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: CORES_HEX[c] || '#777', display: 'inline-block' }} />{c}
+                      </label>
+                      <input style={inputStyle} inputMode="decimal" placeholder={apPreco || 'Igual ao preço'} value={apPrecosCor[c] || ''}
+                        onChange={e => setApPrecosCor(prev => ({ ...prev, [c]: e.target.value }))} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button style={btnSalvar} onClick={salvarAparelho} disabled={salvandoAparelho}>
+                {salvandoAparelho ? '⏳ Salvando...' : '✅ Salvar aparelho'}
+              </button>
+              {(editandoAparelho || novoAparelhoAberto) && (
+                <button style={{ ...btnSecundario, padding: '14px 16px' }} onClick={() => { setEditandoAparelho(null); setNovoAparelhoAberto(false); setApMemoria(''); setApCusto(''); setApPreco(''); setApPrecosCor({}) }}>Cancelar</button>
+              )}
+            </div>
+          </div>
   )
 
   if (editando) {
@@ -1588,7 +1721,6 @@ export default function Admin() {
         <button style={aba === 'cadastrar' ? abaAtiva : abaInativa} onClick={() => setAba('cadastrar')}>+ Cadastrar</button>
         <button style={aba === 'lista' ? abaAtiva : abaInativa} onClick={() => setAba('lista')}>📦 ({produtos.length})</button>
         <button style={aba === 'capas' ? abaAtiva : abaInativa} onClick={() => { setAba('capas'); setCapaAberta(null) }}>📱 Capas</button>
-        <button style={aba === 'aparelhos' ? abaAtiva : abaInativa} onClick={() => setAba('aparelhos')}>🤝</button>
         <button style={aba === 'precos' ? abaAtiva : abaInativa} onClick={() => { setAba('precos'); carregarAparelhos() }}>💰 Preços</button>
         <button style={aba === 'hero' ? abaAtiva : abaInativa} onClick={() => setAba('hero')}>🖼 Hero</button>
         <button style={aba === 'vitrine' ? abaAtiva : abaInativa} onClick={() => setAba('vitrine')}>🏷 Vitrine</button>
@@ -1613,6 +1745,12 @@ export default function Admin() {
         return (
           <div style={formContainer}>
             <h2 style={formTitle}>💰 Preços da lista</h2>
+            {editandoAparelho || novoAparelhoAberto ? formAparelho : (
+              <button type="button" onClick={() => { setEditandoAparelho(null); setNovoAparelhoAberto(true) }}
+                style={{ width: '100%', background: 'none', border: '1px dashed #ff6600', color: '#ff6600', borderRadius: 14, padding: '12px', fontSize: 15, fontWeight: 800, marginBottom: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+                ➕ Cadastrar aparelho à mão
+              </button>
+            )}
             {(() => {
               const antigos = todos.filter(a => !a.na_loja && !vistoHoje(a.ultima_lista))
               return antigos.length > 0 && (
@@ -1661,6 +1799,7 @@ export default function Admin() {
                           <CartaoAparelho key={l[0].id} ap={ap} listaAntiga={!ap.na_loja && !vistoHoje(ap.ultima_lista)} onUsarFornecedor={ap.id.startsWith('loja-') ? undefined : f => usarFornecedor(ap, f)}
                             onAlternarNaLoja={ap.id.startsWith('loja-') ? undefined : () => alternarNaLoja(ap)} mostrarHistorico
                             onTirar={ap.id.startsWith('loja-') ? undefined : () => tirarAparelho(ap)}
+                            onEditar={ap.id.startsWith('loja-') ? undefined : () => { const cru = aparelhos.find(x => x.id === ap.id); if (cru) abrirEdicaoAparelho(cru) }}
                             memorias={memorias} onEscolherMemoria={id => { setMemAdmin(m => ({ ...m, [chaveVariante(marcaDoAparelho(ap), ap.modelo)]: id })); setPrecoAberto(id) }}
                             sanfona={{ aberto: l.some(x => x.id === precoAberto), alternar: () => setPrecoAberto(l.some(x => x.id === precoAberto) ? null : ap.id), ultimo: k === linhas.length - 1 }} />
                         )
@@ -1749,6 +1888,12 @@ export default function Admin() {
                 </p>
                 <button style={{ ...btnSecundario, width: '100%', padding: 14, fontSize: 15, fontWeight: 700, borderColor: '#ff4444', color: '#ff6666' }}
                   onClick={prepararFinalizarDia}>🏁 Finalizar o dia</button>
+                <p style={{ color: '#aaa', fontSize: 12, margin: '18px 0 8px', lineHeight: 1.5 }}>
+                  Quer começar do zero? Apaga os preços e cores das listas de hoje (Preços, Negociação e catálogo) pra você mandar as listas de novo.
+                  Os marcados <b>“Tenho na loja”</b>, as fotos e o histórico da semana ficam.
+                </p>
+                <button style={{ ...btnSecundario, width: '100%', padding: 14, fontSize: 15, fontWeight: 700, borderColor: '#ffc800', color: '#ffc800' }}
+                  onClick={zerarListasHoje}>♻️ Zerar as listas e mandar de novo</button>
               </div>
             </>
           ) : (
@@ -2175,102 +2320,7 @@ export default function Admin() {
       {aba === 'aparelhos' && (
         <div style={formContainer}>
           <h2 style={formTitle}>🤝 Aparelhos p/ Negociação</h2>
-          <div style={{ background: '#0a0a0a', border: '1px solid #222', borderRadius: 14, padding: 16, marginBottom: 24 }}>
-            <p style={{ color: '#ff6600', fontWeight: 700, fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
-              {editandoAparelho ? '✏️ Editando: ' + editandoAparelho.modelo : '+ Novo aparelho'}
-            </p>
-            <label style={labelStyle}>Modelo</label>
-            <input
-              style={inputStyle}
-              placeholder="Ex: iPhone 16 Pro Max"
-              value={editandoAparelho ? editandoAparelho.modelo : novoModelo}
-              onChange={e => editandoAparelho ? setEditandoAparelho({ ...editandoAparelho, modelo: e.target.value }) : setNovoModelo(e.target.value)}
-            />
-            <label style={labelStyle}>Cores disponíveis</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
-              {Array.from(new Set([...CORES_LISTA, ...coresAtivas])).map(cor => {
-                const sel = coresAtivas.includes(cor)
-                return (
-                  <button key={cor} onClick={() => toggleCorAdmin(cor)} title={cor} style={{
-                    width: 32, height: 32, borderRadius: '50%', border: sel ? '3px solid #ff6600' : '2px solid #333',
-                    background: CORES_HEX[cor], cursor: 'pointer', padding: 0,
-                    boxShadow: sel ? '0 0 0 2px #ff6600' : 'none', flexShrink: 0,
-                    outline: 'none', transition: 'all 0.15s'
-                  }} />
-                )
-              })}
-            </div>
-            {coresAtivas.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <label style={labelStyle}>Fotos por cor</label>
-                {seletorAjuste}
-                {coresAtivas.map(cor => (
-                  <div key={cor} style={{ marginBottom: 14, background: '#111', borderRadius: 10, padding: 10 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                      <div style={{ width: 18, height: 18, borderRadius: '50%', background: CORES_HEX[cor], border: '1px solid #333', flexShrink: 0 }} />
-                      <span style={{ color: '#ccc', fontSize: 13, fontWeight: 600 }}>{cor}</span>
-                    </div>
-                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#1a1a1a', border: '1px dashed #333', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', color: '#aaa', fontSize: 12, marginBottom: 6 }}>
-                      {uploadandoFotoAp === cor && enviandoFotos ? `⏳ Enviando ${enviandoFotos.feitas} de ${enviandoFotos.total}...` : '📷 Adicionar fotos'}
-                      <input type="file" accept="image/*" style={{ display: 'none' }}
-                        multiple onChange={e => { const fs = Array.from(e.target.files || []) as File[]; e.target.value = ''; uploadFotosAparelho(cor, fs) }} />
-                    </label>
-                    {(fotosAtivas[cor] || []).length > 0 && (
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {(fotosAtivas[cor] || []).map((url, i) => (
-                          <div key={i} style={{ position: 'relative' }}>
-                            <img src={url} style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8, border: '1px solid #333' }} />
-                            <button onClick={() => removerFotoAparelho(cor, url)}
-                              style={{ position: 'absolute', top: -4, right: -4, background: '#7a1111', border: 'none', color: 'white', borderRadius: '50%', width: 18, height: 18, cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div>
-                <label style={labelStyle}>Armazenamento</label>
-                <select style={inputStyle} value={apMemoria} onChange={e => atualizarCustoAparelho(apCusto, e.target.value)}>
-                  <option value="">Selecione...</option>
-                  {MEMORIAS.map(m => <option key={m}>{m}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>Custo (fornecedor)</label>
-                <input style={inputStyle} inputMode="decimal" placeholder="0,00" value={apCusto} onChange={e => atualizarCustoAparelho(e.target.value, apMemoria)} />
-              </div>
-            </div>
-            <label style={labelStyle}>💰 Preço de venda {apMemoria && apCusto ? <span style={{ color: '#25D366', textTransform: 'none', letterSpacing: 0 }}>(custo + R$ {lucroPorMemoria(apMemoria)})</span> : null}</label>
-            <input style={{ ...inputStyle, borderColor: '#1f5c37', fontWeight: 700, color: '#25D366' }} inputMode="decimal" placeholder="Calculado automaticamente"
-              value={apPreco} onChange={e => setApPreco(e.target.value)} />
-            {coresAtivas.length > 1 && (
-              <div style={{ ...tagsBox, marginBottom: 10 }}>
-                <p style={tagsTitle}>🎨 Preço por cor (opcional — se uma cor for mais cara)</p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  {coresAtivas.map(c => (
-                    <div key={c}>
-                      <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: CORES_HEX[c] || '#777', display: 'inline-block' }} />{c}
-                      </label>
-                      <input style={inputStyle} inputMode="decimal" placeholder={apPreco || 'Igual ao preço'} value={apPrecosCor[c] || ''}
-                        onChange={e => setApPrecosCor(prev => ({ ...prev, [c]: e.target.value }))} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button style={btnSalvar} onClick={salvarAparelho} disabled={salvandoAparelho}>
-                {salvandoAparelho ? '⏳ Salvando...' : '✅ Salvar aparelho'}
-              </button>
-              {editandoAparelho && (
-                <button style={{ ...btnSecundario, padding: '14px 16px' }} onClick={() => { setEditandoAparelho(null); setApMemoria(''); setApCusto(''); setApPreco(''); setApPrecosCor({}) }}>Cancelar</button>
-              )}
-            </div>
-          </div>
+          {formAparelho}
           <h3 style={{ color: '#aaa', fontSize: 14, fontWeight: 700, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 }}>
             Cadastrados ({aparelhos.length})
           </h3>
@@ -2302,14 +2352,7 @@ export default function Admin() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  <button style={btnEditar} onClick={() => {
-                    setEditandoAparelho(ap)
-                    setApMemoria(ap.memoria || '')
-                    setApCusto(ap.custo != null ? String(ap.custo).replace('.', ',') : '')
-                    setApPreco(ap.preco != null ? String(ap.preco).replace('.', ',') : '')
-                    setApPrecosCor(Object.fromEntries(Object.entries(ap.precos_cor || {}).map(([c, v]) => [c, String(v).replace('.', ',')])))
-                    window.scrollTo(0, 0)
-                  }}>✏️</button>
+                  <button style={btnEditar} onClick={() => abrirEdicaoAparelho(ap)}>✏️</button>
                   <button style={btnExcluir} onClick={() => excluirAparelho(ap.id)}>🗑</button>
                 </div>
               </div>

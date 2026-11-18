@@ -132,6 +132,7 @@ type Props = {
   onUsarFornecedor?: (fornecedor: string) => void
   // Menu sanfona: fechado mostra só uma linha (modelo + preço); tocando abre
   onAlternarNaLoja?: () => void
+  onEditar?: () => void // abre o editor (cores, fotos, preços)
   onTirar?: () => void // tira dos Preços e da Negociação (volta se vier numa lista nova)
   mostrarHistorico?: boolean // só no Admin: selo de melhor preço da semana
   // Mesmo modelo com GB diferente num cartão só: botões de memória que trocam o aparelho
@@ -140,7 +141,7 @@ type Props = {
   sanfona?: { aberto: boolean; alternar: () => void; ultimo?: boolean }
 }
 
-export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolherCor, onTocarCartao, custoEscondido, listaAntiga, fornecedorUsado, onUsarFornecedor, onAlternarNaLoja, onTirar, mostrarHistorico, memorias, onEscolherMemoria, sanfona }: Props) {
+export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolherCor, onTocarCartao, custoEscondido, listaAntiga, fornecedorUsado, onUsarFornecedor, onAlternarNaLoja, onEditar, onTirar, mostrarHistorico, memorias, onEscolherMemoria, sanfona }: Props) {
   const [verCusto, setVerCusto] = useState(!custoEscondido)
   const [verFornecedores, setVerFornecedores] = useState(false)
   const g = useTelaGrande()
@@ -305,6 +306,12 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
         <button type="button" onClick={e => { e.stopPropagation(); onAlternarNaLoja() }}
           style={{ width: '100%', marginTop: 12, background: ap.na_loja ? '#25D366' : 'none', color: ap.na_loja ? '#000' : '#25D366', border: '1px solid #25D366', borderRadius: 12, padding: g ? 14 : 11, fontSize: g ? 17 : 15, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
           {ap.na_loja ? '✓ Tenho na loja' : '🏪 Marcar: tenho na loja'}
+        </button>
+      )}
+      {onEditar && (
+        <button type="button" onClick={e => { e.stopPropagation(); onEditar() }}
+          style={{ width: '100%', marginTop: 8, background: 'none', color: '#ff6600', border: '1px solid #ff6600', borderRadius: 12, padding: g ? 12 : 10, fontSize: g ? 16 : 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+          ✏️ Editar (cores, fotos e preços)
         </button>
       )}
       {onTirar && (
