@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabase'
 import { lerCaixinha } from '../lib/lerCaixinha'
 import { completarFotos } from '../lib/fotosCatalogo'
+import { chaveVariante, memoriaDe } from '../lib/variantes'
 
 type Negociacao = {
   id: string; nome: string; telefone: string; instagram: string
@@ -1579,16 +1580,36 @@ export default function Negociacao() {
                         <div key={g.marca}>
                           <p style={{ color: '#ff6600', fontWeight: 800, letterSpacing: 2, fontSize: 13, textAlign: 'center', margin: '16px 0 8px', textTransform: 'uppercase' }}>{g.marca}</p>
                           <div style={{ border: '1px solid #222', borderRadius: 16, overflow: 'hidden' }}>
-                            {g.itens.map((a, k) => (
-                              a.id === aparelhoSelecionado?.id
+                            {(() => {
+                              // Mesmo modelo com GB diferente: uma linha só (escolhe a memória dentro)
+                              const linhas: Aparelho[][] = []
+                              const porChave = new Map<string, Aparelho[]>()
+                              for (const a of g.itens) {
+                                const ch = chaveVariante(marcaDoAparelho(a), a.modelo)
+                                const l = porChave.get(ch)
+                                if (l) l.push(a); else { const nova = [a]; porChave.set(ch, nova); linhas.push(nova) }
+                              }
+                              for (const l of linhas) l.sort((x, y) => (memoriaDe(x.modelo)?.valor || 0) - (memoriaDe(y.modelo)?.valor || 0))
+                              return linhas.map(l => {
+                                const escolhido = l.find(x => x.id === aparelhoSelecionado?.id)
+                                const comPreco = l.filter(x => x.preco != null)
+                                return escolhido || (comPreco.length ? comPreco.reduce((x, y) => Number(y.preco) < Number(x.preco) ? y : x) : l[0])
+                              }).map((a, k, todos) => {
+                                const linha = linhas.find(l => l.some(x => x.id === a.id))!
+                                const memorias = linha.length > 1 ? linha.map(x => ({ id: x.id, rotulo: memoriaDe(x.modelo)?.rotulo || x.modelo, preco: x.preco != null ? Number(x.preco) : null })) : undefined
+                                const escolherMem = (id: string) => { const v = linha.find(x => x.id === id); if (v) { selecionarAparelho(v, form.cor && v.cores.includes(form.cor) ? form.cor : corMaisBarata(v)); setAbertoNeg(v.id) } }
+                                const ultimo = k === todos.length - 1
+                                return a.id === aparelhoSelecionado?.id
                                 ? <CartaoAparelho key={a.id} ap={{ ...apNeg!, na_loja: !!(apNeg!.naLoja || apNeg!.na_loja) }} custoEscondido selecionado corEscolhida={form.cor || undefined}
                                     onAlternarNaLoja={apNeg!.naLoja || apNeg!.na_loja ? () => tirarDaLoja(a) : undefined}
                                     fornecedorUsado={fornecedorNeg} onUsarFornecedor={usarFornecedorNeg}
-                                    sanfona={{ aberto: abertoNeg === a.id, alternar: () => abertoNeg === a.id ? setAbertoNeg(null) : desmarcarAparelho(), ultimo: k === g.itens.length - 1 }}
+                                    memorias={memorias} onEscolherMemoria={escolherMem}
+                                    sanfona={{ aberto: abertoNeg === a.id, alternar: () => abertoNeg === a.id ? setAbertoNeg(null) : desmarcarAparelho(), ultimo }}
                                     onEscolherCor={escolherCorNegociacao} />
-                                : <CartaoAparelho key={a.id} ap={a} custoEscondido
-                                    sanfona={{ aberto: false, alternar: () => { selecionarAparelho(a, corMaisBarata(a)); setAbertoNeg(a.id) }, ultimo: k === g.itens.length - 1 }} />
-                            ))}
+                                : <CartaoAparelho key={a.id} ap={a} custoEscondido memorias={memorias}
+                                    sanfona={{ aberto: false, alternar: () => { selecionarAparelho(a, corMaisBarata(a)); setAbertoNeg(a.id) }, ultimo }} />
+                              })
+                            })()}
                           </div>
                         </div>
                       ))

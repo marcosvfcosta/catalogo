@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from './supabase'
 import { baseModelo } from './lib/fotosCatalogo'
+import { agruparVariantes, chaveVariante, memoriaDe, nomeSemMemoria } from './lib/variantes'
 import VitrineHero from './components/VitrineHero'
 
 // ─── Tipos ─────────────────────────────────────────
@@ -464,11 +465,10 @@ function App() {
   }
 
   // ─── Navegação ───────────────────────────────────
-  async function abrirProduto(p: Produto, corInicial?: string | null) {
+  async function abrirProduto(p: Produto, corInicial?: string | null, semHistorico = false) {
     const capa = p.foto_url ? [{ url: p.foto_url, cor: p.foto_cor || null }] : []
     setSelecionado(p); setFotoIndex(0); setFotosDetalhe(capa); setSacolaAberta(false); setCorEscolhida(corInicial || p.foto_cor || null)
-    window.history.pushState({ produto: p.id }, '')
-    window.scrollTo(0, 0)
+    if (!semHistorico) { window.history.pushState({ produto: p.id }, ''); window.scrollTo(0, 0) }
     const idFotos = p.fotoDe || p.id
     const r1 = await supabase.from('produto_fotos').select('url, cor').eq('produto_id', idFotos).order('ordem')
     const data = r1.error ? (await supabase.from('produto_fotos').select('url').eq('produto_id', idFotos).order('ordem')).data : r1.data
@@ -601,6 +601,26 @@ function App() {
   })()
   const mostrarBarraCelular = !SO_CELULARES && (!filtrando || grupoDaCategoria !== null)
 
+  // Mesmo celular com GB diferente vira um cartão só (a memória escolhe na página do produto)
+  const gruposMemoria = useMemo(() => agruparVariantes(produtos.filter(ehCelular), p => p.marca, p => p.modelo, p => p.memoria), [produtos])
+  const variantesDe = (p: Produto) => ehCelular(p) ? (gruposMemoria.get(chaveVariante(p.marca, p.modelo)) || [p]) : [p]
+  function agrupar(lista: Produto[]) {
+    const vistos = new Set<string>()
+    const saida: Produto[] = []
+    for (const p of lista) {
+      if (!ehCelular(p)) { saida.push(p); continue }
+      const k = chaveVariante(p.marca, p.modelo)
+      if (vistos.has(k)) continue
+      vistos.add(k)
+      const g = variantesDe(p)
+      if (g.length < 2) { saida.push(p); continue }
+      // Aparece o mais barato do grupo (o "a partir de")
+      const comPreco = g.filter(precoVisivel)
+      saida.push(comPreco.length ? comPreco.reduce((a, b) => precoFinal(b) < precoFinal(a) ? b : a) : p)
+    }
+    return saida
+  }
+
   const resultados = useMemo(() => {
     const termo = semAcento(busca)
     return produtos.filter(p => {
@@ -614,6 +634,7 @@ function App() {
       return true
     })
   }, [produtos, busca, categoriaAtiva, marcaAtiva, filtroEspecial])
+  const resultadosAgrupados = agrupar(resultados)
 
   // Marcas que existem na categoria escolhida (ex: Celulares → Apple, Samsung, Xiaomi...)
   const marcasDaCategoria = categoriaAtiva
@@ -632,7 +653,7 @@ function App() {
   // "Todos os produtos" da tela inicial: 8 itens misturados (1 de cada categoria, revezando)
   const vitrineMista = useMemo(() => {
     const grupos = new Map<string, Produto[]>()
-    for (const p of produtos) {
+    for (const p of agrupar(produtos)) {
       const g = grupos.get(p.categoria) || []
       g.push(p); grupos.set(p.categoria, g)
     }
@@ -686,14 +707,18 @@ function App() {
     const cores = coresDoProduto(p.cor)
     const selo = p.lancamento ? { t: 'Lançamento', c: '#ff6600' } : (p.promocao || temDesconto(p)) ? { t: 'Oferta', c: '#e5332a' } : p.mais_procurado ? { t: 'Mais vendido', c: '#ff6600' } : p.destaque ? { t: 'Destaque', c: '#0a8a3a' } : null
     const dentro = naSacola(p.id)
+    const vars = variantesDe(p)
+    const varios = vars.length > 1
+    const precosDiferentes = varios && new Set(vars.filter(precoVisivel).map(precoFinal)).size > 1
     return (
       <div key={p.id} className={grade ? 'mm-card mm-card-grade' : 'mm-card'} onClick={() => abrirProduto(p)}>
         <div className="mm-card-foto">
           {selo && <span className="mm-selo" style={{ background: selo.c }}>{selo.t}</span>}
           {p.foto_url ? <img src={p.foto_url} alt={p.modelo} loading="lazy" /> : <span className="mm-sem-foto">{p.marca}</span>}
         </div>
-        <b className="mm-card-nome">{p.modelo}</b>
-        <small className="mm-card-info">{[p.memoria, p.condicao].filter(Boolean).join(' · ') || p.marca}</small>
+        <b className="mm-card-nome">{varios ? nomeSemMemoria(p.modelo) : p.modelo}</b>
+        <small className="mm-card-info">{varios ? vars.map(v => memoriaDe(v.modelo, v.memoria)?.rotulo).filter(Boolean).join(' · ') : [p.memoria, p.condicao].filter(Boolean).join(' · ') || p.marca}</small>
+        {precosDiferentes && precoVisivel(p) && <small className="mm-card-apartir">a partir de</small>}
         <PrecoProduto p={p} />
         {precoVisivel(p) && !p.tipo && <small className="mm-card-parc">ou <b>{PARCELAS}x de {reais(parcela18(precoFinal(p)))}</b></small>}
         <div className="mm-cores">
@@ -712,7 +737,7 @@ function App() {
         <h2>{titulo}</h2>
         {lista.length > 2 && especial && <button className="mm-link" onClick={() => aplicarFiltro({ especial })}>Ver todos ›</button>}
       </div>
-      <div className="mm-trilho">{lista.slice(0, 12).map(p => cartao(p))}</div>
+      <div className="mm-trilho">{agrupar(lista).slice(0, 12).map(p => cartao(p))}</div>
     </section>
   )
 
@@ -809,13 +834,23 @@ function App() {
           <div className="mm-detalhe-info">
             <p className="mm-detalhe-marca">{p.marca}</p>
             <div className="mm-nome-linha">
-              <h1 className="mm-detalhe-nome">{p.modelo}</h1>
+              <h1 className="mm-detalhe-nome">{variantesDe(p).length > 1 ? nomeSemMemoria(p.modelo) : p.modelo}</h1>
               <button className="mm-compartilhar" onClick={() => compartilhar(p)} aria-label="Compartilhar">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12" /><path d="m7 8 5-5 5 5" /><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" /></svg>
                 Enviar
               </button>
             </div>
             <PrecoProduto p={p} grande />
+            {variantesDe(p).length > 1 && (
+              <div className="mm-memorias">
+                {variantesDe(p).map(v => (
+                  <button key={v.id} className={v.id === p.id ? 'on' : ''} onClick={() => v.id !== p.id && abrirProduto(v, corEscolhida, true)}>
+                    <b>{memoriaDe(v.modelo, v.memoria)?.rotulo || v.modelo}</b>
+                    {precoVisivel(v) && <small>{reais(precoFinal(v))}</small>}
+                  </button>
+                ))}
+              </div>
+            )}
             {cores.length > 0 && (
               <div className="mm-cores mm-cores-grandes">
                 {cores.map(c => {
@@ -1056,7 +1091,7 @@ function App() {
               <button className="mm-btn-verde" onClick={() => abrirWhatsApp(`Olá! Vocês têm ${busca.trim() || tituloResultados}?`)}><IconeWhats /> Perguntar no WhatsApp</button>
             </div>
           ) : (
-            <div className="mm-grade">{resultados.map(p => cartao(p, true))}</div>
+            <div className="mm-grade">{resultadosAgrupados.map(p => cartao(p, true))}</div>
           )}
         </main>
       ) : (
@@ -1163,7 +1198,7 @@ function App() {
 
               {/* ─── Todos ─── */}
               <section className="mm-secao">
-                <div className="mm-secao-topo"><h2>Todos os produtos</h2><small className="mm-contador">{produtos.length}</small></div>
+                <div className="mm-secao-topo"><h2>Todos os produtos</h2><small className="mm-contador">{agrupar(produtos).length}</small></div>
                 {SO_CELULARES ? (
                   /* Só celulares: as marcas no lugar das categorias */
                   <div className="mm-marcas mm-marcas-topo">
@@ -1564,6 +1599,13 @@ const CSS_PREMIUM = `
 .mm .mm-lanc-fotos img { height: 78%; width: auto; max-width: 34%; object-fit: contain; mix-blend-mode: multiply; margin: 0 -10px; cursor: pointer; transition: transform .3s; }
 .mm .mm-lanc-fotos img.meio { height: 100%; max-width: 42%; z-index: 1; }
 .mm .mm-lanc-fotos.n1 img.meio { max-width: 70%; }
+.mm .mm-card-apartir { display: block; font-size: 11.5px; color: #6e6e73; margin-top: 6px; margin-bottom: -6px; }
+.mm .mm-memorias { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.mm .mm-memorias button { border: 1.5px solid var(--borda); border-radius: 14px; padding: 9px 14px; text-align: center; min-width: 92px; }
+.mm .mm-memorias button b { display: block; font-size: 15px; }
+.mm .mm-memorias button small { display: block; font-size: 12px; color: #6e6e73; margin-top: 2px; }
+.mm .mm-memorias button.on { border-color: var(--tinta); background: var(--tinta); color: #fff; }
+.mm .mm-memorias button.on small { color: #d2d2d7; }
 .mm .mm-marcas-topo { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 0 0 18px; margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
 .mm .mm-marcas-topo::-webkit-scrollbar { display: none; }
 .mm .mm-marcas-topo button { flex: 0 0 auto; width: 120px; height: 72px; scroll-snap-align: start; }

@@ -133,10 +133,13 @@ type Props = {
   // Menu sanfona: fechado mostra só uma linha (modelo + preço); tocando abre
   onAlternarNaLoja?: () => void
   mostrarHistorico?: boolean // só no Admin: selo de melhor preço da semana
+  // Mesmo modelo com GB diferente num cartão só: botões de memória que trocam o aparelho
+  memorias?: { id: string; rotulo: string; preco: number | null }[]
+  onEscolherMemoria?: (id: string) => void
   sanfona?: { aberto: boolean; alternar: () => void; ultimo?: boolean }
 }
 
-export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolherCor, onTocarCartao, custoEscondido, listaAntiga, fornecedorUsado, onUsarFornecedor, onAlternarNaLoja, mostrarHistorico, sanfona }: Props) {
+export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolherCor, onTocarCartao, custoEscondido, listaAntiga, fornecedorUsado, onUsarFornecedor, onAlternarNaLoja, mostrarHistorico, memorias, onEscolherMemoria, sanfona }: Props) {
   const [verCusto, setVerCusto] = useState(!custoEscondido)
   const [verFornecedores, setVerFornecedores] = useState(false)
   const g = useTelaGrande()
@@ -161,7 +164,11 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
     .sort((x, y) => Number(y.temCor) - Number(x.temCor) || x.custo - y.custo)
   const precos = ap.cores.map(c => precoDaCor(ap, c)).filter((v): v is number => v != null)
   const menor = precos.length ? Math.min(...precos) : ap.preco != null ? Number(ap.preco) : null
+  const variasMem = !!memorias && memorias.length > 1
+  const precosMem = variasMem ? memorias!.map(m => m.preco).filter((v): v is number => v != null) : []
+  const menorLinha = variasMem && precosMem.length ? Math.min(...precosMem) : menor
   const variosPrecos = new Set(precos).size > 1
+  const variosLinha = variosPrecos || new Set(precosMem).size > 1
   const valorMostrado = corEscolhida ? precoDaCor(ap, corEscolhida) : menor
   const fotoDe = (c?: string) => (c && ap.fotos?.[c]?.[0]) || null
   const foto = fotoDe(corEscolhida) || ap.cores.map(c => fotoDe(c)).find(Boolean) || Object.values(ap.fotos || {}).flat()[0] || null
@@ -184,12 +191,12 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontSize: g ? 24 : 17, fontWeight: 800, color: '#fff', margin: 0 }}>{titulo}{selecionado && <span style={{ marginLeft: 8, fontSize: g ? 12 : 10, background: '#25D366', color: '#000', borderRadius: 6, padding: '2px 6px', verticalAlign: 'middle' }}>ESCOLHIDO{corEscolhida ? ' · ' + corEscolhida : ''}</span>}</p>
-          {detalhe && <p style={{ color: '#888', fontSize: g ? 16 : 12, margin: '2px 0 0' }}>{detalhe}</p>}
+          {(variasMem && !selecionado ? memorias!.map(m => m.rotulo).join(' · ') : detalhe) && <p style={{ color: '#888', fontSize: g ? 16 : 12, margin: '2px 0 0' }}>{variasMem && !selecionado ? memorias!.map(m => m.rotulo).join(' · ') : detalhe}</p>}
           {mostrarHistorico && seloPreco}
         </div>
         <div style={{ textAlign: 'right' }}>
-          {variosPrecos && <p style={{ color: '#888', fontSize: g ? 13 : 10, margin: 0 }}>a partir de</p>}
-          <p style={{ color: '#25D366', fontSize: g ? 24 : 16, fontWeight: 800, margin: 0, whiteSpace: 'nowrap' }}>{real(menor)}</p>
+          {(selecionado ? variosPrecos : variosLinha) && <p style={{ color: '#888', fontSize: g ? 13 : 10, margin: 0 }}>a partir de</p>}
+          <p style={{ color: '#25D366', fontSize: g ? 24 : 16, fontWeight: 800, margin: 0, whiteSpace: 'nowrap' }}>{real(selecionado ? menor : menorLinha)}</p>
           {listaAntiga && <p style={{ color: '#ffc800', fontSize: 9, fontWeight: 800, margin: '2px 0 0' }}>LISTA ANTIGA</p>}
         </div>
         </div>
@@ -225,6 +232,20 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
             {listaAntiga && <span style={{ border: '1px solid #ffc800', color: '#ffc800', fontSize: 9, fontWeight: 800, borderRadius: 7, padding: '3px 6px', whiteSpace: 'nowrap' }}>LISTA ANTIGA</span>}
           </div>
           {detalhe && <p style={{ color: '#aaa', fontSize: g ? 20 : 13, margin: '3px 0 0' }}>{detalhe}</p>}
+          {variasMem && (
+            <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+              {memorias!.map(m => {
+                const on = m.id === ap.id
+                return (
+                  <button key={m.id} type="button" onClick={() => !on && onEscolherMemoria?.(m.id)}
+                    style={{ background: on ? '#ff6600' : '#151515', color: on ? '#fff' : '#ccc', border: '1px solid ' + (on ? '#ff6600' : '#333'), borderRadius: 10, padding: g ? '8px 14px' : '6px 10px', fontSize: g ? 16 : 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', lineHeight: 1.2 }}>
+                    {m.rotulo}
+                    {m.preco != null && <span style={{ display: 'block', fontSize: g ? 12 : 10, fontWeight: 600, opacity: 0.85 }}>{real(m.preco)}</span>}
+                  </button>
+                )
+              })}
+            </div>
+          )}
           {!g && blocoPreco}
         </div>
         {g && <div style={{ textAlign: 'right', flex: '0 0 auto' }}>{blocoPreco}</div>}
