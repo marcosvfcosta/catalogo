@@ -198,6 +198,14 @@ function textoInteresse(p: Produto, cor?: string | null) {
   return `Olá! Tenho interesse no ${nomeCompleto(p)}${cor ? ` na cor ${cor}` : ''} que vi no catálogo da Marcos Magazine.\n${linkProduto(p, cor)}${cupom}`
 }
 
+// Benefício: brindes que o cliente ganha comprando o celular (fotos em public/beneficios)
+const BENEFICIOS = [
+  { nome: 'Capa', preco: 40, foto: '/beneficios/capa.webp' },
+  { nome: 'Película', preco: 20, foto: '/beneficios/pelicula.webp' },
+  { nome: 'Fonte', preco: 79, foto: '/beneficios/fonte.webp' },
+  { nome: 'Transferência', preco: 120, foto: '/beneficios/transferencia.webp' },
+]
+
 const reais = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 // Preço só aparece se tiver valor e (for acessório ou estiver marcado "mostrar preço")
@@ -346,6 +354,9 @@ function App() {
   const [heroIndex, setHeroIndex] = useState(0)
   const [selecionado, setSelecionado] = useState<Produto | null>(null)
   const [verParcelas, setVerParcelas] = useState(false)
+  const [beneficioAberto, setBeneficioAberto] = useState(false)
+  const [beneficioMarcados, setBeneficioMarcados] = useState<string[]>(BENEFICIOS.map(b => b.nome))
+  const [beneficioUsado, setBeneficioUsado] = useState(false)
   const rolandoPorCor = useRef(false)
   const fimRolagemCor = useRef<number | undefined>(undefined)
   const [fotosDetalhe, setFotosDetalhe] = useState<{ url: string; cor: string | null }[]>([])
@@ -547,7 +558,7 @@ function App() {
   async function abrirProduto(p: Produto, corInicial?: string | null, semHistorico = false) {
     const capa = p.foto_url ? [{ url: p.foto_url, cor: p.foto_cor || null }] : []
     setSelecionado(p); setFotoIndex(0); setFotosDetalhe(capa); setSacolaAberta(false); setCorEscolhida(corInicial || p.foto_cor || null)
-    if (!semHistorico) { window.history.pushState({ produto: p.id }, ''); window.scrollTo(0, 0) }
+    if (!semHistorico) { window.history.pushState({ produto: p.id }, ''); window.scrollTo(0, 0); setBeneficioAberto(false); setBeneficioUsado(false); setBeneficioMarcados(BENEFICIOS.map(b => b.nome)) }
     const idFotos = p.fotoDe || p.id
     const r1 = await supabase.from('produto_fotos').select('url, cor').eq('produto_id', idFotos).order('ordem')
     const data = r1.error ? (await supabase.from('produto_fotos').select('url').eq('produto_id', idFotos).order('ordem')).data : r1.data
@@ -926,7 +937,7 @@ function App() {
           <Logo onClick={irParaInicio} />
           {botaoSacolaTopo}
         </header>
-        <main className="mm-detalhe">
+        <main className={beneficioAberto ? 'mm-detalhe com-beneficio' : 'mm-detalhe'}>
           <div className="mm-galeria" ref={galeriaRef}
             onScroll={e => {
               const el = e.currentTarget; const i = Math.round(el.scrollLeft / el.clientWidth); setFotoIndex(i)
@@ -998,7 +1009,41 @@ function App() {
             <div className="mm-beneficios mm-beneficios-detalhe">
               <div><span>💳</span><p><b>Até {PARCELAS}x</b>no cartão</p></div>
               <div onClick={() => navigate('/entrada')}><span>⇄</span><p><b>Seu usado</b>vale como entrada</p></div>
+              <div className={beneficioAberto ? 'mm-beneficio-on' : ''} onClick={() => setBeneficioAberto(v => !v)}><span>🎁</span><p><b>Benefício</b>ganhe na compra</p></div>
             </div>
+            {beneficioAberto && (() => {
+              const total = BENEFICIOS.filter(b => beneficioMarcados.includes(b.nome)).reduce((t, b) => t + b.preco, 0)
+              return (
+                <>
+                  <div className="mm-beneficio-fundo" onClick={() => setBeneficioAberto(false)} />
+                  <div className={beneficioUsado ? 'mm-beneficio-folha usado' : 'mm-beneficio-folha'}>
+                    <div className="mm-beneficio-topo">
+                      <h3>🎁 Benefício</h3>
+                      <button onClick={() => setBeneficioAberto(false)} aria-label="Fechar">✕</button>
+                    </div>
+                    <p className="mm-beneficio-sub">Comprando seu celular aqui, você leva:</p>
+                    {BENEFICIOS.map(b => {
+                      const on = beneficioMarcados.includes(b.nome)
+                      return (
+                        <div key={b.nome} className="mm-beneficio-item" onClick={() => !beneficioUsado && setBeneficioMarcados(m => on ? m.filter(x => x !== b.nome) : [...m, b.nome])}>
+                          <i className={on ? 'on' : ''}>{on ? '✓' : ''}</i>
+                          <b>{b.nome}</b>
+                          <span>{reais(b.preco)}</span>
+                          <img src={b.foto} alt={b.nome} />
+                        </div>
+                      )
+                    })}
+                    <div className="mm-beneficio-total">
+                      <span>Total</span>
+                      {beneficioUsado ? <b><s>{reais(total)}</s> <em>{reais(0)}</em></b> : <b>{reais(total)}</b>}
+                    </div>
+                    {beneficioUsado
+                      ? <div className="mm-beneficio-ok">✓ Benefício aplicado · você economizou {reais(total)}</div>
+                      : <button className="mm-beneficio-usar" disabled={!total} onClick={() => setBeneficioUsado(true)}>🎁 Usar benefício</button>}
+                  </div>
+                </>
+              )
+            })()}
             <button className="mm-btn-contorno" onClick={() => navigate('/comparar')}><span className="mm-com-icone"><IconeVs /> Comparar com outro celular</span></button>
           </div>
         </main>
@@ -1631,6 +1676,42 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 .mm .mm-descricao { font-size: 16px; color: #555; line-height: 1.65; margin-top: 20px; }
 .mm .mm-beneficios-detalhe { padding: 0; margin-top: 20px; }
 .mm .mm-beneficios-detalhe div:nth-child(2) { cursor: pointer; }
+.mm .mm-beneficios-detalhe { grid-template-columns: repeat(3, 1fr) !important; gap: 8px; }
+.mm .mm-beneficios-detalhe div { flex-direction: column; text-align: center; gap: 6px; padding: 12px 8px; cursor: pointer; }
+.mm .mm-beneficios-detalhe span { font-size: 24px; }
+.mm .mm-beneficios-detalhe b { font-size: 15px; }
+.mm .mm-beneficios-detalhe p { font-size: 12.5px; }
+.mm .mm-beneficios-detalhe div.mm-beneficio-on { background: #fff4ec; box-shadow: inset 0 0 0 2px var(--laranja); }
+.mm .mm-beneficio-fundo { position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,0.35); animation: mmFade .2s ease; }
+.mm .mm-beneficio-folha { position: fixed; left: 0; right: 0; bottom: 0; z-index: 71; max-width: 560px; margin: 0 auto; background: #fff; border-radius: 24px 24px 0 0; padding: 18px 18px calc(22px + env(safe-area-inset-bottom)); box-shadow: 0 -10px 40px rgba(0,0,0,0.15); animation: mmSobe .3s ease; max-height: 90vh; overflow-y: auto; }
+@keyframes mmSobe { from { transform: translateY(40px); opacity: 0; } }
+@keyframes mmFade { from { opacity: 0; } }
+.mm .mm-beneficio-topo { display: flex; align-items: center; justify-content: space-between; }
+.mm .mm-beneficio-topo h3 { font-size: 22px; font-weight: 800; letter-spacing: -0.4px; color: var(--tinta); }
+.mm .mm-beneficio-topo button { width: 32px; height: 32px; border-radius: 50%; background: var(--cinza); color: #6e6e73; font-size: 15px; }
+.mm .mm-beneficio-sub { color: #6e6e73; font-size: 14px; margin: 2px 0 12px; }
+.mm .mm-beneficio-item { display: grid; grid-template-columns: 26px 1fr auto 64px; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--borda); cursor: pointer; }
+.mm .mm-beneficio-item i { width: 24px; height: 24px; border-radius: 7px; border: 2px solid #d2d2d7; display: flex; align-items: center; justify-content: center; font-style: normal; font-size: 14px; font-weight: 900; color: #fff; }
+.mm .mm-beneficio-item i.on { background: var(--laranja); border-color: var(--laranja); }
+.mm .mm-beneficio-item b { font-size: 16px; font-weight: 700; color: var(--tinta); }
+.mm .mm-beneficio-item span { font-size: 16px; font-weight: 700; color: var(--tinta); }
+.mm .mm-beneficio-item img { width: 64px; height: 64px; border-radius: 14px; object-fit: cover; background: var(--cinza); }
+.mm .mm-beneficio-folha.usado .mm-beneficio-item span { text-decoration: line-through; color: #a1a1a6; font-weight: 500; }
+.mm .mm-beneficio-total { display: flex; justify-content: space-between; align-items: baseline; border-top: 2px solid var(--tinta); margin-top: 4px; padding-top: 14px; }
+.mm .mm-beneficio-total span { font-size: 16px; font-weight: 700; color: var(--tinta); }
+.mm .mm-beneficio-total b { font-size: 26px; font-weight: 800; color: var(--tinta); }
+.mm .mm-beneficio-total s { font-size: 15px; color: #a1a1a6; font-weight: 500; margin-right: 6px; }
+.mm .mm-beneficio-total em { font-style: normal; color: #1a9a4f; }
+.mm .mm-beneficio-usar { margin-top: 16px; width: 100%; border-radius: 26px; background: var(--laranja); color: #fff; font-size: 17px; font-weight: 800; padding: 15px; }
+.mm .mm-beneficio-usar:disabled { opacity: 0.4; }
+.mm .mm-beneficio-ok { margin-top: 16px; background: #e9f9ef; color: #1a8a4a; border-radius: 16px; padding: 13px; text-align: center; font-weight: 800; font-size: 15px; }
+/* iPad deitado: a mini tela sobe no espaço vazio do lado direito, sem escurecer */
+@media (min-width: 1000px) {
+  .mm .mm-detalhe { transition: margin .3s ease; }
+  .mm .mm-detalhe.com-beneficio { margin-left: 16px; }
+  .mm .mm-beneficio-fundo { display: none; }
+  .mm .mm-beneficio-folha { left: 676px; right: 24px; bottom: 100px; margin: 0; max-width: 460px; border-radius: 24px; border: 1px solid var(--borda); box-shadow: 0 24px 60px rgba(0,0,0,0.18); max-height: calc(100vh - 200px); padding-bottom: 20px; }
+}
 .mm .mm-btn-contorno { display: block; width: 100%; text-align: center; border: 1.5px solid var(--borda); border-radius: 18px; padding: 14px; font-size: 16px; font-weight: 700; color: var(--tinta); margin-top: 12px; }
 .mm .mm-barra-fixa { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: rgba(255,255,255,0.95); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-top: 1px solid var(--borda); }
 .mm .mm-barra-dupla { display: flex; gap: 10px; justify-content: center; }
