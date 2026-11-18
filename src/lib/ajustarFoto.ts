@@ -32,6 +32,24 @@ function paraArquivo(canvas: HTMLCanvasElement, nomeBase: string): Promise<File>
   })
 }
 
+// Cresce (dilata) uma máscara 0/1 num quadrado de raio R
+function crescer(m: Uint8Array, w: number, h: number, R: number) {
+  const a = new Uint8Array(w * h), b = new Uint8Array(w * h)
+  for (let y = 0; y < h; y++) {
+    let ult = -1e9
+    for (let x = 0; x < w; x++) { if (m[y * w + x]) ult = x; if (x - ult <= R) a[y * w + x] = 1 }
+    ult = 1e9
+    for (let x = w - 1; x >= 0; x--) { if (m[y * w + x]) ult = x; if (ult - x <= R) a[y * w + x] = 1 }
+  }
+  for (let x = 0; x < w; x++) {
+    let ult = -1e9
+    for (let y = 0; y < h; y++) { if (a[y * w + x]) ult = y; if (y - ult <= R) b[y * w + x] = 1 }
+    ult = 1e9
+    for (let y = h - 1; y >= 0; y--) { if (a[y * w + x]) ult = y; if (ult - y <= R) b[y * w + x] = 1 }
+  }
+  return b
+}
+
 export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promise<FotoAjustada> {
   try {
     const img = await carregarImagem(original)
@@ -144,9 +162,21 @@ export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promis
       let ini = 0, fim = 0
       // Em fundo branco o "pintar" só avança por degraus suaves: na borda do produto (contorno/sombra) ele para
       const lum = (p: number) => px[p * 4] * 0.3 + px[p * 4 + 1] * 0.59 + px[p * 4 + 2] * 0.11
+      // Fundo branco: o contorno do produto (qualquer risquinho de cor/sombra) vira "parede" que o pintar não atravessa.
+      // A parede é engrossada 1 ponto pra fechar falhas do contorno: celular branco não é mais "mordido"
+      let parede: Uint8Array | null = null
+      if (fundoBranco) {
+        const risco = new Uint8Array(w * h)
+        for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+          const p = y * w + x, l = lum(p)
+          if (Math.abs(l - lum(p - 1)) > 4 || Math.abs(l - lum(p + 1)) > 4 || Math.abs(l - lum(p - w)) > 4 || Math.abs(l - lum(p + w)) > 4) risco[p] = 1
+        }
+        parede = crescer(risco, w, h, 1)
+      }
       const tentar = (p: number, de = -1) => {
         if (fundo[p]) return
         if (dist(p * 4) >= TOL) return
+        if (parede && parede[p] && de >= 0) return
         if (fundoBranco && de >= 0 && Math.abs(lum(p) - lum(de)) > 5) return
         fundo[p] = 1; fila[fim++] = p
       }
@@ -261,6 +291,18 @@ export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promis
         marcarMiolo(false)
       }
 
+      // Fundo branco: fecha "mordidas" na beirada do produto (cresce o produto e encolhe de volta)
+      if (fundoBranco) {
+        const R = Math.max(3, Math.round(Math.min(w, h) * 0.012))
+        const produto = new Uint8Array(w * h)
+        for (let p = 0; p < w * h; p++) produto[p] = fundo[p] ? 0 : 1
+        const grande = crescer(produto, w, h, R)
+        const foraGrande = new Uint8Array(w * h)
+        for (let p = 0; p < w * h; p++) foraGrande[p] = grande[p] ? 0 : 1
+        const fechado = crescer(foraGrande, w, h, R) // fundo "de verdade" depois de fechar
+        for (let p = 0; p < w * h; p++) if (fundo[p] && !fechado[p]) fundo[p] = 0
+      }
+
       // A IA reconheceu como produto: nunca apaga (resolve produto branco em fundo branco)
       if (iaCheia) {
         for (let p = 0; p < w * h; p++) {
@@ -321,9 +363,8 @@ export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promis
         if (resto < w * h * 0.06 && !ia) return { arquivo: original, ajustou: false, semFundo: false }
       }
 
-      // Fundo branco: NÃO apaga nada (o catálogo já é branco e "mistura" o fundo da foto).
-      // Só usa o que achou pra recortar as sobras e centralizar: celular branco nunca sai mordido.
-      if (!fundoBranco) for (let p = 0; p < w * h; p++) {
+      // Aplica transparência, com borda suave para não ficar serrilhado
+      for (let p = 0; p < w * h; p++) {
         if (fundo[p]) { px[p * 4 + 3] = 0; continue }
         const x = p % w, y = (p - x) / w
         const vizFundo = (x > 0 && fundo[p - 1]) || (x < w - 1 && fundo[p + 1]) || (y > 0 && fundo[p - w]) || (y < h - 1 && fundo[p + w])
@@ -354,7 +395,6 @@ export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promis
     saida.width = TAMANHO_FINAL; saida.height = TAMANHO_FINAL
     const sctx = saida.getContext('2d')
     if (!sctx) return { arquivo: original, ajustou: false, semFundo: false }
-    if (fundoBranco) { sctx.fillStyle = '#fff'; sctx.fillRect(0, 0, TAMANHO_FINAL, TAMANHO_FINAL) }
     sctx.imageSmoothingEnabled = true
     sctx.imageSmoothingQuality = 'high'
     const util = TAMANHO_FINAL * (1 - MARGEM * 2)
