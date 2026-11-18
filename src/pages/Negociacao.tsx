@@ -346,6 +346,16 @@ export default function Negociacao() {
   const [lendoCaixa, setLendoCaixa] = useState(false)
   const [msgCaixa, setMsgCaixa] = useState('')
   const [fotoProposta, setFotoProposta] = useState<File | null>(null)
+  // Parcelas que vão juntas na proposta do WhatsApp (escolhe várias de uma vez)
+  const [simulacoes, setSimulacoes] = useState<string[]>(() => {
+    try { const v = JSON.parse(localStorage.getItem('simulacoes') || 'null'); if (Array.isArray(v) && v.length) return v } catch { /* padrão */ }
+    return ['À vista sem juros', '5x', '8x', '12x', '18x']
+  })
+  function alternarSimulacao(label: string) {
+    const nova = simulacoes.includes(label) ? simulacoes.filter(x => x !== label) : [...simulacoes, label]
+    setSimulacoes(nova)
+    try { localStorage.setItem('simulacoes', JSON.stringify(nova)) } catch { /* sem guardar */ }
+  }
   const [relAberto, setRelAberto] = useState<string | null>(null)
   const [vendedorAberto, setVendedorAberto] = useState<string | null>(null)
   const [vendedorFiltro, setVendedorFiltro] = useState<string | null>(null) // Fechadas / Andamento / Desistiram do vendedor
@@ -1108,14 +1118,28 @@ export default function Negociacao() {
     return () => { cancelado = true }
   }, [urlFotoProposta])
 
+  // Valor de cada parcela numa opção de pagamento (mesma conta da lista de parcelamento)
+  function simular(label: string) {
+    const t = TAXAS.find(x => x.label === label)
+    if (!t) return null
+    const total = valorFinanciar / (1 - t.taxa / 100)
+    return { t, parcela: t.parcelas === 1 ? total : total / t.parcelas }
+  }
+
+  function linhaSimulacao(label: string) {
+    const r = simular(label)
+    if (!r) return ''
+    if (r.t.taxa === 0) return `• ${r.t.label.replace(' sem juros', '')}: *${fmt(r.parcela)}*`
+    if (r.t.parcelas === 1) return `• Crédito 1x: *${fmt(r.parcela)}*`
+    return `• ${r.t.parcelas}x de *${fmt(r.parcela)}*`
+  }
+
   function textoProposta() {
     const nome = form.nome.trim().split(' ')[0]
-    const pagamento = !parcelaSelecionada ? ''
-      : taxaAtual.label.includes('sem juros') ? taxaAtual.label.toLowerCase()
-      : parcelaSelecionada === 1 ? 'no crédito 1x' : `em ${parcelaSelecionada}x de ${fmt(valorParcela)}`
+    const escolhidas = TAXAS.map(t => t.label).filter(l => simulacoes.includes(l))
     return `Olá${nome ? ' ' + nome : ''}! ✨\n\nSegue a proposta:\n\n📱 *${form.modelo}${form.cor ? ' ' + form.cor : ''}*\n✅ Valor: ${fmt(valorAparelho)}`
       + (valorEntrada > 0 ? `\n✅ Entrada: ${fmt(valorEntrada)}` : '')
-      + (pagamento ? `\n✅ Pagamento: ${pagamento}` : '')
+      + (escolhidas.length ? `\n\n💳 *Formas de pagamento*${valorEntrada > 0 ? ' (depois da entrada)' : ''}:\n` + escolhidas.map(linhaSimulacao).join('\n') : '')
       + `\n\nQualquer dúvida estou à disposição!\n\n_Marcos Magazine_`
   }
 
@@ -1648,15 +1672,31 @@ export default function Negociacao() {
               <h3 style={s.sectionTitle}>Observações</h3>
               <textarea style={{ ...s.input, height: 80, resize: 'none' }} value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} placeholder="Anotações sobre a negociação..." />
             </div>
-            {form.modelo && valorAparelho > 0 && (
-              <div style={{ marginBottom: 14 }}>
+            <div style={{ ...s.section, border: '1px solid #25D366' }}>
+              <h3 style={{ ...s.sectionTitle, color: '#25D366' }}>📲 Proposta no WhatsApp</h3>
+              <p style={{ color: '#888', fontSize: 13, margin: '0 0 10px' }}>Marque as parcelas que vão juntas na mensagem:</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+                {TAXAS.filter(t => t.label !== 'Débito sem juros').map(t => {
+                  const on = simulacoes.includes(t.label)
+                  const sim = simular(t.label)
+                  return (
+                    <button key={t.label} type="button" onClick={() => alternarSimulacao(t.label)}
+                      style={{ background: on ? '#25D366' : '#151515', color: on ? '#000' : '#ccc', border: '1px solid ' + (on ? '#25D366' : '#333'), borderRadius: 12, padding: '8px 12px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
+                      {on ? '✓ ' : ''}{t.label === 'À vista sem juros' ? 'À vista' : t.label}
+                      {valorAparelho > 0 && sim && <span style={{ display: 'block', fontSize: 11, fontWeight: 400, opacity: 0.8 }}>{fmt(sim.parcela)}</span>}
+                    </button>
+                  )
+                })}
+              </div>
+              {(!form.modelo || valorAparelho <= 0) && <p style={{ color: '#ffc800', fontSize: 13, margin: '0 0 10px', textAlign: 'center' }}>Escolha o celular e o valor pra enviar</p>}
+              <div>
                 <button type="button" onClick={enviarProposta}
                   style={{ width: '100%', background: '#25D366', color: '#000', border: 'none', borderRadius: 14, padding: 15, fontSize: 17, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
                   📲 Enviar proposta no WhatsApp{fotoProposta ? ' (com foto)' : ''}
                 </button>
                 {fotoProposta && <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0', textAlign: 'center' }}>Escolha o WhatsApp e o cliente. Se o texto não for junto, é só colar: ele já fica copiado.</p>}
               </div>
-            )}
+            </div>
             <div style={s.botoesRow}>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flex: 1 }}>
                 <div style={{ flex: 1 }}>
@@ -1666,7 +1706,7 @@ export default function Negociacao() {
                 <button style={s.btnLimpar} onClick={limpar}>Limpar</button>
               </div>
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
-                <button style={s.btnPendente} onClick={() => salvar('Venda Pendente')} disabled={salvando}>{salvando ? '...' : 'Em Andamento'}</button>
+                <button style={s.btnPendente} onClick={() => salvar('Venda Pendente')} disabled={salvando}>{salvando ? '...' : 'Em Negociação'}</button>
                 <button style={s.btnFechar} onClick={() => salvar('Venda Fechada')} disabled={salvando}>{salvando ? '...' : editandoId ? 'Salvar Alteração' : 'Fechar Venda'}</button>
               </div>
             </div>
