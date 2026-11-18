@@ -34,7 +34,10 @@ export function situacaoPreco(h: DiaPreco[] | null | undefined) {
   if (!outros.length) return { semana, tipo: 'primeiro' as const }
   const melhor = outros.reduce((a, b) => b.c < a.c ? b : a)
   if (deHoje.c <= melhor.c) return { semana, tipo: 'melhor' as const }
-  return { semana, tipo: 'acima' as const, diff: deHoje.c - melhor.c, melhor }
+  // Mudou desde a lista anterior? (subiu = vermelho, baixou = amarelo)
+  const anterior = outros[outros.length - 1]
+  const mudanca = deHoje.c > anterior.c ? 'subiu' as const : deHoje.c < anterior.c ? 'baixou' as const : 'igual' as const
+  return { semana, tipo: 'acima' as const, diff: deHoje.c - melhor.c, melhor, mudanca }
 }
 
 export type AparelhoPreco = {
@@ -151,7 +154,10 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
   const seloPreco = sit.tipo === 'melhor'
     ? <span style={{ display: 'inline-block', marginTop: 4, fontSize: g ? 12 : 10, fontWeight: 800, background: '#25D366', color: '#000', borderRadius: 6, padding: '2px 7px' }}>🏆 MELHOR PREÇO DA SEMANA</span>
     : sit.tipo === 'acima'
-      ? <span style={{ display: 'inline-block', marginTop: 4, fontSize: g ? 12 : 10, fontWeight: 700, border: '1px solid #ffc800', color: '#ffc800', borderRadius: 6, padding: '1px 6px' }}>↑ {real(sit.diff)} acima do melhor ({diaCurto(sit.melhor.d)})</span>
+      ? (() => {
+          const cor = sit.mudanca === 'subiu' ? '#ff4d4d' : sit.mudanca === 'baixou' ? '#ffc800' : '#888'
+          return <span style={{ display: 'inline-block', marginTop: 4, fontSize: g ? 12 : 10, fontWeight: 700, border: '1px solid ' + cor, color: cor, borderRadius: 6, padding: '1px 6px' }}>{sit.mudanca === 'baixou' ? '↓ baixou · ' : sit.mudanca === 'subiu' ? '↑ subiu · ' : ''}{real(sit.diff)} acima do melhor ({diaCurto(sit.melhor.d)})</span>
+        })()
       : sit.tipo === 'primeiro'
         ? <span style={{ display: 'inline-block', marginTop: 4, fontSize: g ? 12 : 10, border: '1px solid #555', color: '#888', borderRadius: 6, padding: '1px 6px' }}>1º dia na semana</span>
         : null
