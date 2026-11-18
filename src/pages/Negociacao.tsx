@@ -1450,7 +1450,7 @@ export default function Negociacao() {
         <nav>
           <p style={{ ...s.navItem, ...(aba === 'negociacao' ? s.navAtivo : {}) }} onClick={() => { setAba('negociacao'); setMenuAberto(false) }}>Negociação</p>
           <p style={{ ...s.navItem, ...(aba === 'clientes' ? s.navAtivo : {}) }} onClick={() => { setAba('clientes'); setMenuAberto(false) }}>
-            Clientes {clientesRetornoHoje.length > 0 && <span style={s.badgeNovas}>{clientesRetornoHoje.length}</span>}
+            Em negociação {clientesRetornoHoje.length > 0 && <span style={s.badgeNovas}>{clientesRetornoHoje.length}</span>}
           </p>
           <p style={{ ...s.navItem, ...(aba === 'relatorios' ? s.navAtivo : {}) }} onClick={() => { setAba('relatorios'); setMenuAberto(false) }}>Relatórios</p>
           <p style={{ ...s.navItem, ...(aba === 'entradas' ? s.navAtivo : {}) }} onClick={() => { setAba('entradas'); setMenuAberto(false) }}>
@@ -1742,7 +1742,7 @@ export default function Negociacao() {
         )}
         {aba === 'clientes' && (
           <div style={s.content}>
-            <h1 style={s.pageTitle}>Clientes</h1>
+            <h1 style={s.pageTitle}>Em negociação</h1>
             {clientesRetornoHoje.length > 0 && (
               <div style={{ ...s.section, borderColor: '#ff6600' }}>
                 <h3 style={s.sectionTitle}>🔔 Retornar contato hoje ({clientesRetornoHoje.length})</h3>
