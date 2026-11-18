@@ -33,6 +33,9 @@ type Produto = {
   promocao?: boolean
   mais_procurado?: boolean
   na_loja?: boolean | null
+  chave?: string | null
+  origem?: string | null
+  ultima_lista?: string | null
 }
 
 type HeroImagem = {
@@ -935,6 +938,15 @@ export default function Admin() {
   }
 
   // Liga/desliga uma memória sem abrir a edição (✓ disponível / ✕ indisponível)
+  // Produto do catálogo de cada aparelho da lista (mesmo modelo e mesmo GB; CPO junto)
+  function produtoDoAparelho(ap: Aparelho) {
+    if (ap.id.startsWith('loja-')) return produtos.find(p => 'loja-' + p.id === ap.id) || null
+    const semCpo = (t: string) => t.replace(/cpo$/, '')
+    const k = semCpo(chaveComparar(ap.chave || ap.modelo))
+    const iguais = produtos.filter(p => semCpo(p.origem === 'lista' ? chaveComparar(p.chave || p.modelo) : chaveComparar(`${p.modelo} ${p.memoria || ''}`)) === k)
+    return iguais.find(p => p.origem === 'lista') || iguais[0] || null
+  }
+
   async function alternarDisponivel(p: Produto) {
     const valor = !p.disponivel
     const { error } = await supabase.from('produtos_catalogo').update({ disponivel: valor }).eq('id', p.id)
@@ -1193,10 +1205,10 @@ export default function Admin() {
     const agora = new Date().toISOString()
 
     const [{ data: prods }, { data: aps }] = await Promise.all([
-      supabase.from('produtos_catalogo').select('id, modelo, chave, cor, ultima_lista, preco'),
+      supabase.from('produtos_catalogo').select('id, modelo, chave, cor, ultima_lista, preco, disponivel'),
       supabase.from('aparelhos').select('*'),
     ])
-    const listaProdutos = (prods || []) as { id: string; modelo: string; chave?: string; cor?: string; ultima_lista?: string; preco?: number | null }[]
+    const listaProdutos = (prods || []) as { id: string; modelo: string; chave?: string; cor?: string; ultima_lista?: string; preco?: number | null; disponivel?: boolean | null }[]
     const listaAparelhos = (aps || []) as { id: string; modelo: string; chave?: string; cores?: string[]; fotos?: Record<string, string[]>; custo?: number; preco?: number | null; ultima_lista?: string; precos_cor?: Record<string, number> | null; fornecedor?: string | null; ofertas?: Ofertas | null; disponivel?: boolean; na_loja?: boolean | null; historico?: DiaPreco[] | null }[]
     const nomeFornecedor = fornecedorLista.trim() || null
 
@@ -1221,7 +1233,9 @@ export default function Admin() {
         const cor = coresProd.join(', ')
         let prodId = prod?.id || null
         if (prod) {
-          await supabase.from('produtos_catalogo').update({ marca: i.marca, modelo: nomeCatalogo, cor, disponivel: true, chave: chaveCatalogo, origem: 'lista', ultima_lista: agora }).eq('id', prod.id)
+          // Tirou do catálogo hoje (check desmarcado em Preços): lista nova do mesmo dia não coloca de volta
+          const tiradoHoje = vistoHoje(prod.ultima_lista) && prod.disponivel === false
+          await supabase.from('produtos_catalogo').update({ marca: i.marca, modelo: nomeCatalogo, cor, disponivel: !tiradoHoje, chave: chaveCatalogo, origem: 'lista', ultima_lista: agora }).eq('id', prod.id)
         } else {
           const novo = await supabase.from('produtos_catalogo').insert([{
             categoria: 'Celulares', marca: i.marca, modelo: nomeCatalogo, memoria: '', cor,
@@ -1721,6 +1735,7 @@ export default function Admin() {
         <button style={aba === 'cadastrar' ? abaAtiva : abaInativa} onClick={() => setAba('cadastrar')}>+ Cadastrar</button>
         <button style={aba === 'lista' ? abaAtiva : abaInativa} onClick={() => setAba('lista')}>📦 ({produtos.length})</button>
         <button style={aba === 'capas' ? abaAtiva : abaInativa} onClick={() => { setAba('capas'); setCapaAberta(null) }}>📱 Capas</button>
+        <button style={aba === 'aparelhos' ? abaAtiva : abaInativa} onClick={() => setAba('aparelhos')}>🤝</button>
         <button style={aba === 'precos' ? abaAtiva : abaInativa} onClick={() => { setAba('precos'); carregarAparelhos() }}>💰 Preços</button>
         <button style={aba === 'hero' ? abaAtiva : abaInativa} onClick={() => setAba('hero')}>🖼 Hero</button>
         <button style={aba === 'vitrine' ? abaAtiva : abaInativa} onClick={() => setAba('vitrine')}>🏷 Vitrine</button>
@@ -1745,12 +1760,6 @@ export default function Admin() {
         return (
           <div style={formContainer}>
             <h2 style={formTitle}>💰 Preços da lista</h2>
-            {editandoAparelho || novoAparelhoAberto ? formAparelho : (
-              <button type="button" onClick={() => { setEditandoAparelho(null); setNovoAparelhoAberto(true) }}
-                style={{ width: '100%', background: 'none', border: '1px dashed #ff6600', color: '#ff6600', borderRadius: 14, padding: '12px', fontSize: 15, fontWeight: 800, marginBottom: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
-                ➕ Cadastrar aparelho à mão
-              </button>
-            )}
             {(() => {
               const antigos = todos.filter(a => !a.na_loja && !vistoHoje(a.ultima_lista))
               return antigos.length > 0 && (
@@ -1799,7 +1808,8 @@ export default function Admin() {
                           <CartaoAparelho key={l[0].id} ap={ap} listaAntiga={!ap.na_loja && !vistoHoje(ap.ultima_lista)} onUsarFornecedor={ap.id.startsWith('loja-') ? undefined : f => usarFornecedor(ap, f)}
                             onAlternarNaLoja={ap.id.startsWith('loja-') ? undefined : () => alternarNaLoja(ap)} mostrarHistorico
                             onTirar={ap.id.startsWith('loja-') ? undefined : () => tirarAparelho(ap)}
-                            onEditar={ap.id.startsWith('loja-') ? undefined : () => { const cru = aparelhos.find(x => x.id === ap.id); if (cru) abrirEdicaoAparelho(cru) }}
+                            noCatalogo={(() => { const pr = produtoDoAparelho(ap); return pr ? { ligado: pr.disponivel !== false, alternar: () => alternarDisponivel(pr) } : undefined })()}
+                            onEditarCatalogo={(() => { const pr = produtoDoAparelho(ap); return pr ? () => { setEditando(pr); carregarFotosEdicao(pr.id) } : undefined })()}
                             memorias={memorias} onEscolherMemoria={id => { setMemAdmin(m => ({ ...m, [chaveVariante(marcaDoAparelho(ap), ap.modelo)]: id })); setPrecoAberto(id) }}
                             sanfona={{ aberto: l.some(x => x.id === precoAberto), alternar: () => setPrecoAberto(l.some(x => x.id === precoAberto) ? null : ap.id), ultimo: k === linhas.length - 1 }} />
                         )

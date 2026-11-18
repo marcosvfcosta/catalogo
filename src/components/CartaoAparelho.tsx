@@ -132,7 +132,8 @@ type Props = {
   onUsarFornecedor?: (fornecedor: string) => void
   // Menu sanfona: fechado mostra só uma linha (modelo + preço); tocando abre
   onAlternarNaLoja?: () => void
-  onEditar?: () => void // abre o editor (cores, fotos, preços)
+  noCatalogo?: { ligado: boolean; alternar: () => void } // check: aparece ou não no catálogo (esse GB)
+  onEditarCatalogo?: () => void // abre o cadastro do catálogo (fotos, descrição)
   onTirar?: () => void // tira dos Preços e da Negociação (volta se vier numa lista nova)
   mostrarHistorico?: boolean // só no Admin: selo de melhor preço da semana
   // Mesmo modelo com GB diferente num cartão só: botões de memória que trocam o aparelho
@@ -141,7 +142,7 @@ type Props = {
   sanfona?: { aberto: boolean; alternar: () => void; ultimo?: boolean }
 }
 
-export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolherCor, onTocarCartao, custoEscondido, listaAntiga, fornecedorUsado, onUsarFornecedor, onAlternarNaLoja, onEditar, onTirar, mostrarHistorico, memorias, onEscolherMemoria, sanfona }: Props) {
+export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolherCor, onTocarCartao, custoEscondido, listaAntiga, fornecedorUsado, onUsarFornecedor, onAlternarNaLoja, noCatalogo, onEditarCatalogo, onTirar, mostrarHistorico, memorias, onEscolherMemoria, sanfona }: Props) {
   const [verCusto, setVerCusto] = useState(!custoEscondido)
   const [verFornecedores, setVerFornecedores] = useState(false)
   const g = useTelaGrande()
@@ -183,6 +184,13 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
       <p style={{ color: '#888', fontSize: g ? 15 : 11, margin: g ? 0 : '8px 0 0' }}>{corEscolhida ? corEscolhida : variosPrecos ? 'a partir de' : 'Valor final'}</p>
       <p style={{ color: '#25D366', fontSize: g ? 46 : 26, fontWeight: 900, margin: 0, letterSpacing: -0.5, whiteSpace: 'nowrap' }}>{real(valorMostrado)}</p>
       <p style={{ color: '#888', fontSize: g ? 15 : 11, margin: 0 }}>até 18x no cartão</p>
+      {noCatalogo && (
+        <button type="button" onClick={e => { e.stopPropagation(); noCatalogo.alternar() }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 8, background: 'none', border: 'none', padding: 0, color: noCatalogo.ligado ? '#25D366' : '#888', fontSize: g ? 16 : 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+          <span style={{ width: g ? 24 : 20, height: g ? 24 : 20, borderRadius: 6, border: '2px solid ' + (noCatalogo.ligado ? '#25D366' : '#555'), background: noCatalogo.ligado ? '#25D366' : 'none', color: '#000', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: g ? 15 : 13, fontWeight: 900 }}>{noCatalogo.ligado ? '✓' : ''}</span>
+          {noCatalogo.ligado ? 'No catálogo' : 'Fora do catálogo'}
+        </button>
+      )}
     </>
   )
 
@@ -308,10 +316,10 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
           {ap.na_loja ? '✓ Tenho na loja' : '🏪 Marcar: tenho na loja'}
         </button>
       )}
-      {onEditar && (
-        <button type="button" onClick={e => { e.stopPropagation(); onEditar() }}
+      {onEditarCatalogo && (
+        <button type="button" onClick={e => { e.stopPropagation(); onEditarCatalogo() }}
           style={{ width: '100%', marginTop: 8, background: 'none', color: '#ff6600', border: '1px solid #ff6600', borderRadius: 12, padding: g ? 12 : 10, fontSize: g ? 16 : 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-          ✏️ Editar (cores, fotos e preços)
+          ✏️ Editar no catálogo (fotos e descrição)
         </button>
       )}
       {onTirar && (
