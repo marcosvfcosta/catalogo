@@ -917,6 +917,72 @@ export default function Admin() {
     carregarProdutos()
   }
 
+  // ─── Recuperar fotos: arquivos guardados no Storage que não estão ligados a nenhum produto ───
+  type FotoSolta = { url: string; nome: string; data: number }
+  const [recAberto, setRecAberto] = useState(false)
+  const [recCarregando, setRecCarregando] = useState(false)
+  const [recFotos, setRecFotos] = useState<FotoSolta[]>([])
+  const [recMarcadas, setRecMarcadas] = useState<string[]>([])
+  const [recBusca, setRecBusca] = useState('')
+  const [recDestino, setRecDestino] = useState<Produto | null>(null)
+  const [recCor, setRecCor] = useState('')
+  const [recSalvando, setRecSalvando] = useState(false)
+
+  async function abrirRecuperar() {
+    setRecAberto(true); setRecCarregando(true); setRecMarcadas([]); setRecDestino(null)
+    try {
+      const arquivos: { name: string; created_at?: string; id?: string | null }[] = []
+      for (let offset = 0; offset < 20000; offset += 1000) {
+        const { data, error } = await supabase.storage.from('fotos').list('', { limit: 1000, offset, sortBy: { column: 'created_at', order: 'desc' } })
+        if (error) throw error
+        arquivos.push(...((data || []) as typeof arquivos))
+        if (!data || data.length < 1000) break
+      }
+      const [{ data: prods }, { data: fts }, { data: aps }] = await Promise.all([
+        supabase.from('produtos_catalogo').select('foto_url'),
+        supabase.from('produto_fotos').select('url'),
+        supabase.from('aparelhos').select('fotos'),
+      ])
+      const usadas = new Set<string>()
+      for (const p of (prods || []) as { foto_url?: string | null }[]) if (p.foto_url) usadas.add(p.foto_url)
+      for (const f of (fts || []) as { url: string }[]) usadas.add(f.url)
+      for (const a of (aps || []) as { fotos?: Record<string, string[]> | null }[]) for (const l of Object.values(a.fotos || {})) for (const u of l || []) usadas.add(u)
+      const soltas = arquivos
+        .filter(a => a.id && /\.(jpe?g|png|webp|heic)$/i.test(a.name))
+        .map(a => ({ url: supabase.storage.from('fotos').getPublicUrl(a.name).data.publicUrl, nome: a.name, data: a.created_at ? new Date(a.created_at).getTime() : 0 }))
+        .filter(f => !usadas.has(f.url))
+      setRecFotos(soltas)
+    } catch (e) {
+      alert('Não consegui ler as fotos guardadas: ' + (e instanceof Error ? e.message : String(e)))
+    } finally { setRecCarregando(false) }
+  }
+
+  async function ligarFotos() {
+    if (!recDestino || !recMarcadas.length) return
+    setRecSalvando(true)
+    try {
+      const { data: ja } = await supabase.from('produto_fotos').select('url').eq('produto_id', recDestino.id)
+      let ordem = (ja || []).length
+      let capa = recDestino.foto_url
+      for (const url of recMarcadas) {
+        if (!capa) {
+          const up = await supabase.from('produtos_catalogo').update({ foto_url: url, foto_cor: recCor || null }).eq('id', recDestino.id)
+          if (up.error) throw up.error
+          capa = url
+        } else {
+          ordem++
+          const ins = await supabase.from('produto_fotos').insert([{ produto_id: recDestino.id, url, ordem, cor: recCor || null }])
+          if (ins.error) { const i2 = await supabase.from('produto_fotos').insert([{ produto_id: recDestino.id, url, ordem }]); if (i2.error) throw i2.error }
+        }
+      }
+      setRecFotos(prev => prev.filter(f => !recMarcadas.includes(f.url)))
+      setRecMarcadas([]); setRecDestino(null); setRecCor(''); setRecBusca('')
+      carregarProdutos()
+    } catch (e) {
+      alert('Erro ao ligar a foto: ' + (e instanceof Error ? e.message : String(e)))
+    } finally { setRecSalvando(false) }
+  }
+
   // Tira os celulares cadastrados à mão: antes passa as fotos (e marcações) pro celular igual que veio da lista
   const [limpandoManuais, setLimpandoManuais] = useState(false)
   async function limparManuais() {
@@ -1790,6 +1856,65 @@ export default function Admin() {
             style={{ width: '100%', background: 'rgba(255,200,0,0.08)', border: '1px solid #ffc800', color: '#ffc800', borderRadius: 14, padding: 12, fontSize: 15, fontWeight: 800, marginBottom: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
             {limpandoManuais ? 'Passando as fotos e apagando...' : '🧹 Tirar celulares cadastrados à mão (passa as fotos pros da lista)'}
           </button>
+          <button type="button" onClick={() => recAberto ? setRecAberto(false) : abrirRecuperar()}
+            style={{ width: '100%', background: 'rgba(37,211,102,0.08)', border: '1px solid #25D366', color: '#25D366', borderRadius: 14, padding: 12, fontSize: 15, fontWeight: 800, marginBottom: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+            {recAberto ? '✕ Fechar recuperar fotos' : '🖼 Recuperar fotos (fotos guardadas sem celular)'}
+          </button>
+          {recAberto && (
+            <div style={{ background: '#0b0b0b', border: '1px solid #25D366', borderRadius: 14, padding: 12, marginBottom: 16 }}>
+              {recCarregando ? <p style={{ color: '#aaa', textAlign: 'center' }}>Procurando as fotos guardadas...</p>
+                : recFotos.length === 0 ? <p style={{ color: '#aaa', textAlign: 'center' }}>Nenhuma foto solta. Todas estão ligadas a algum produto ✅</p>
+                : <>
+                  <p style={{ color: '#ccc', fontSize: 13, margin: '0 0 8px' }}>{recFotos.length} foto(s) sem celular. 1) Toque nas fotos do mesmo modelo · 2) escolha o celular e a cor · 3) Ligar.</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(84px, 1fr))', gap: 8, maxHeight: 360, overflowY: 'auto', marginBottom: 12 }}>
+                    {recFotos.map(f => {
+                      const on = recMarcadas.includes(f.url)
+                      return (
+                        <div key={f.url} onClick={() => setRecMarcadas(m => on ? m.filter(x => x !== f.url) : [...m, f.url])}
+                          style={{ position: 'relative', aspectRatio: '1', borderRadius: 10, overflow: 'hidden', border: '2px solid ' + (on ? '#25D366' : '#222'), background: '#fff', cursor: 'pointer' }}>
+                          <img src={f.url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                          {on && <span style={{ position: 'absolute', top: 4, right: 4, background: '#25D366', color: '#000', borderRadius: '50%', width: 20, height: 20, fontSize: 12, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✓</span>}
+                          {f.data > 0 && <span style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: 9, textAlign: 'center' }}>{new Date(f.data).toLocaleDateString('pt-BR')}</span>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {recMarcadas.length > 0 && (
+                    <>
+                      <input style={{ ...inputStyle, marginBottom: 8 }} placeholder={`De qual celular são essas ${recMarcadas.length} foto(s)? (ex: iphone 17)`} value={recBusca} onChange={e => { setRecBusca(e.target.value); setRecDestino(null) }} />
+                      {!recDestino && recBusca.trim().length >= 2 && (
+                        <div style={{ maxHeight: 220, overflowY: 'auto', marginBottom: 8 }}>
+                          {gruposDeProdutos(produtos.filter(p => `${p.marca} ${p.modelo}`.toLowerCase().includes(recBusca.trim().toLowerCase()))).slice(0, 15).map(g => {
+                            const alvo = g.find(x => (x as { origem?: string | null }).origem === 'lista') || g[0]
+                            return (
+                              <button key={alvo.id} type="button" onClick={() => { setRecDestino(alvo); setRecCor('') }}
+                                style={{ display: 'block', width: '100%', textAlign: 'left', background: '#151515', border: '1px solid #333', color: '#fff', borderRadius: 10, padding: '10px 12px', marginBottom: 6, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                {alvo.marca} {g.length > 1 ? nomeSemMemoria(alvo.modelo) : alvo.modelo} {alvo.foto_url ? '📷' : ''}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                      {recDestino && (
+                        <>
+                          <p style={{ color: '#25D366', fontSize: 14, margin: '0 0 6px' }}>Celular: <b>{recDestino.marca} {recDestino.modelo}</b></p>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                            {['', ...(recDestino.cor || '').split(/[,/;]| e /).map(c => c.trim()).filter(Boolean)].map(c => (
+                              <button key={c || 'sem'} type="button" onClick={() => setRecCor(c)}
+                                style={{ ...(recCor === c ? filtroAtivo : filtroInativo) }}>{c || 'Sem cor'}</button>
+                            ))}
+                          </div>
+                          <button type="button" onClick={ligarFotos} disabled={recSalvando}
+                            style={{ width: '100%', background: '#25D366', color: '#000', border: 'none', borderRadius: 12, padding: 12, fontSize: 15, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+                            {recSalvando ? 'Ligando...' : `Ligar ${recMarcadas.length} foto(s) a esse celular`}
+                          </button>
+                        </>
+                      )}
+                    </>
+                  )}
+                </>}
+            </div>
+          )}
           <input style={{ ...inputStyle, marginBottom: 10 }} placeholder="🔍 Buscar modelo (ex: 17 pro max)" value={buscaProduto} onChange={e => setBuscaProduto(e.target.value)} />
           <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 6, marginBottom: 8 }}>
             {['', ...Array.from(new Set(produtos.map(p => (p.marca || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR'))].map(m => (
