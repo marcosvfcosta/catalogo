@@ -344,6 +344,14 @@ function App() {
   // Fotos de cada cor por modelo (todas as cadastradas, carregadas uma vez): no cartão, passa as cores com o dedo
   const [fotosModelo, setFotosModelo] = useState<Record<string, Record<string, string>>>({})
   const [corCard, setCorCard] = useState<Record<string, number>>({})
+  // iPad (tela grande de toque): o botão do cartão vira "Negociar" e abre a Negociação
+  const [telaIpad, setTelaIpad] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 700px) and (pointer: coarse)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 700px) and (pointer: coarse)')
+    const f = () => setTelaIpad(mq.matches)
+    mq.addEventListener('change', f)
+    return () => mq.removeEventListener('change', f)
+  }, [])
   const arrastouCard = useRef(0)
   const toqueCard = useRef<{ x: number; y: number } | null>(null)
   useEffect(() => {
@@ -888,9 +896,17 @@ function App() {
         <div className="mm-cores">
           {cores.map(c => <i key={c.nome} title={c.nome} className={corAtual && semAcento(corAtual) === semAcento(c.nome) ? 'on' : ''} style={{ background: c.hex }} />)}
         </div>
-        <button className={dentro ? 'mm-btn-sacola dentro' : 'mm-btn-sacola'} onClick={e => { e.stopPropagation(); alternarSacola(p) }}>
-          {dentro ? '✓ Na sacola' : <><IconeSacola tamanho={18} /> Adicionar</>}
-        </button>
+        {telaIpad ? (
+          <button className="mm-btn-sacola" onClick={e => {
+            e.stopPropagation()
+            const cor = corAtual || p.foto_cor || cores[0]?.nome || ''
+            navigate(`/negociacao?modelo=${encodeURIComponent(p.modelo)}&mem=${encodeURIComponent(p.memoria || '')}&cor=${encodeURIComponent(cor)}`)
+          }}>Negociar</button>
+        ) : (
+          <button className={dentro ? 'mm-btn-sacola dentro' : 'mm-btn-sacola'} onClick={e => { e.stopPropagation(); alternarSacola(p) }}>
+            {dentro ? '✓ Na sacola' : <><IconeSacola tamanho={18} /> Adicionar</>}
+          </button>
+        )}
       </div>
     )
   }

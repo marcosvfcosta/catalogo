@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabase'
 import { lerCaixinha } from '../lib/lerCaixinha'
 import { completarFotos } from '../lib/fotosCatalogo'
-import { chaveVariante, memoriaDe } from '../lib/variantes'
+import { chaveVariante, memoriaDe, nomeSemMemoria } from '../lib/variantes'
 import { useVoltarDeslizando } from '../lib/voltarDeslizando'
 
 type Negociacao = {
@@ -1091,6 +1091,27 @@ export default function Negociacao() {
   // ---------- Dados derivados ----------
 
   const aparelhoSelecionado = todosAparelhos.find(a => a.modelo === form.modelo)
+
+  // Veio do botão "Negociar" do catálogo (iPad): já escolhe o celular, a cor e preenche o valor
+  const vindoDoCatalogo = useRef(new URLSearchParams(window.location.search))
+  useEffect(() => {
+    const q = vindoDoCatalogo.current
+    const modelo = q.get('modelo')
+    if (!modelo || !aparelhos.length) return
+    const base = (t: string) => tirarAcento(nomeSemMemoria(t)).replace(/\b(4g|nfc|cpo)\b/g, ' ').replace(/[^a-z0-9]/g, '')
+    const mem = memoriaDe(modelo, q.get('mem'))?.valor || 0
+    const iguais = todosAparelhos.filter(a => a.disponivel !== false && a.preco != null && base(a.modelo) === base(modelo) && (memoriaDe(a.modelo)?.valor || 0) === mem)
+    const a = iguais.sort((x, y) => Number(x.preco) - Number(y.preco))[0]
+    vindoDoCatalogo.current = new URLSearchParams()
+    window.history.replaceState(null, '', window.location.pathname)
+    if (!a) { alert(`Não achei o ${modelo} na lista de hoje da Negociação. Escolha na lista.`); return }
+    const corPedida = q.get('cor') || ''
+    const maisBarata = a.cores.filter(c => a.precos_cor?.[c] != null).sort((x, y) => Number(a.precos_cor![x]) - Number(a.precos_cor![y]))[0] || ''
+    const cor = a.cores.find(c => tirarAcento(c) === tirarAcento(corPedida)) || maisBarata
+    setAba('negociacao')
+    setMarcaNeg(marcaDoAparelho(a))
+    selecionarAparelho(a, cor)
+  }, [aparelhos])
   const coresDisponiveis = aparelhoSelecionado?.cores || []
 
   // Aparelho como está nesta negociação (se trocou de fornecedor, com os preços dele)
