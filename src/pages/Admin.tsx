@@ -324,8 +324,27 @@ export default function Admin() {
     const lista = (data || []) as Aparelho[]
     if (await juntarDuplicados(lista)) return carregarAparelhos()
     if (await zerarListaVencida(lista)) return carregarAparelhos()
+    sincronizarPrecosCatalogo(lista)
     setAparelhos(lista)
     carregarFotosCatalogo().then(setFotosCat).catch(() => {})
+  }
+
+  // Catálogo mostra o mesmo preço de venda da Negociação nos celulares que vieram da lista (custo nunca vai)
+  async function sincronizarPrecosCatalogo(lista: Aparelho[]) {
+    const { data } = await supabase.from('produtos_catalogo').select('id, chave, modelo, preco, mostrar_preco').eq('origem', 'lista')
+    const prods = (data || []) as { id: string; chave?: string | null; modelo: string; preco?: number | null; mostrar_preco?: boolean | null }[]
+    const disponiveis = lista.filter(a => a.disponivel !== false && a.preco != null && a.chave)
+    let mudou = 0
+    for (const p of prods) {
+      const k = chaveComparar(p.chave || p.modelo)
+      const iguais = disponiveis.filter(a => chaveComparar(a.chave!) === k)
+      if (!iguais.length) continue
+      const preco = Math.min(...iguais.map(a => Number(a.preco)))
+      if (Number(p.preco) === preco && p.mostrar_preco) continue
+      const { error } = await supabase.from('produtos_catalogo').update({ preco, mostrar_preco: true }).eq('id', p.id)
+      if (!error) mudou++
+    }
+    if (mudou) carregarProdutos()
   }
 
   // Às 9h do dia seguinte a lista vence: o que não veio em lista de hoje fica indisponível
