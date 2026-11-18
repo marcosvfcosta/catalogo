@@ -1641,19 +1641,19 @@ const CSS_PREMIUM = `
 .mm .mm-lanc-tag { color: var(--laranja); font-size: 14px; font-weight: 600; }
 .mm .mm-lanc h1 { font-size: clamp(34px, 9vw, 58px); font-weight: 700; letter-spacing: -1.5px; line-height: 1.05; margin: 6px 0 6px; color: var(--tinta); }
 .mm .mm-lanc-sub { color: #6e6e73; font-size: 17px; }
-.mm .mm-black { background: #000; color: #c8d24a; padding: 22px 16px 18px; container-type: inline-size; }
+.mm .mm-black { background: #000; color: #ff6600; padding: 22px 16px 18px; container-type: inline-size; }
 .mm .mm-black-linha1, .mm .mm-black-linha2 { display: flex; align-items: center; justify-content: center; max-width: 620px; margin: 0 auto; }
-.mm .mm-black-esquenta { font-size: clamp(44px, 15.5cqw, 98px); font-weight: 900; letter-spacing: -2px; line-height: .9; color: #c8d24a; }
-.mm .mm-black-fogo { width: clamp(30px, 10cqw, 62px); height: auto; margin-left: 6px; color: #c8d24a; }
+.mm .mm-black-esquenta { font-size: clamp(44px, 15.5cqw, 98px); font-weight: 900; letter-spacing: -2px; line-height: .9; color: #ff6600; }
+.mm .mm-black-fogo { width: clamp(30px, 10cqw, 62px); height: auto; margin-left: 6px; color: #ff6600; }
 .mm .mm-black-linha2 { gap: 10px; margin-top: 6px; }
-.mm .mm-black-selo { flex: 0 0 auto; width: clamp(64px, 20cqw, 120px); aspect-ratio: 1; border-radius: 50%; border: 3px solid #c8d24a; border-left-color: transparent; transform: rotate(-20deg); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
-.mm .mm-black-selo b, .mm .mm-black-selo i { transform: rotate(20deg); color: #fff; font-style: normal; }
-.mm .mm-black-selo b { font-size: clamp(14px, 4.6cqw, 26px); font-weight: 800; letter-spacing: -0.5px; }
-.mm .mm-black-selo i { font-size: clamp(8px, 2.4cqw, 13px); font-weight: 700; color: #c8d24a; margin-top: 2px; }
+.mm .mm-black-selo { flex: 0 0 auto; width: clamp(64px, 20cqw, 120px); aspect-ratio: 1; border-radius: 50%; border: 3px solid #ff6600; border-left-color: transparent; transform: rotate(-20deg); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
+.mm .mm-black-selo b, .mm .mm-black-selo i { transform: rotate(20deg); color: #ff6600; font-style: normal; font-family: Nunito, Poppins, sans-serif; }
+.mm .mm-black-selo b { font-size: clamp(16px, 5cqw, 28px); font-weight: 800; letter-spacing: -0.5px; }
+.mm .mm-black-selo i { font-size: clamp(8px, 2.5cqw, 14px); font-weight: 700; margin-top: 0; align-self: flex-end; margin-right: 18%; }
 .mm .mm-black-black { font-size: clamp(56px, 19cqw, 120px); font-weight: 800; letter-spacing: -2px; line-height: .9; color: transparent; -webkit-text-stroke: 2px #fff; }
 .mm .mm-black-faixa { max-width: 620px; margin: 16px auto 0; border: 1.5px solid #e5e5e5; border-radius: 16px; padding: 10px 12px; display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
 .mm .mm-black-faixa span { color: #fff; font-size: 15px; }
-.mm .mm-black-faixa button { background: #c8d24a; color: #000; font-weight: 700; font-size: 15px; border-radius: 10px; padding: 8px 16px; }
+.mm .mm-black-faixa button { background: #ff6600; color: #fff; font-weight: 700; font-size: 15px; border-radius: 10px; padding: 8px 16px; }
 .mm .mm-lanc-det { color: #6e6e73; font-size: 13px; margin-top: 6px; }
 .mm .mm-lanc-preco { margin-top: 10px; font-size: 15px; color: var(--tinta); }
 .mm .mm-lanc-preco b { font-size: 19px; }
