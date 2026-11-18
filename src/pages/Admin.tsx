@@ -3,7 +3,7 @@ import { carregarFotosCatalogo, completarFotos, type ComFotos } from '../lib/fot
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { recortarProduto } from '../lib/recortarProduto'
-import CartaoAparelho, { marcaDoAparelho, precosComFornecedor, listaValida, type DiaPreco } from '../components/CartaoAparelho'
+import CartaoAparelho, { marcaDoAparelho, precosComFornecedor, listaValida, CORES_BOLINHA, type DiaPreco } from '../components/CartaoAparelho'
 import AssistenteIA from './AssistenteIA'
 import VitrineAdmin from './VitrineAdmin'
 
@@ -1704,7 +1704,16 @@ export default function Admin() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.marca} {p.modelo}</p>
                   <p style={{ color: '#aaa', fontSize: 12 }}>{p.categoria} {p.memoria ? '· ' + p.memoria : ''}</p>
-                  <p style={{ fontSize: 11, color: p.disponivel ? '#25D366' : '#ff4444' }}>{p.disponivel ? '● Disponível' : '● Indisponível'}{p.cor && <span style={{ color: '#aaa' }}> · {p.cor}</span>}</p>
+                  <p style={{ fontSize: 11, color: p.disponivel ? '#25D366' : '#ff4444' }}>{p.disponivel ? '● Disponível' : '● Indisponível'}</p>
+                  {p.cor && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 10px', marginTop: 4 }}>
+                      {p.cor.split(/[,/;]| e /).map(c => c.trim()).filter(Boolean).map(c => (
+                        <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#aaa' }}>
+                          <i style={{ width: 9, height: 9, borderRadius: '50%', background: CORES_BOLINHA[c] || '#888', border: '1px solid #555' }} />{c}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
                     {p.destaque && <span style={tagStyle}>☆ Destaque</span>}
                     {p.lancamento && <span style={tagStyle}>🚀 Lançamento</span>}
