@@ -852,6 +852,9 @@ function App() {
   const maisProcurados = produtos.filter(p => p.mais_procurado)
 
   // ─── Pedaços da tela ─────────────────────────────
+  const irNegociar = (p: Produto, cor: string) =>
+    navigate(`/negociacao?modelo=${encodeURIComponent(p.modelo)}&mem=${encodeURIComponent(p.memoria || '')}&cor=${encodeURIComponent(cor)}`)
+
   const cartao = (p: Produto, grade = false) => {
     const cores = coresDoProduto(p.cor)
     const selo = p.lancamento ? { t: 'Lançamento', c: '#ff6600' } : (p.promocao || temDesconto(p)) ? { t: 'Oferta', c: '#e5332a' } : p.mais_procurado ? { t: 'Mais vendido', c: '#ff6600' } : p.destaque ? { t: 'Destaque', c: '#0a8a3a' } : null
@@ -899,8 +902,7 @@ function App() {
         {telaIpad ? (
           <button className="mm-btn-sacola" onClick={e => {
             e.stopPropagation()
-            const cor = corAtual || p.foto_cor || cores[0]?.nome || ''
-            navigate(`/negociacao?modelo=${encodeURIComponent(p.modelo)}&mem=${encodeURIComponent(p.memoria || '')}&cor=${encodeURIComponent(cor)}`)
+            irNegociar(p, corAtual || p.foto_cor || cores[0]?.nome || '')
           }}>Negociar</button>
         ) : (
           <button className={dentro ? 'mm-btn-sacola dentro' : 'mm-btn-sacola'} onClick={e => { e.stopPropagation(); alternarSacola(p) }}>
@@ -987,7 +989,6 @@ function App() {
     // Preço da cor escolhida (cor mais cara = preço maior)
     const precoDaCor = corEscolhida && p.precos_cor ? (p.precos_cor[corEscolhida] ?? Object.entries(p.precos_cor).find(([c]) => semAcento(c) === semAcento(corEscolhida))?.[1]) : undefined
     const pCor: Produto = precoDaCor != null ? { ...p, preco: Number(precoDaCor) } : p
-    const dentro = naSacola(p.id)
     const specs = [
       p.memoria && { icone: '💾', nome: 'Memória', valor: p.memoria },
       p.condicao && { icone: '✅', nome: 'Condição', valor: p.condicao },
@@ -1111,11 +1112,9 @@ function App() {
             <button className="mm-btn-contorno" onClick={() => navigate('/comparar')}><span className="mm-com-icone"><IconeVs /> Comparar com outro celular</span></button>
           </div>
         </main>
+        {/* Catálogo de uso interno: só o botão Negociar (abre a Negociação com o celular, a cor e o valor) */}
         <div className="mm-barra-fixa mm-barra-dupla">
-          <button className={dentro ? 'mm-btn-contorno mm-btn-sacola-grande dentro' : 'mm-btn-contorno mm-btn-sacola-grande'} onClick={() => alternarSacola(p)}>
-            {dentro ? '✓ Na sacola' : <><IconeSacola tamanho={20} /> Sacola</>}
-          </button>
-          <button className="mm-btn-verde" onClick={() => abrirWhatsApp(textoInteresse(p, corEscolhida))}><IconeWhats /> Tenho interesse</button>
+          <button className="mm-btn-negociar" onClick={() => irNegociar(p, corEscolhida || p.foto_cor || coresDoProduto(p.cor)[0]?.nome || '')}>Negociar</button>
         </div>
         {gavetaSacola}
         {avisoFlutuante}
@@ -1790,6 +1789,7 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 .mm .mm-barra-fixa { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: rgba(255,255,255,0.95); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-top: 1px solid var(--borda); }
 .mm .mm-barra-dupla { display: flex; gap: 10px; justify-content: center; }
 .mm .mm-barra-dupla > * { max-width: 300px; }
+.mm .mm-barra-dupla > .mm-btn-negociar { flex: 1; max-width: 600px; border-radius: 26px; background: var(--tinta); color: #fff; font-size: 18px; font-weight: 700; padding: 15px; }
 .mm .mm-btn-sacola-grande { flex: 0 0 38%; margin: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 15px 8px; }
 .mm .mm-btn-sacola-grande.dentro { border-color: var(--laranja); color: var(--laranja); background: #fff1e6; }
 .mm .mm-btn-verde { display: flex; align-items: center; justify-content: center; gap: 8px; flex: 1; width: 100%; text-align: center; background: var(--verde); color: #fff; border-radius: 18px; padding: 15px 18px; font-size: 17px; font-weight: 800; max-width: 600px; }
