@@ -978,7 +978,7 @@ export default function Admin() {
       supabase.from('aparelhos').select('*'),
     ])
     const listaProdutos = (prods || []) as { id: string; modelo: string; chave?: string; cor?: string; ultima_lista?: string; preco?: number | null }[]
-    const listaAparelhos = (aps || []) as { id: string; modelo: string; chave?: string; cores?: string[]; fotos?: Record<string, string[]>; custo?: number; ultima_lista?: string; precos_cor?: Record<string, number> | null; fornecedor?: string | null; ofertas?: Ofertas | null; disponivel?: boolean; na_loja?: boolean | null; historico?: DiaPreco[] | null }[]
+    const listaAparelhos = (aps || []) as { id: string; modelo: string; chave?: string; cores?: string[]; fotos?: Record<string, string[]>; custo?: number; preco?: number | null; ultima_lista?: string; precos_cor?: Record<string, number> | null; fornecedor?: string | null; ofertas?: Ofertas | null; disponivel?: boolean; na_loja?: boolean | null; historico?: DiaPreco[] | null }[]
     const nomeFornecedor = fornecedorLista.trim() || null
 
     let feitos = 0
