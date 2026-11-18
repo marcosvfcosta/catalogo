@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { carregarFotosCatalogo, completarFotos, type ComFotos } from '../lib/fotosCatalogo'
 import { chaveVariante, memoriaDe, nomeSemMemoria } from '../lib/variantes'
+import { useVoltarDeslizando } from '../lib/voltarDeslizando'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { recortarProduto } from '../lib/recortarProduto'
@@ -217,6 +218,7 @@ export default function Admin() {
   const [memAdmin, setMemAdmin] = useState<Record<string, string>>({}) // memória escolhida em cada modelo (Preços)
   const [uploadandoHero, setUploadandoHero] = useState(false)
   const [editando, setEditando] = useState<Produto | null>(null)
+  useVoltarDeslizando(editando ? () => { setEditando(null); setFotosEdicao([]) } : null)
   const [heroImagens, setHeroImagens] = useState<HeroImagem[]>([])
   const [fotosNovas, setFotosNovas] = useState<string[]>([]) // fotos do produto novo (a 1ª é a capa)
   // Foto original guardada para o botão "usar original" (chave = url da foto ajustada)

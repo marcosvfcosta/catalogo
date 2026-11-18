@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from './supabase'
 import { baseModelo } from './lib/fotosCatalogo'
 import { agruparVariantes, chaveVariante, memoriaDe, nomeSemMemoria } from './lib/variantes'
+import { useVoltarDeslizando } from './lib/voltarDeslizando'
 import VitrineHero from './components/VitrineHero'
 
 // ─── Tipos ─────────────────────────────────────────
@@ -324,6 +325,7 @@ function App() {
   const [filtroEspecial, setFiltroEspecial] = useState<FiltroEspecial>(null)
   const [heroIndex, setHeroIndex] = useState(0)
   const [selecionado, setSelecionado] = useState<Produto | null>(null)
+  useVoltarDeslizando(selecionado ? () => window.history.back() : null)
   const [fotosDetalhe, setFotosDetalhe] = useState<{ url: string; cor: string | null }[]>([])
   const [corEscolhida, setCorEscolhida] = useState<string | null>(null)
   const galeriaRef = useRef<HTMLDivElement>(null)

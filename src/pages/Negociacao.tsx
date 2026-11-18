@@ -4,6 +4,7 @@ import { supabase } from '../supabase'
 import { lerCaixinha } from '../lib/lerCaixinha'
 import { completarFotos } from '../lib/fotosCatalogo'
 import { chaveVariante, memoriaDe } from '../lib/variantes'
+import { useVoltarDeslizando } from '../lib/voltarDeslizando'
 
 type Negociacao = {
   id: string; nome: string; telefone: string; instagram: string
@@ -331,6 +332,7 @@ export default function Negociacao() {
   const [menuAberto, setMenuAberto] = useState(false)
   const [clientes, setClientes] = useState<Negociacao[]>([])
   const [clienteSelecionado, setClienteSelecionado] = useState<Negociacao | null>(null)
+  useVoltarDeslizando(clienteSelecionado ? () => { setClienteSelecionado(null); setMsgCaixa('') } : null)
   const [salvando, setSalvando] = useState(false)
   const [opcaoPagamento, setOpcaoPagamento] = useState<string | null>(null)
   const [erros, setErros] = useState<Record<string, string>>({})
