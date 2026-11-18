@@ -346,6 +346,8 @@ function App() {
   const [heroIndex, setHeroIndex] = useState(0)
   const [selecionado, setSelecionado] = useState<Produto | null>(null)
   const [verParcelas, setVerParcelas] = useState(false)
+  const rolandoPorCor = useRef(false)
+  const fimRolagemCor = useRef<number | undefined>(undefined)
   const [fotosDetalhe, setFotosDetalhe] = useState<{ url: string; cor: string | null }[]>([])
   const [corEscolhida, setCorEscolhida] = useState<string | null>(null)
   const galeriaRef = useRef<HTMLDivElement>(null)
@@ -453,6 +455,13 @@ function App() {
     document.addEventListener('visibilitychange', salvar)
     return () => { window.removeEventListener('scroll', aoRolar); document.removeEventListener('visibilitychange', salvar); clearTimeout(t) }
   }, [busca, categoriaAtiva, marcaAtiva, filtroEspecial, selecionado])
+
+  // Produto aberto sempre com os dados mais novos (ex: preço por cor que chegou depois)
+  useEffect(() => {
+    if (!selecionado) return
+    const novo = produtos.find(x => x.id === selecionado.id)
+    if (novo && novo !== selecionado && (novo.preco !== selecionado.preco || JSON.stringify(novo.precos_cor || {}) !== JSON.stringify(selecionado.precos_cor || {}) || novo.cor !== selecionado.cor)) setSelecionado(novo)
+  }, [produtos])
 
   // Ao abrir de novo: reabre o produto e volta pra mesma altura da página
   const restaurado = useRef(false)
@@ -587,6 +596,10 @@ function App() {
     setCorEscolhida(nome)
     const i = fotosDetalhe.findIndex(f => f.cor && semAcento(f.cor) === semAcento(nome))
     if (i >= 0 && galeriaRef.current) {
+      // Enquanto a foto desliza até a cor tocada, as fotos do meio não trocam a cor nem o preço
+      rolandoPorCor.current = true
+      clearTimeout(fimRolagemCor.current)
+      fimRolagemCor.current = window.setTimeout(() => { rolandoPorCor.current = false }, 900)
       galeriaRef.current.scrollTo({ left: i * galeriaRef.current.clientWidth, behavior: 'smooth' })
       setFotoIndex(i)
     }
@@ -917,7 +930,10 @@ function App() {
           <div className="mm-galeria" ref={galeriaRef}
             onScroll={e => {
               const el = e.currentTarget; const i = Math.round(el.scrollLeft / el.clientWidth); setFotoIndex(i)
-              const cor = fotosDetalhe[i]?.cor; if (cor) setCorEscolhida(cor)
+              if (rolandoPorCor.current) return
+              // Arrastou a foto com o dedo: quando parar, a cor (e o preço) acompanham a foto
+              clearTimeout(fimRolagemCor.current)
+              fimRolagemCor.current = window.setTimeout(() => { const cor = fotosDetalhe[i]?.cor; if (cor) setCorEscolhida(cor) }, 150)
             }}>
             {fotosDetalhe.length > 0
               ? fotosDetalhe.map((f, i) => <div key={i} className="mm-galeria-item"><img src={f.url} alt={`${p.modelo} ${f.cor || i + 1}`} /></div>)
