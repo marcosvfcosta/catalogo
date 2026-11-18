@@ -1135,12 +1135,11 @@ export default function Negociacao() {
   }
 
   function textoProposta() {
-    const nome = form.nome.trim().split(' ')[0]
     const escolhidas = TAXAS.map(t => t.label).filter(l => simulacoes.includes(l))
-    return `Olá${nome ? ' ' + nome : ''}! ✨\n\nSegue a proposta:\n\n📱 *${form.modelo}${form.cor ? ' ' + form.cor : ''}*\n✅ Valor: ${fmt(valorAparelho)}`
+    return `Segue a proposta:\n\n📱 *${form.modelo}${form.cor ? ' ' + form.cor : ''}*\n✅ Valor: ${fmt(valorAparelho)}`
       + (valorEntrada > 0 ? `\n✅ Entrada: ${fmt(valorEntrada)}` : '')
       + (escolhidas.length ? `\n\n💳 *Formas de pagamento*${valorEntrada > 0 ? ' (depois da entrada)' : ''}:\n` + escolhidas.map(linhaSimulacao).join('\n') : '')
-      + `\n\nQualquer dúvida estou à disposição!\n\n_Marcos Magazine_`
+      + `\n\n_Marcos Magazine_`
   }
 
   async function enviarProposta() {
