@@ -475,7 +475,12 @@ function App() {
     const r1 = await supabase.from('produto_fotos').select('url, cor').eq('produto_id', idFotos).order('ordem')
     const data = r1.error ? (await supabase.from('produto_fotos').select('url').eq('produto_id', idFotos).order('ordem')).data : r1.data
     const extras = ((data || []) as { url: string; cor?: string | null }[]).map(f => ({ url: f.url, cor: f.cor || null }))
-    const todas = [...capa, ...extras]
+    // Só as fotos das cores que tem hoje (a cor que saiu da lista some; quando volta, a foto volta junto)
+    const coresHoje = coresDoProduto(p.cor).map(c => semAcento(c.nome))
+    const temHoje = (f: { cor: string | null }) => !f.cor || coresHoje.length === 0 || coresHoje.includes(semAcento(f.cor))
+    const juntas = [...capa, ...extras].filter((f, i, l) => l.findIndex(x => x.url === f.url) === i)
+    const filtradas = juntas.filter(temHoje)
+    const todas = filtradas.length ? filtradas : juntas
     setFotosDetalhe(todas)
     if (corInicial) {
       const i = todas.findIndex(f => f.cor && semAcento(f.cor) === semAcento(corInicial))
