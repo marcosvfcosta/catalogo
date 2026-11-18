@@ -347,7 +347,7 @@ export default function Admin() {
     if (mudou) carregarProdutos()
   }
 
-  // Às 9h do dia seguinte a lista vence: o que não veio em lista de hoje fica indisponível
+  // Às 10h do dia seguinte a lista vence: o que não veio em lista de hoje fica indisponível
   // (Negociação, Preços e catálogo). Os marcados "Tenho na loja" ficam.
   async function zerarListaVencida(lista: Aparelho[]) {
     const ids = lista.filter(a => a.chave && a.disponivel !== false && !a.na_loja && !listaValida(a.ultima_lista)).map(a => a.id)

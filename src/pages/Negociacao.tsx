@@ -1529,7 +1529,7 @@ export default function Negociacao() {
               ) : (() => {
                 // Escolher o celular: busca + marcas + cartões com foto, cores e valor
                 const disponiveis = todosAparelhos.filter(a => a.disponivel !== false && a.preco != null
-                  // da lista: some às 9h do dia seguinte (menos os da loja)
+                  // da lista: some às 10h do dia seguinte (menos os da loja)
                   && (!a.ultima_lista || a.naLoja || a.na_loja || listaValida(a.ultima_lista)))
                 const marcas = Array.from(new Set(disponiveis.map(marcaDoAparelho))).sort((a, b) => a.localeCompare(b, 'pt-BR'))
                 const termo = tirarAcento(buscaModelo.trim())
