@@ -1297,7 +1297,7 @@ function App() {
             <div className="mm-trilho mm-carregando">{[0, 1, 2].map(i => <div key={i} className="mm-card mm-card-fantasma" />)}</div>
           ) : (
             <>
-              {!SO_CELULARES && secao('Destaques da semana', destaques.length ? destaques : produtos.slice(0, 10), destaques.length ? 'destaques' : null)}
+              {secao('Destaques da semana', destaques.length ? destaques : produtos.slice(0, 10), destaques.length ? 'destaques' : null)}
 
 
               {secao('Lançamentos', lancamentos, 'lancamentos')}
