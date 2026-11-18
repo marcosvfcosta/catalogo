@@ -1110,8 +1110,8 @@ function App() {
           <div className="mm-beneficios">
             <div><span>💳</span><p><b>Até {PARCELAS}x</b>no cartão</p></div>
             <div onClick={() => navigate('/entrada')}><span>⇄</span><p><b>Seu usado</b>vale como entrada</p></div>
-            <div><span>🛡️</span><p><b>Garantia</b>e procedência</p></div>
-            <div><span>🔧</span><p><b>Assistência</b>técnica própria</p></div>
+            {!SO_CELULARES && <div><span>🛡️</span><p><b>Garantia</b>e procedência</p></div>}
+            {!SO_CELULARES && <div><span>🔧</span><p><b>Assistência</b>técnica própria</p></div>}
           </div>
 
           {carregando ? (
@@ -1128,11 +1128,22 @@ function App() {
               {/* ─── Todos ─── */}
               <section className="mm-secao">
                 <div className="mm-secao-topo"><h2>Todos os produtos</h2><small className="mm-contador">{produtos.length}</small></div>
+                {SO_CELULARES ? (
+                  /* Só celulares: as marcas no lugar das categorias */
+                  <div className="mm-marcas mm-marcas-topo">
+                    {marcas.filter(m => produtos.some(p => mesmaMarca(p.marca, m.nome))).map(m => (
+                      <button key={m.nome} onClick={() => aplicarFiltro({ marca: m.nome })}>
+                        {m.img ? <img src={m.img} alt={m.nome} className={m.padrao ? 'padrao' : ''} /> : <b className="mm-marca-texto">{m.nome}</b>}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
                 <div className="mm-chips">
                   {categorias.filter(c => !c.capas && produtos.some(p => p.categoria === c.nome)).map(c => (
                     <button key={c.nome} onClick={() => aplicarFiltro({ categoria: c.nome })}>{c.nome}</button>
                   ))}
                 </div>
+                )}
                 <div className="mm-grade">{vitrineMista.map(p => cartao(p, true))}</div>
                 {produtos.length > 8 && (
                   <button className="mm-btn-contorno mm-ver-mais" onClick={() => aplicarFiltro({ especial: 'todos' })}>Ver todos os {produtos.length} produtos ›</button>
@@ -1142,7 +1153,7 @@ function App() {
           )}
 
           {/* ─── Marcas ─── */}
-          <section className="mm-secao">
+          {!SO_CELULARES && <section className="mm-secao">
             <div className="mm-secao-topo"><h2>Marcas</h2></div>
             <div className="mm-marcas">
               {marcas.map(m => (
@@ -1151,7 +1162,7 @@ function App() {
                 </button>
               ))}
             </div>
-          </section>
+          </section>}
         </main>
       )}
 
@@ -1517,6 +1528,7 @@ const CSS_PREMIUM = `
 .mm .mm-lanc-fotos img { height: 78%; width: auto; max-width: 34%; object-fit: contain; mix-blend-mode: multiply; margin: 0 -10px; cursor: pointer; transition: transform .3s; }
 .mm .mm-lanc-fotos img.meio { height: 100%; max-width: 42%; z-index: 1; }
 .mm .mm-lanc-fotos.n1 img.meio { max-width: 70%; }
+.mm .mm-marcas-topo { padding: 0 0 18px; }
 .mm .mm-lanc.com-foto { background: linear-gradient(180deg, #e4e3ea 0%, #dddce4 100%); }
 .mm .mm-lanc-unica { width: calc(100% + 32px); max-width: 760px; height: auto; margin: 0 -16px; cursor: pointer; animation: mmEntra .6s ease;
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%); mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%); }
