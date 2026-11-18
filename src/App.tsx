@@ -66,8 +66,6 @@ const FOTO_LANCAMENTO = '/hero/iphones-lancamento.webp?v=4'
 // Topo do catálogo: sempre o iPhone 18 Pro Max (o mais barato das memórias), com texto fixo
 const MODELO_TOPO = /iphone\s*18\s*pro\s*max/i
 const TOPO_NOME = 'iPhone 18 Pro Max'
-const TOPO_FRASE = 'O iPhone mais avançado. Chegou na Marcos Magazine.'
-const TOPO_DETALHE = 'Pronta entrega · Parcele em até 18x · Seu usado vale como entrada'
 // Faixa de campanha (Black Friday) em cima do topo. false = esconde
 const CAMPANHA_BLACK = true
 const TEMA_VITRINE = false // false = visual branco premium (estilo loja Apple); true = vitrine de pedra escura
@@ -1154,7 +1152,7 @@ function App() {
                 <span className="mm-lanc-tag">{topo18 ? 'Lançamento' : principal.lancamento ? 'Lançamento' : principal.destaque ? 'Destaque' : 'Novidade'}</span>
                 <h1>{topo18 ? TOPO_NOME : nomeSemMemoria(principal.modelo)}</h1>
                 {topo18
-                  ? <><p className="mm-lanc-sub">{TOPO_FRASE}</p><p className="mm-lanc-det">{TOPO_DETALHE}</p></>
+                  ? null
                   : principal.memoria && <p className="mm-lanc-sub">{principal.memoria}{principal.cor ? ' · ' + coresDoProduto(principal.cor).map(c => c.nome).join(', ') : ''}</p>}
                 {precoVisivel(principal) && (
                   <p className="mm-lanc-preco">a partir de <b>{reais(precoFinal(principal))}</b> ou {PARCELAS}x de {reais(parcela18(precoFinal(principal)))}</p>
