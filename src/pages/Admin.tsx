@@ -338,10 +338,10 @@ export default function Admin() {
   // Catálogo mostra o mesmo preço de venda da Negociação nos celulares que vieram da lista (custo nunca vai)
   async function sincronizarPrecosCatalogo(lista: Aparelho[]) {
     // Preço de cada cor também vai (a cor mais cara aparece mais cara no catálogo)
-    let res = await supabase.from('produtos_catalogo').select('id, chave, modelo, preco, mostrar_preco, precos_cor').eq('origem', 'lista')
-    let comColunaCor = true
-    if (res.error) { comColunaCor = false; res = await supabase.from('produtos_catalogo').select('id, chave, modelo, preco, mostrar_preco').eq('origem', 'lista') }
-    const prods = (res.data || []) as { id: string; chave?: string | null; modelo: string; preco?: number | null; mostrar_preco?: boolean | null; precos_cor?: Record<string, number> | null }[]
+    const r1 = await supabase.from('produtos_catalogo').select('id, chave, modelo, preco, mostrar_preco, precos_cor').eq('origem', 'lista')
+    const comColunaCor = !r1.error
+    const dadosCat: unknown[] | null = comColunaCor ? r1.data : (await supabase.from('produtos_catalogo').select('id, chave, modelo, preco, mostrar_preco').eq('origem', 'lista')).data
+    const prods = (dadosCat || []) as { id: string; chave?: string | null; modelo: string; preco?: number | null; mostrar_preco?: boolean | null; precos_cor?: Record<string, number> | null }[]
     const disponiveis = lista.filter(a => a.disponivel !== false && a.preco != null && a.chave)
     let mudou = 0
     for (const p of prods) {
