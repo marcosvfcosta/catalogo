@@ -942,7 +942,10 @@ export default function Admin() {
         if (!l.foto_url && fonte.foto_url) { dados.foto_url = fonte.foto_url; dados.foto_cor = fonte.foto_cor || null }
         if (!(l as P).descricao && fonte.descricao) dados.descricao = fonte.descricao
         for (const f of ['destaque', 'lancamento', 'promocao', 'mais_procurado'] as const) if (doMesmo.some(m => m[f]) && !l[f]) dados[f] = true
-        if (Object.keys(dados).length) await supabase.from('produtos_catalogo').update(dados).eq('id', l.id)
+        if (Object.keys(dados).length) {
+          const up = await supabase.from('produtos_catalogo').update(dados).eq('id', l.id)
+          if (up.error) { alert('Parei sem apagar nada: não consegui passar a foto para ' + l.modelo + '.\n' + up.error.message); return }
+        }
         // Fotos extras (galeria) que ainda não estão nele
         const jaTem = new Set(fotos.filter(f => f.produto_id === l.id).map(f => f.url))
         const novas = fotos.filter(f => doMesmo.some(m => m.id === f.produto_id) && !jaTem.has(f.url))
@@ -950,7 +953,10 @@ export default function Admin() {
         if (novas.length) {
           const linhas = novas.map((f, i) => ({ produto_id: l.id, url: f.url, ordem: jaTem.size + i + 1, cor: f.cor ?? null }))
           const ins = await supabase.from('produto_fotos').insert(linhas)
-          if (ins.error) await supabase.from('produto_fotos').insert(linhas.map(({ cor: _c, ...x }) => x))
+          if (ins.error) {
+            const ins2 = await supabase.from('produto_fotos').insert(linhas.map(({ cor: _c, ...x }) => x))
+            if (ins2.error) { alert('Parei sem apagar nada: não consegui passar as fotos para ' + l.modelo + '.\n' + ins2.error.message); return }
+          }
         }
       }
       await supabase.from('produto_fotos').delete().in('produto_id', ids)
