@@ -944,7 +944,11 @@ export default function Admin() {
     const semCpo = (t: string) => t.replace(/cpo$/, '')
     const k = semCpo(chaveComparar(ap.chave || ap.modelo))
     const iguais = produtos.filter(p => semCpo(p.origem === 'lista' ? chaveComparar(p.chave || p.modelo) : chaveComparar(`${p.modelo} ${p.memoria || ''}`)) === k)
-    return iguais.find(p => p.origem === 'lista') || iguais[0] || null
+    if (iguais.length) return iguais.find(p => p.origem === 'lista') || iguais[0]
+    // Nome escrito diferente: mesmo modelo base e mesma memória
+    const b = baseModelo(ap.modelo), m = memoriaDe(ap.modelo, ap.memoria)?.valor
+    const parecidos = produtos.filter(p => !/capa|pelicula|película|acess/i.test(p.categoria || '') && baseModelo(`${p.modelo} ${p.memoria || ''}`) === b && memoriaDe(p.modelo, p.memoria)?.valor === m)
+    return parecidos.find(p => p.origem === 'lista') || parecidos[0] || null
   }
 
   async function alternarDisponivel(p: Produto) {
@@ -1811,12 +1815,13 @@ export default function Admin() {
                       for (const l of linhas) l.sort((x, y) => (memoriaDe(x.modelo)?.valor || 0) - (memoriaDe(y.modelo)?.valor || 0))
                       return linhas.map((l, k) => {
                         const ap = l.find(x => x.id === precoAberto) || l.find(x => x.id === memAdmin[chaveVariante(marcaDoAparelho(x), x.modelo)]) || l[0]
-                        const memorias = l.length > 1 ? l.map(x => ({ id: x.id, rotulo: memoriaDe(x.modelo)?.rotulo || x.modelo, preco: x.preco != null ? Number(x.preco) : null })) : undefined
+                        const catDe = (x: Aparelho) => { const pr = produtoDoAparelho(x); return pr ? { ligado: pr.disponivel !== false, alternar: () => alternarDisponivel(pr) } : { ligado: false, alternar: () => alert('Esse celular ainda não está no catálogo. Cole a lista de novo que ele entra.') } }
+                        const memorias = l.length > 1 ? l.map(x => ({ id: x.id, rotulo: memoriaDe(x.modelo)?.rotulo || x.modelo, preco: x.preco != null ? Number(x.preco) : null, noCatalogo: catDe(x) })) : undefined
                         return (
                           <CartaoAparelho key={l[0].id} ap={ap} listaAntiga={!ap.na_loja && !vistoHoje(ap.ultima_lista)} onUsarFornecedor={ap.id.startsWith('loja-') ? undefined : f => usarFornecedor(ap, f)}
                             onAlternarNaLoja={ap.id.startsWith('loja-') ? undefined : () => alternarNaLoja(ap)} mostrarHistorico
                             onTirar={ap.id.startsWith('loja-') ? undefined : () => tirarAparelho(ap)}
-                            noCatalogo={(() => { const pr = produtoDoAparelho(ap); return pr ? { ligado: pr.disponivel !== false, alternar: () => alternarDisponivel(pr) } : undefined })()}
+                            noCatalogo={catDe(ap)}
                             onEditarCatalogo={(() => { const pr = produtoDoAparelho(ap); return pr ? () => { setEditando(pr); carregarFotosEdicao(pr.id) } : undefined })()}
                             memorias={memorias} onEscolherMemoria={id => { setMemAdmin(m => ({ ...m, [chaveVariante(marcaDoAparelho(ap), ap.modelo)]: id })); setPrecoAberto(id) }}
                             sanfona={{ aberto: l.some(x => x.id === precoAberto), alternar: () => setPrecoAberto(l.some(x => x.id === precoAberto) ? null : ap.id), ultimo: k === linhas.length - 1 }} />

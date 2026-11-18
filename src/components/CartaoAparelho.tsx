@@ -137,7 +137,7 @@ type Props = {
   onTirar?: () => void // tira dos Preços e da Negociação (volta se vier numa lista nova)
   mostrarHistorico?: boolean // só no Admin: selo de melhor preço da semana
   // Mesmo modelo com GB diferente num cartão só: botões de memória que trocam o aparelho
-  memorias?: { id: string; rotulo: string; preco: number | null }[]
+  memorias?: { id: string; rotulo: string; preco: number | null; noCatalogo?: { ligado: boolean; alternar: () => void } }[]
   onEscolherMemoria?: (id: string) => void
   sanfona?: { aberto: boolean; alternar: () => void; ultimo?: boolean }
 }
@@ -179,18 +179,21 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
   const custoMostrado = custoCor ?? ap.custo
 
   // Valor final: no celular embaixo do modelo; no iPad do lado direito
+  // Check "No catálogo" (embaixo do preço): toca e entra/sai do catálogo
+  const checkCatalogo = noCatalogo && (
+    <button type="button" onClick={e => { e.stopPropagation(); noCatalogo.alternar() }}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 8, background: 'none', border: 'none', padding: 0, color: noCatalogo.ligado ? '#25D366' : '#888', fontSize: g ? 16 : 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+      <span style={{ width: g ? 24 : 20, height: g ? 24 : 20, borderRadius: 6, border: '2px solid ' + (noCatalogo.ligado ? '#25D366' : '#555'), background: noCatalogo.ligado ? '#25D366' : 'none', color: '#000', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: g ? 15 : 13, fontWeight: 900 }}>{noCatalogo.ligado ? '✓' : ''}</span>
+      {noCatalogo.ligado ? 'No catálogo' : 'Fora do catálogo'}
+    </button>
+  )
+
   const blocoPreco = (
     <>
       <p style={{ color: '#888', fontSize: g ? 15 : 11, margin: g ? 0 : '8px 0 0' }}>{corEscolhida ? corEscolhida : variosPrecos ? 'a partir de' : 'Valor final'}</p>
       <p style={{ color: '#25D366', fontSize: g ? 46 : 26, fontWeight: 900, margin: 0, letterSpacing: -0.5, whiteSpace: 'nowrap' }}>{real(valorMostrado)}</p>
       <p style={{ color: '#888', fontSize: g ? 15 : 11, margin: 0 }}>até 18x no cartão</p>
-      {noCatalogo && (
-        <button type="button" onClick={e => { e.stopPropagation(); noCatalogo.alternar() }}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 8, background: 'none', border: 'none', padding: 0, color: noCatalogo.ligado ? '#25D366' : '#888', fontSize: g ? 16 : 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-          <span style={{ width: g ? 24 : 20, height: g ? 24 : 20, borderRadius: 6, border: '2px solid ' + (noCatalogo.ligado ? '#25D366' : '#555'), background: noCatalogo.ligado ? '#25D366' : 'none', color: '#000', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: g ? 15 : 13, fontWeight: 900 }}>{noCatalogo.ligado ? '✓' : ''}</span>
-          {noCatalogo.ligado ? 'No catálogo' : 'Fora do catálogo'}
-        </button>
-      )}
+      {checkCatalogo && <div>{checkCatalogo}</div>}
     </>
   )
 
@@ -208,6 +211,17 @@ export default function CartaoAparelho({ ap, corEscolhida, selecionado, onEscolh
           {(selecionado ? variosPrecos : variosLinha) && <p style={{ color: '#888', fontSize: g ? 13 : 10, margin: 0 }}>a partir de</p>}
           <p style={{ color: '#25D366', fontSize: g ? 24 : 16, fontWeight: 800, margin: 0, whiteSpace: 'nowrap' }}>{real(selecionado ? menor : menorLinha)}</p>
           {listaAntiga && <p style={{ color: '#ffc800', fontSize: 9, fontWeight: 800, margin: '2px 0 0' }}>LISTA ANTIGA</p>}
+          {variasMem && memorias!.some(m => m.noCatalogo) ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, marginTop: 8 }}>
+              {memorias!.filter(m => m.noCatalogo).map(m => (
+                <button key={m.id} type="button" onClick={e => { e.stopPropagation(); m.noCatalogo!.alternar() }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', padding: 0, color: m.noCatalogo!.ligado ? '#25D366' : '#888', fontSize: g ? 15 : 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  <span style={{ width: g ? 22 : 18, height: g ? 22 : 18, borderRadius: 5, border: '2px solid ' + (m.noCatalogo!.ligado ? '#25D366' : '#555'), background: m.noCatalogo!.ligado ? '#25D366' : 'none', color: '#000', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: g ? 13 : 11, fontWeight: 900 }}>{m.noCatalogo!.ligado ? '✓' : ''}</span>
+                  {m.rotulo}
+                </button>
+              ))}
+            </div>
+          ) : checkCatalogo}
         </div>
         </div>
         <div style={{ textAlign: 'center', color: '#666', fontSize: 16, lineHeight: 1, marginTop: 4 }}>▾</div>
