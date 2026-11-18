@@ -1528,7 +1528,9 @@ const CSS_PREMIUM = `
 .mm .mm-lanc-fotos img { height: 78%; width: auto; max-width: 34%; object-fit: contain; mix-blend-mode: multiply; margin: 0 -10px; cursor: pointer; transition: transform .3s; }
 .mm .mm-lanc-fotos img.meio { height: 100%; max-width: 42%; z-index: 1; }
 .mm .mm-lanc-fotos.n1 img.meio { max-width: 70%; }
-.mm .mm-marcas-topo { padding: 0 0 18px; }
+.mm .mm-marcas-topo { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 0 0 18px; margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+.mm .mm-marcas-topo::-webkit-scrollbar { display: none; }
+.mm .mm-marcas-topo button { flex: 0 0 auto; width: 120px; height: 72px; scroll-snap-align: start; }
 .mm .mm-lanc.com-foto { background: linear-gradient(180deg, #e4e3ea 0%, #dddce4 100%); }
 .mm .mm-lanc-unica { width: calc(100% + 32px); max-width: 760px; height: auto; margin: 0 -16px; cursor: pointer; animation: mmEntra .6s ease;
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%); mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%); }
