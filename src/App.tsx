@@ -341,16 +341,11 @@ function emprestarFotos(lista: Produto[], fontes: Produto[] = lista): Produto[] 
 
 function App() {
   const navigate = useNavigate()
-  // Fotos de cada cor por modelo (todas as cadastradas, carregadas uma vez): o cartão vai passando as cores sozinho
+  // Fotos de cada cor por modelo (todas as cadastradas, carregadas uma vez): no cartão, passa as cores com o dedo
   const [fotosModelo, setFotosModelo] = useState<Record<string, Record<string, string>>>({})
   const [corCard, setCorCard] = useState<Record<string, number>>({})
-  const [giro, setGiro] = useState(0)
   const arrastouCard = useRef(0)
   const toqueCard = useRef<{ x: number; y: number } | null>(null)
-  useEffect(() => {
-    const t = window.setInterval(() => setGiro(g => g + 1), 2800)
-    return () => window.clearInterval(t)
-  }, [])
   useEffect(() => {
     Promise.all([
       supabase.from('produtos_catalogo').select('id, modelo, memoria, foto_url, foto_cor'),
@@ -857,7 +852,7 @@ function App() {
     const varios = vars.length > 1
     const precosDiferentes = (varios && new Set(vars.filter(precoVisivel).map(precoFinal)).size > 1)
       || new Set(Object.values(p.precos_cor || {})).size > 1
-    // Uma foto por cor de hoje: passa sozinho e, na grade, dá pra arrastar com o dedo
+    // Uma foto por cor de hoje: na grade, passa as cores arrastando com o dedo
     const porCor = fotosModelo[baseModelo(`${p.modelo} ${p.memoria || ''}`)] || {}
     const slides = cores.map(c => {
       const url = porCor[semAcento(c.nome)] || (p.foto_url && p.foto_cor && semAcento(p.foto_cor) === semAcento(c.nome) ? p.foto_url : undefined)
@@ -865,7 +860,7 @@ function App() {
     }).filter(Boolean) as { cor: string; url: string }[]
     const carrossel = slides.length > 1
     const n = slides.length || 1
-    const iCor = ((corCard[p.id] ?? 0) + giro) % n
+    const iCor = (corCard[p.id] ?? 0) % n
     const atual = carrossel ? slides[iCor] : null
     const corAtual = atual?.cor || null
     return (
