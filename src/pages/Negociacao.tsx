@@ -2494,7 +2494,7 @@ const base: Record<string, React.CSSProperties> = {
   resumoBox: { background: '#fff4ec', border: 'none', borderRadius: 18, padding: '14px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' },
   resumoLabel: { color: '#ff6600', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4, textAlign: 'center' },
   resumoValor: { color: '#1d1d1f', fontSize: 26, fontWeight: 800, textAlign: 'center' },
-  parcelasGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
+  parcelasGrid: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 8 }, // uma embaixo da outra, em sequência (1x, 2x, 3x...)
   parcelaCard: { background: '#f5f5f7', borderRadius: 14, padding: '12px 16px', cursor: 'pointer' },
   parcelaAtiva: { background: '#fff4ec' },
   resumoFinal: { background: '#fff', border: '1px solid #ececf0', borderRadius: 22, padding: 24, marginBottom: 20, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, alignItems: 'center' },
