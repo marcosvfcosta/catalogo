@@ -235,6 +235,7 @@ export default function Admin() {
   // Fundo com IA: url nova → url de antes (para o botão "voltar")
   const [antesIA, setAntesIA] = useState<Record<string, string>>({})
   const [iaTrabalhando, setIaTrabalhando] = useState<string | null>(null)
+  const [capaAjuste, setCapaAjuste] = useState('')
   const [avisoIA, setAvisoIA] = useState('') // aviso enquanto a IA baixa / recorta
   const [apPrecosCor, setApPrecosCor] = useState<Record<string, string>>({})
 
@@ -539,6 +540,31 @@ export default function Admin() {
     await supabase.from('capas_fotos').update({ url: antes }).eq('id', f.id)
     setAntesIA(prev => { const n = { ...prev }; delete n[f.url]; return n })
     carregarCapas()
+  }
+
+  // ✨ Foto de estúdio (Gemini): capinha vestida no celular do modelo, fundo branco
+  async function estudioCapinha(f: CapaFoto) {
+    if (!capaAberta) return
+    setIaTrabalhando(f.url)
+    try {
+      const { data, error } = await supabase.functions.invoke('gerar-banner', {
+        body: { acao: 'capa_estudio', foto_url: f.url, celular_url: capaAberta.foto_url || null, modelo: capaAberta.modelo, ajuste: capaAjuste.trim() || undefined },
+      })
+      if (error) {
+        let msg = error.message
+        try { const c = await (error as { context?: Response }).context?.json(); if (c?.error) msg = c.error } catch { /* ok */ }
+        throw new Error(msg)
+      }
+      if (data?.error || !data?.imagem) throw new Error(data?.error || 'A IA não devolveu a foto')
+      const blob = await (await fetch(`data:${data.mime || 'image/jpeg'};base64,${data.imagem}`)).blob()
+      const ext = blob.type.includes('png') ? 'png' : 'jpg'
+      const arquivo = new File([blob], `estudio.${ext}`, { type: blob.type || 'image/jpeg' })
+      const nova = await enviarOriginal(arquivo, 'estudio')
+      await supabase.from('capas_fotos').update({ url: nova }).eq('id', f.id)
+      setAntesIA(prev => ({ ...prev, [nova]: f.url }))
+      await carregarCapas()
+    } catch (e) { alert('Não deu certo: ' + (e instanceof Error ? e.message : e)) }
+    setIaTrabalhando(null)
   }
 
   async function iaFotoEdicao(url: string, fotoId?: string) {
@@ -2321,6 +2347,13 @@ export default function Admin() {
               onChange={e => { const fs = Array.from(e.target.files || []) as File[]; e.target.value = ''; uploadCapinhas(fs) }} />
           </label>
 
+          <div style={{ background: '#140b04', border: '1px solid #3a2410', borderRadius: 12, padding: 12, margin: '4px 0 14px' }}>
+            <p style={{ color: '#ffb27a', fontWeight: 700, fontSize: 13, margin: '0 0 6px' }}>✨ Estúdio: a IA veste a capinha no celular deste modelo, em fundo branco</p>
+            {!capaAberta.foto_url && <p style={{ color: '#ff9a55', fontSize: 12, margin: '0 0 6px' }}>Dica: cadastre a foto do celular neste modelo (✏️ na lista) pra IA usar o aparelho certo.</p>}
+            <input style={{ ...inputStyle, marginBottom: 0 }} placeholder="Pedido extra (opcional): ex. mais sombra, capinha maior, mais brilho no strass"
+              value={capaAjuste} onChange={e => setCapaAjuste(e.target.value)} />
+          </div>
+
           {(() => {
             const lista = capasFotos.filter(f => f.modelo_id === capaAberta.id && f.tipo === capaTipo)
             if (lista.length === 0) return <p style={{ color: '#555', textAlign: 'center', padding: 30 }}>Nenhuma capinha em {capaTipo} ainda.</p>
@@ -2332,6 +2365,10 @@ export default function Admin() {
                     <button onClick={() => excluirCapinha(f)}
                       style={{ position: 'absolute', top: 4, right: 4, background: '#7a1111', border: 'none', color: 'white', borderRadius: '50%', width: 26, height: 26, cursor: 'pointer', fontSize: 12 }}>✕</button>
                     {botoesIA(f.url, () => recortarCapinha(f), () => voltarCapinha(f))}
+                    <button onClick={() => estudioCapinha(f)} disabled={!!iaTrabalhando} title="Gemini: foto de estúdio com a capinha vestida no celular, fundo branco"
+                      style={{ ...btnIA, width: '100%', marginTop: 4, background: '#2a1503', borderColor: '#ff6600', color: '#ffb27a', opacity: iaTrabalhando && iaTrabalhando !== f.url ? 0.4 : 1 }}>
+                      {iaTrabalhando === f.url ? '⏳ Criando...' : '✨ Estúdio'}
+                    </button>
                   </div>
                 ))}
               </div>

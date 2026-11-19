@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // Gemini (Nano Banana). Só o admin logado pode usar.
 //  - banner do carrossel (padrão)
 //  - acao: 'tirar_fundo' → tira o fundo de uma foto de produto/capinha e deixa em fundo branco
+//  - acao: 'capa_estudio' → foto de estúdio da capinha VESTIDA no celular do modelo, fundo branco
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -56,11 +57,12 @@ serve(async (req) => {
     const CHAVE = Deno.env.get('GEMINI_API_KEY')
     if (!CHAVE) return json({ error: 'Falta a GEMINI_API_KEY nos Secrets do Supabase' }, 500)
 
-    const { ideia, produto, proporcao, acao, foto_url } = await req.json()
-    const tirarFundo = acao === 'tirar_fundo'
+    const { ideia, produto, proporcao, acao, foto_url, celular_url, modelo, ajuste } = await req.json()
+    const estudio = acao === 'capa_estudio'
+    const tirarFundo = acao === 'tirar_fundo' || estudio
     if (tirarFundo && !foto_url) return json({ error: 'Falta a foto' }, 400)
     if (!tirarFundo && (!ideia || String(ideia).trim().length < 3)) return json({ error: 'Escreva a ideia do banner' }, 400)
-    const formato = PROPORCOES.includes(proporcao) ? proporcao : (tirarFundo ? '1:1' : '4:5')
+    const formato = PROPORCOES.includes(proporcao) ? proporcao : (estudio ? '4:5' : tirarFundo ? '1:1' : '4:5')
 
     // Foto: no banner é opcional (aparelho de verdade); no "tirar fundo" é a própria foto a editar
     let foto: { data: string; mime: string } | null = null
@@ -73,7 +75,26 @@ serve(async (req) => {
     }
     if (tirarFundo && !foto) return json({ error: 'Não consegui abrir a foto' }, 400)
 
-    const prompt = tirarFundo
+    // Foto de referência do celular (cadastrada no modelo) para vestir a capinha
+    let celular: { data: string; mime: string } | null = null
+    if (estudio && celular_url) {
+      try {
+        const r = await fetch(celular_url)
+        if (r.ok) celular = { data: paraBase64(new Uint8Array(await r.arrayBuffer())), mime: r.headers.get('content-type') || 'image/png' }
+      } catch { /* segue sem o celular */ }
+    }
+
+    const nomeModelo = String(modelo || '').trim() || 'o celular compatível'
+    const promptEstudio = `Crie uma FOTO DE ESTÚDIO PROFISSIONAL de produto (proporção ${formato}) para o catálogo premium de uma loja de celulares.
+A PRIMEIRA imagem é a foto real de uma capinha (capa de celular). ${celular ? 'A SEGUNDA imagem é o celular ' + nomeModelo + '.' : 'O celular é o ' + nomeModelo + '.'}
+Mostre essa capinha VESTIDA no celular ${nomeModelo}, vista de TRÁS (traseira), de frente para a câmera, reta, centralizada e ocupando cerca de 80% da altura da imagem.
+A CAPINHA DEVE FICAR IDÊNTICA À DA FOTO: mesmo material e transparência, mesma cor das bordas, mesmo brilho/strass, mesmo anel MagSafe, mesmo recorte e proteção da câmera, mesmos detalhes e acabamento. Não redesenhe, não troque a cor, não acrescente e não remova nada da capinha.
+${celular ? 'O celular por baixo deve ser IGUAL ao da segunda imagem (mesma cor, mesmas câmeras e posição das câmeras).' : 'O celular por baixo deve ter as câmeras na posição correta do modelo ' + nomeModelo + '.'}
+Remova completamente dedos, mãos, mesa, tecido, loja e qualquer objeto da foto original.
+Fundo BRANCO PURO (#FFFFFF) liso e infinito, iluminação de estúdio suave e difusa, com um leve reflexo do produto no chão branco e uma sombra suave embaixo. Aparência de foto de site da Apple: nítida, limpa, realista e luxuosa.
+Sem textos, sem logotipos novos, sem marca d'água.${ajuste ? '\nAJUSTE PEDIDO PELO DONO DA LOJA: ' + String(ajuste).trim() : ''}`
+
+    const prompt = estudio ? promptEstudio : tirarFundo
       ? `Edite esta foto de produto para o catálogo de uma loja online (proporção ${formato}).
 Remova TODO o fundo (mesa, tecido, parede, mãos, sombras e qualquer objeto) e deixe SOMENTE o produto principal.
 O produto deve ficar IDÊNTICO ao da foto: mesmo formato, cor, textura, estampa, furos da câmera, botões, anel/suporte, logos e detalhes. Não redesenhe, não "melhore", não acrescente e não remova nada do produto.
@@ -93,12 +114,13 @@ Não coloque preços nem valores. Pode incluir discretamente o nome "Marcos Maga
     try {
       const input: unknown[] = [{ type: 'text', text: prompt }]
       if (foto) input.push({ type: 'image', mime_type: foto.mime, data: foto.data })
+      if (celular) input.push({ type: 'image', mime_type: celular.mime, data: celular.data })
       const r = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': CHAVE },
         body: JSON.stringify({
           model: MODELO, input,
-          response_format: { type: 'image', mime_type: tirarFundo ? 'image/png' : 'image/jpeg', aspect_ratio: formato, image_size: tirarFundo ? '1K' : '2K' },
+          response_format: { type: 'image', mime_type: tirarFundo && !estudio ? 'image/png' : 'image/jpeg', aspect_ratio: formato, image_size: tirarFundo && !estudio ? '1K' : '2K' },
         }),
       })
       const data = await r.json()
@@ -111,6 +133,7 @@ Não coloque preços nem valores. Pode incluir discretamente o nome "Marcos Maga
       console.log('Interactions falhou, tentando generateContent:', erroTexto)
       const parts: unknown[] = [{ text: prompt }]
       if (foto) parts.push({ inline_data: { mime_type: foto.mime, data: foto.data } })
+      if (celular) parts.push({ inline_data: { mime_type: celular.mime, data: celular.data } })
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODELO_RESERVA}:generateContent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': CHAVE },
