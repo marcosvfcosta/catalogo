@@ -345,6 +345,8 @@ export default function Negociacao() {
   const [lendoCaixa, setLendoCaixa] = useState(false)
   const [msgCaixa, setMsgCaixa] = useState('')
   const [fotoProposta, setFotoProposta] = useState<File | null>(null)
+  // Mesma foto em PNG: é o formato que o iPhone/iPad aceita pra copiar imagem
+  const [fotoPropostaPng, setFotoPropostaPng] = useState<Blob | null>(null)
   // Parcelas que vão juntas na proposta do WhatsApp (escolhe várias de uma vez)
   const [simulacoes, setSimulacoes] = useState<string[]>(() => {
     try { const v = JSON.parse(localStorage.getItem('simulacoes') || 'null'); if (Array.isArray(v) && v.length) return v } catch { /* padrão */ }
@@ -1132,7 +1134,7 @@ export default function Negociacao() {
     return (form.cor && f[form.cor]?.[0]) || apNeg.cores.map(c => f[c]?.[0]).find(Boolean) || Object.values(f).flat()[0] || null
   })()
   useEffect(() => {
-    setFotoProposta(null)
+    setFotoProposta(null); setFotoPropostaPng(null)
     if (!urlFotoProposta) return
     let cancelado = false
     ;(async () => {
@@ -1148,6 +1150,8 @@ export default function Negociacao() {
         ctx.drawImage(img, (lado - w) / 2, (lado - h) / 2, w, h)
         const jpg = await new Promise<Blob | null>(ok => c.toBlob(ok, 'image/jpeg', 0.9))
         if (jpg && !cancelado) setFotoProposta(new File([jpg], 'celular.jpg', { type: 'image/jpeg' }))
+        const png = await new Promise<Blob | null>(ok => c.toBlob(ok, 'image/png'))
+        if (png && !cancelado) setFotoPropostaPng(png)
       } catch (e) { console.error('Foto da proposta:', e) }
     })()
     return () => { cancelado = true }
@@ -1177,9 +1181,27 @@ export default function Negociacao() {
       + `\n\n_Marcos Magazine_`
   }
 
+  const digitosCliente = form.telefone.replace(/\D/g, '')
+
   async function enviarProposta() {
     if (!form.modelo.trim() || !valorAparelho) { alert('Escolha o celular primeiro'); return }
     const texto = textoProposta()
+
+    // Com o número do cliente: abre direto a conversa dele com o texto pronto e deixa a foto copiada pra colar
+    if (digitosCliente) {
+      if (digitosCliente.length < 10) { alert('Confira o WhatsApp do cliente (com DDD)'); return }
+      const link = linkWhatsApp(form.telefone, texto)
+      if (fotoPropostaPng && typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+        const copiar = navigator.clipboard.write([new ClipboardItem({ 'image/png': fotoPropostaPng })]).catch(e => console.error('Copiar foto:', e))
+        // Espera a cópia terminar (rapidinho) antes de sair pro WhatsApp
+        await Promise.race([copiar, new Promise(ok => setTimeout(ok, 700))])
+      }
+      const aba = window.open(link, '_blank')
+      if (!aba) window.location.href = link // navegador bloqueou a nova aba
+      return
+    }
+
+    // Sem número: compartilhar (escolhe o WhatsApp e o cliente)
     if (fotoProposta && navigator.canShare?.({ files: [fotoProposta] })) {
       try { await navigator.clipboard?.writeText(texto) } catch { /* sem copiar */ }
       try {
@@ -1189,8 +1211,7 @@ export default function Negociacao() {
         if (e instanceof Error && e.name === 'AbortError') return // fechou sem enviar
       }
     }
-    if (!form.telefone.replace(/\D/g, '')) { alert('Digite o WhatsApp do cliente'); return }
-    window.open(linkWhatsApp(form.telefone, texto), '_blank')
+    alert('Digite o WhatsApp do cliente')
   }
 
   function usarFornecedorNeg(f: string) {
@@ -1748,7 +1769,9 @@ export default function Negociacao() {
                   style={{ width: '100%', background: '#25D366', color: '#000', border: 'none', borderRadius: 14, padding: 15, fontSize: 17, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
                   📲 Enviar proposta no WhatsApp{fotoProposta ? ' (com foto)' : ''}
                 </button>
-                {fotoProposta && <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0', textAlign: 'center' }}>Escolha o WhatsApp e o cliente. Se o texto não for junto, é só colar: ele já fica copiado.</p>}
+                {digitosCliente.length >= 10
+                  ? <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0', textAlign: 'center' }}>Abre a conversa de {form.telefone} com o texto pronto.{fotoPropostaPng ? ' A foto fica copiada: toque e segure na caixa de mensagem e escolha Colar.' : ''}</p>
+                  : fotoProposta && <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0', textAlign: 'center' }}>Escolha o WhatsApp e o cliente. Se o texto não for junto, é só colar: ele já fica copiado.</p>}
               </div>
             </div>
             <div style={s.botoesRow}>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { flushSync } from 'react-dom'
 import { supabase } from './supabase'
 import { baseModelo } from './lib/fotosCatalogo'
 import { agruparVariantes, chaveVariante, memoriaDe, nomeSemMemoria } from './lib/variantes'
@@ -339,6 +340,20 @@ function emprestarFotos(lista: Produto[], fontes: Produto[] = lista): Produto[] 
   })
 }
 
+// Ordem do catálogo: marca (na ordem do Admin), depois o modelo em ordem natural (iPhone 11, 12, 13...), depois a memória
+const comparaNatural = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' }).compare
+function ordenarCatalogo(lista: Produto[], marcas: { nome: string }[]): Produto[] {
+  const posMarca = (m?: string | null) => {
+    const i = marcas.findIndex(x => mesmaMarca(x.nome, m))
+    return i < 0 ? marcas.length : i
+  }
+  return [...lista].sort((a, b) =>
+    posMarca(a.marca) - posMarca(b.marca)
+    || comparaNatural(a.marca || '', b.marca || '')
+    || comparaNatural(nomeSemMemoria(a.modelo), nomeSemMemoria(b.modelo))
+    || (memoriaDe(a.modelo, a.memoria)?.valor || 0) - (memoriaDe(b.modelo, b.memoria)?.valor || 0))
+}
+
 function App() {
   const navigate = useNavigate()
   // Fotos de cada cor por modelo (todas as cadastradas, carregadas uma vez): no cartão, passa as cores com o dedo
@@ -375,7 +390,7 @@ function App() {
       setFotosModelo(m)
     })
   }, [])
-  const [produtos, setProdutos] = useState<Produto[]>(emprestarFotos(soCelulares(CACHE?.produtos || [])))
+  const [produtos, setProdutos] = useState<Produto[]>(ordenarCatalogo(emprestarFotos(soCelulares(CACHE?.produtos || [])), CACHE?.marcas || []))
   const [banners, setBanners] = useState<Banner[]>(CACHE?.banners || [])
   const [categorias, setCategorias] = useState<ItemVitrine[]>((CACHE?.categorias || []).filter(c => !SO_CELULARES || semAcento(c.nome).includes('celular')))
   const [marcas, setMarcas] = useState<ItemVitrine[]>(CACHE?.marcas || [])
@@ -411,6 +426,9 @@ function App() {
   const [sugestoesAbertas, setSugestoesAbertas] = useState(false)
   const [grupoAcessorio, setGrupoAcessorio] = useState('')
   const campoCelularRef = useRef<HTMLInputElement>(null)
+  // Lupa do topo (catálogo só de celulares): abre um campo de busca
+  const [buscaAberta, setBuscaAberta] = useState(false)
+  const campoBuscaRef = useRef<HTMLInputElement>(null)
   const [categoriaAcesa, setCategoriaAcesa] = useState<string | null>(null)
   const toqueInicio = useRef<number | null>(null)
   const topoRef = useRef<HTMLDivElement>(null)
@@ -439,7 +457,7 @@ function App() {
       const falhou = !!p.error
       if (!falhou || !CACHE) {
         setModelos(novosModelos); setCategorias(novasCategorias.filter(c => !SO_CELULARES || semAcento(c.nome).includes('celular'))); setMarcas(novasMarcas)
-        setProdutos(emprestarFotos(soCelulares(novosProdutos), (p.data || []) as Produto[])); setBanners(novosBanners)
+        setProdutos(ordenarCatalogo(emprestarFotos(soCelulares(novosProdutos), (p.data || []) as Produto[]), novasMarcas)); setBanners(novosBanners)
       }
       setCarregando(false)
       if (!falhou) {
@@ -662,7 +680,7 @@ function App() {
   }
 
   function limparFiltros() {
-    setBusca(''); setCategoriaAtiva(null); setMarcaAtiva(null); setFiltroEspecial(null); setMeuCelular(null)
+    setBusca(''); setCategoriaAtiva(null); setMarcaAtiva(null); setFiltroEspecial(null); setMeuCelular(null); setBuscaAberta(false)
   }
 
   // ─── Busca por modelo de celular ─────────────────
@@ -681,6 +699,15 @@ function App() {
   }
 
   function abrirBuscaCelular() {
+    if (SO_CELULARES) {
+      // Abre o campo e já foca (no mesmo toque, pra o teclado subir no iPad/iPhone)
+      if (selecionado) fecharProduto()
+      setMenuAberto(false); setSacolaAberta(false)
+      flushSync(() => setBuscaAberta(true))
+      campoBuscaRef.current?.focus()
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
     if (selecionado) fecharProduto()
     limparFiltros()
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -771,9 +798,11 @@ function App() {
   }
 
   const resultados = useMemo(() => {
-    const termo = semAcento(busca)
+    // Cada palavra digitada precisa aparecer (ex: "samsung a16" ou "15 pro 256")
+    const palavras = semAcento(busca).split(/\s+/).filter(Boolean)
     return produtos.filter(p => {
-      if (termo && !semAcento(`${p.marca} ${p.modelo} ${p.memoria || ''} ${p.categoria} ${p.cor || ''}`).includes(termo)) return false
+      const alvo = palavras.length ? semAcento(`${p.marca} ${p.modelo} ${p.memoria || ''} ${p.categoria} ${p.cor || ''}`) : ''
+      if (palavras.length && !palavras.every(w => alvo.includes(w))) return false
       if (categoriaAtiva && p.categoria !== categoriaAtiva) return false
       if (marcaAtiva && !mesmaMarca(p.marca, marcaAtiva)) return false
       if (filtroEspecial === 'destaques' && !p.destaque) return false
@@ -1170,11 +1199,20 @@ function App() {
         <button className="mm-icone" onClick={abrirBuscaCelular} aria-label="Buscar"><IconeBusca /></button>
         {botaoSacolaTopo}
       </header>
-      {busca && filtrando && (
+      {(buscaAberta || (busca && filtrando)) && (
         <div className="mm-busca">
           <IconeBusca />
-          <input autoFocus placeholder="Buscar celular, fone, capinha..." value={busca} onChange={e => setBusca(e.target.value)} />
-          {busca && <button onClick={() => setBusca('')}>✕</button>}
+          <input ref={campoBuscaRef} autoFocus={!buscaAberta} type="search" enterKeyHint="search"
+            placeholder={SO_CELULARES ? 'Buscar celular: iPhone 15, A16, Redmi...' : 'Buscar celular, fone, capinha...'}
+            value={busca}
+            onChange={e => {
+              const t = e.target.value
+              // Buscando por texto: sai da marca/filtro escolhido pra procurar em tudo
+              if (t.trim() && !busca.trim()) { setCategoriaAtiva(null); setMarcaAtiva(null); setFiltroEspecial(null); setMeuCelular(null) }
+              setBusca(t)
+            }}
+            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
+          <button onClick={() => { setBusca(''); setBuscaAberta(false) }} aria-label="Fechar busca">✕</button>
         </div>
       )}
 
@@ -1565,6 +1603,7 @@ body { display: block !important; place-items: normal !important; margin: 0 !imp
 
 .mm .mm-busca { display: flex; align-items: center; gap: 8px; margin: 12px 16px 0; background: var(--cinza); border-radius: 16px; padding: 4px 6px 4px 14px; color: #86868b; }
 .mm .mm-busca input { flex: 1; border: none; outline: none; background: none; font-size: 17px; padding: 11px 0; font-family: inherit; color: var(--tinta); min-width: 0; }
+.mm .mm-busca input::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
 .mm .mm-busca button { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; color: #888; font-size: 16px; }
 
 /* Banner */
