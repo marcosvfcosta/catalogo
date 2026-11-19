@@ -260,7 +260,7 @@ function estilos(celular: boolean): Record<string, React.CSSProperties> {
     formGrid2: { ...base.formGrid2, gridTemplateColumns: '1fr', gap: 12 },
     formGrid3: { ...base.formGrid3, gridTemplateColumns: 'minmax(0, 1fr)', gap: 12 },
     input: { ...base.input, fontSize: 16 },
-    parcelasGrid: { ...base.parcelasGrid, gridTemplateColumns: 'minmax(0, 1fr)' },
+    parcelasGrid: { ...base.parcelasGrid, gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'none', gridAutoFlow: 'row' },
     parcelaCard: { ...base.parcelaCard, padding: '12px 14px', minWidth: 0 },
     resumoFinal: { ...base.resumoFinal, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', padding: 16, gap: 14 },
     botoesRow: { ...base.botoesRow, flexDirection: 'column', alignItems: 'stretch' },
@@ -2494,7 +2494,8 @@ const base: Record<string, React.CSSProperties> = {
   resumoBox: { background: '#fff4ec', border: 'none', borderRadius: 18, padding: '14px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' },
   resumoLabel: { color: '#ff6600', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4, textAlign: 'center' },
   resumoValor: { color: '#1d1d1f', fontSize: 26, fontWeight: 800, textAlign: 'center' },
-  parcelasGrid: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 8 }, // uma embaixo da outra, em sequência (1x, 2x, 3x...)
+  // Duas colunas em sequência: desce a da esquerda e continua na da direita (À vista, Débito, 1x, 2x, 3x...)
+  parcelasGrid: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gridTemplateRows: `repeat(${Math.ceil(TAXAS.length / 2)}, auto)`, gridAutoFlow: 'column', gap: 10 },
   parcelaCard: { background: '#f5f5f7', borderRadius: 14, padding: '12px 16px', cursor: 'pointer' },
   parcelaAtiva: { background: '#fff4ec' },
   resumoFinal: { background: '#fff', border: '1px solid #ececf0', borderRadius: 22, padding: 24, marginBottom: 20, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, alignItems: 'center' },
