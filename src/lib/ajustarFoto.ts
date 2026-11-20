@@ -32,7 +32,10 @@ function paraArquivo(canvas: HTMLCanvasElement, nomeBase: string): Promise<File>
   })
 }
 
-export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promise<FotoAjustada> {
+// soProdutoIA: apaga também o que a IA tem certeza que NÃO é produto (dedo, mão) — usado nas capinhas
+export type OpcoesAjuste = { soProdutoIA?: boolean }
+
+export async function ajustarFoto(original: File, mascaraIA?: MascaraIA, opcoes: OpcoesAjuste = {}): Promise<FotoAjustada> {
   try {
     const img = await carregarImagem(original)
     const escala = Math.min(1, LIMITE_TRABALHO / Math.max(img.width, img.height))
@@ -256,6 +259,62 @@ export async function ajustarFoto(original: File, mascaraIA?: MascaraIA): Promis
           const x = p % w, y = (p - x) / w
           // só com certeza alta: a IA "vaza" um brilho em volta do produto (0,6–0,85) que deixava pedaços do fundo
           if (ia(x, y) > 0.9) fundo[p] = 0
+        }
+      }
+
+      // Capinhas: dedo/mão entrando pela borda da foto (cor de pele ligada à borda) vira fundo
+      if (opcoes.soProdutoIA) {
+        const pele = new Uint8Array(w * h)
+        for (let p = 0; p < w * h; p++) {
+          if (fundo[p]) continue
+          const r = px[p * 4], g = px[p * 4 + 1], b = px[p * 4 + 2]
+          const cr = 128 + 0.5 * r - 0.4187 * g - 0.0813 * b
+          const cb = 128 - 0.1687 * r - 0.3313 * g + 0.5 * b
+          // matiz de pele (0–30°): separa do dourado das capinhas (≈35–50°)
+          const mx = Math.max(r, g, b), mn = Math.min(r, g, b)
+          const matiz = mx === r && mx > mn ? 60 * ((g - b) / (mx - mn)) : -1
+          if (cr > 138 && cr < 180 && cb > 80 && cb < 128 && r > 60 && matiz >= 0 && matiz <= 30) pele[p] = 1
+        }
+        const filaPele = new Int32Array(w * h)
+        let a = 0, z = 0
+        // só avança entre vizinhos de cor parecida (não "vaza" do dedo para a capa encostada nele)
+        const parecido = (p: number, de: number) => de < 0 ||
+          Math.abs(px[p * 4] - px[de * 4]) + Math.abs(px[p * 4 + 1] - px[de * 4 + 1]) + Math.abs(px[p * 4 + 2] - px[de * 4 + 2]) < 30
+        const entra = (p: number, de = -1) => { if (pele[p] === 1 && parecido(p, de)) { pele[p] = 2; filaPele[z++] = p } }
+        for (let x = 0; x < w; x++) { entra(x); entra((h - 1) * w + x) }
+        for (let y = 0; y < h; y++) { entra(y * w); entra(y * w + w - 1) }
+        while (a < z) {
+          const p = filaPele[a++]
+          const x = p % w, y = (p - x) / w
+          if (x > 0) entra(p - 1, p)
+          if (x < w - 1) entra(p + 1, p)
+          if (y > 0) entra(p - w, p)
+          if (y < h - 1) entra(p + w, p)
+        }
+        // só vale se for um pedaço razoável (dedo), não um pontinho
+        if (z > w * h * 0.004) {
+          const R = Math.max(2, Math.round(Math.min(w, h) / 150)) // engole a sombrinha em volta do dedo
+          for (let p = 0; p < w * h; p++) {
+            if (pele[p] !== 2) continue
+            const x = p % w, y = (p - x) / w
+            for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+              const xx = x + dx, yy = y + dy
+              if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue
+              const q = yy * w + xx
+              const r = px[q * 4], g = px[q * 4 + 1], b = px[q * 4 + 2]
+              const satur = Math.max(r, g, b) - Math.min(r, g, b)
+              if (q === p || pele[q] === 1 || satur < 40) fundo[q] = 1
+            }
+          }
+        }
+      }
+
+      // Capinhas: o que a IA tem certeza que não é a capa (dedo, mão, objeto encostado) vira fundo
+      if (ia && opcoes.soProdutoIA) {
+        for (let p = 0; p < w * h; p++) {
+          if (fundo[p]) continue
+          const x = p % w, y = (p - x) / w
+          if (ia(x, y) < 0.12) fundo[p] = 1
         }
       }
 

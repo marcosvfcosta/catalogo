@@ -5,6 +5,7 @@ import { useVoltarDeslizando } from '../lib/voltarDeslizando'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { recortarProduto } from '../lib/recortarProduto'
+import { padraoCapa } from '../lib/padraoCapa'
 import CartaoAparelho, { marcaDoAparelho, precosComFornecedor, listaValida, CORES_BOLINHA, type DiaPreco } from '../components/CartaoAparelho'
 import AssistenteIA from './AssistenteIA'
 import VitrineAdmin from './VitrineAdmin'
@@ -523,17 +524,6 @@ export default function Admin() {
     finally { setAvisoIA('') }
   }
 
-  async function recortarCapinha(f: CapaFoto) {
-    setIaTrabalhando(f.url)
-    try {
-      const nova = await recortarUrl(f.url)
-      await supabase.from('capas_fotos').update({ url: nova }).eq('id', f.id)
-      setAntesIA(prev => ({ ...prev, [nova]: f.url }))
-      await carregarCapas()
-    } catch (e) { alert('Não deu certo: ' + (e instanceof Error ? e.message : e)) }
-    setIaTrabalhando(null)
-  }
-
   async function voltarCapinha(f: CapaFoto) {
     const antes = antesIA[f.url]
     if (!antes) return
@@ -724,6 +714,35 @@ export default function Admin() {
     return url
   }
 
+  // Capinha: SEMPRE no automático → só a capa (sem dedo), fundo branco, centralizada, sombra e reflexo
+  async function enviarCapinhaPadrao(arquivo: File) {
+    let final: File = arquivo
+    try {
+      const recortada = await recortarProduto(arquivo, setAvisoIA, { soProdutoIA: true })
+      setAvisoIA('Deixando no padrão do catálogo...')
+      final = await padraoCapa(recortada)
+    } catch (e) { console.error('Padrão da capinha:', e) }
+    finally { setAvisoIA('') }
+    return enviarOriginal(final, 'capas/capa')
+  }
+
+  // Refaz o padrão numa capinha já cadastrada
+  async function padronizarCapinha(f: CapaFoto) {
+    setIaTrabalhando(f.url)
+    try {
+      const r = await fetch(f.url, { cache: 'no-store' })
+      if (!r.ok) throw new Error('Não consegui abrir a foto')
+      const recortada = await recortarProduto(await r.blob(), setAvisoIA, { soProdutoIA: true })
+      setAvisoIA('Deixando no padrão do catálogo...')
+      const nova = await enviarOriginal(await padraoCapa(recortada), 'capas/capa')
+      await supabase.from('capas_fotos').update({ url: nova }).eq('id', f.id)
+      setAntesIA(prev => ({ ...prev, [nova]: f.url }))
+      await carregarCapas()
+    } catch (e) { alert('Não deu certo: ' + (e instanceof Error ? e.message : e)) }
+    finally { setAvisoIA('') }
+    setIaTrabalhando(null)
+  }
+
   async function uploadFotoModeloCapa(arquivo: File) {
     setCapaUploadModelo(true)
     try {
@@ -786,7 +805,7 @@ export default function Admin() {
     let falhas = 0
     for (let i = 0; i < arquivos.length; i++) {
       try {
-        const url = await enviarArquivoCapa(arquivos[i], 'capa')
+        const url = await enviarCapinhaPadrao(arquivos[i])
         const { error } = await supabase.from('capas_fotos').insert([{ modelo_id: capaAberta.id, tipo: capaTipo, url }])
         if (error) falhas++
       } catch {
@@ -2337,7 +2356,7 @@ export default function Admin() {
             })}
           </div>
 
-          {seletorAjuste}
+          <p style={{ color: '#25D366', fontSize: 12, margin: '0 0 8px' }}>🪄 Automático: tira o fundo e o dedo, deixa no branco, centraliza e coloca sombra. Dica: fotografe a capinha em cima de uma folha branca.</p>
           <label style={{ ...uploadBox, borderColor: '#ff6600', color: '#ff6600' }}>
             {capaEnviando
               ? `⏳ Enviando ${capaEnviando.feitas} de ${capaEnviando.total}...`
@@ -2364,7 +2383,7 @@ export default function Admin() {
                     <img src={f.url} alt="capinha" style={{ width: '100%', aspectRatio: '3 / 4', objectFit: 'cover', borderRadius: 10, border: '1px solid #333', display: 'block' }} />
                     <button onClick={() => excluirCapinha(f)}
                       style={{ position: 'absolute', top: 4, right: 4, background: '#7a1111', border: 'none', color: 'white', borderRadius: '50%', width: 26, height: 26, cursor: 'pointer', fontSize: 12 }}>✕</button>
-                    {botoesIA(f.url, () => recortarCapinha(f), () => voltarCapinha(f))}
+                    {botoesIA(f.url, () => padronizarCapinha(f), () => voltarCapinha(f))}
                     <button onClick={() => estudioCapinha(f)} disabled={!!iaTrabalhando} title="Gemini: foto de estúdio com a capinha vestida no celular, fundo branco"
                       style={{ ...btnIA, width: '100%', marginTop: 4, background: '#2a1503', borderColor: '#ff6600', color: '#ffb27a', opacity: iaTrabalhando && iaTrabalhando !== f.url ? 0.4 : 1 }}>
                       {iaTrabalhando === f.url ? '⏳ Criando...' : '✨ Estúdio'}

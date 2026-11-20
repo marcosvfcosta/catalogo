@@ -4,7 +4,7 @@
 // (carregador, cabo, fone) não é mais "comido". O fundo liso continua sendo tirado pela cor,
 // o que mantém detalhes finos como cabos. Em foto com cenário, a IA recorta sozinha.
 
-import { ajustarFoto } from './ajustarFoto'
+import { ajustarFoto, type OpcoesAjuste } from './ajustarFoto'
 
 const VERSAO_ORT = '1.20.1'
 const CDN_ORT = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${VERSAO_ORT}/dist/`
@@ -94,19 +94,19 @@ function comTempo<T>(p: Promise<T>, ms: number) {
   return Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error('A IA demorou demais')), ms))])
 }
 
-export function recortarProduto(original: Blob, aviso?: (t: string) => void): Promise<File> {
-  const vez = fila.then(() => recortarAgora(original, aviso))
+export function recortarProduto(original: Blob, aviso?: (t: string) => void, opcoes?: OpcoesAjuste): Promise<File> {
+  const vez = fila.then(() => recortarAgora(original, aviso, opcoes))
   fila = vez.catch(() => undefined)
   return vez
 }
 
-async function recortarAgora(original: Blob, aviso?: (t: string) => void): Promise<File> {
+async function recortarAgora(original: Blob, aviso?: (t: string) => void, opcoes?: OpcoesAjuste): Promise<File> {
   const arquivo = original instanceof File ? original
     : new File([original], 'foto.' + ((original.type.split('/')[1] || 'png').replace('jpeg', 'jpg')), { type: original.type || 'image/png' })
   let mascara
   try { mascara = await comTempo(mascaraDoProduto(arquivo, aviso), 60000) }
   catch (e) { console.error('IA do recorte:', e) } // sem IA: faz só o ajuste normal
-  const aj = await ajustarFoto(arquivo, mascara)
+  const aj = await ajustarFoto(arquivo, mascara, opcoes)
   if (!aj.ajustou || !aj.semFundo) throw new Error('Não consegui separar o produto do fundo nessa foto')
   return aj.arquivo
 }
