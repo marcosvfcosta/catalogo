@@ -136,9 +136,13 @@ export default function Black() {
     window.setTimeout(() => porNaSacolaCom(exp.modelo), 380)
   }
 
-  function abrirProduto(p: BlackProduto) {
+  function abrirProduto(p: BlackProduto, foto = 0) {
     setAberto(p)
-    setFotoAtual(0)
+    setFotoAtual(foto)
+    window.setTimeout(() => {
+      const g = raiz.current?.querySelector('.gaveta .galeria') as HTMLDivElement | null
+      if (g) g.scrollLeft = foto * g.clientWidth
+    }, 30)
     setModeloEsc(filtroModelo && serveNo(p, filtroModelo) && p.tipo === 'capa' ? filtroModelo : '')
   }
   function fechar() { setAberto(null); setSacolaAberta(false) }
@@ -281,13 +285,14 @@ export default function Black() {
     return () => { document.body.style.overflow = antes }
   }, [filtroModelo])
   const telaModeloRef = useRef<HTMLDivElement>(null)
+  // na tela do modelo cada foto vira uma capinha na grade (nada de carrossel)
+  const cardsModelo = base.flatMap(p => (p.fotos.length ? p.fotos : ['']).map((_, i) => ({ p, i })))
   function abrirModelo(nome: string) {
     const topo = raiz.current?.querySelector('.topo')?.getBoundingClientRect().bottom
     if (topo && telaModeloRef.current) telaModeloRef.current.style.top = Math.max(0, Math.round(topo)) + 'px'
     setFiltroModelo(nome)
     window.setTimeout(() => {
       telaModeloRef.current?.scrollTo({ top: 0 })
-      telaModeloRef.current?.querySelector('.trocar .on')?.scrollIntoView({ inline: 'center', block: 'nearest' })
     }, 30)
   }
 
@@ -317,14 +322,14 @@ export default function Black() {
   }, [clipeAtivo, listaVideos.length])
 
   // ── pedaços da tela ──
-  function card(p: BlackProduto) {
+  function card(p: BlackProduto, foto = 0) {
     const promo = emPromocao(p)
     return (
-      <article className="card" key={p.id} onClick={() => abrirProduto(p)}>
+      <article className="card" key={p.id + '-' + foto} onClick={() => abrirProduto(p, foto)}>
         <div className="foto">
-          {p.fotos[0] ? <img src={p.fotos[0]} alt={p.nome} loading="lazy" /> : <span className="semfoto">sem foto</span>}
+          {p.fotos[foto] ? <img src={p.fotos[foto]} alt={p.nome} loading="lazy" /> : <span className="semfoto">sem foto</span>}
           {promo ? <span className="badge">BLACK -{Math.round((1 - (p.preco_promo as number) / p.preco) * 100)}%</span> : p.lancamento ? <span className="badge novo">NOVO</span> : null}
-          <button className="add" aria-label="Adicionar" onClick={e => { e.stopPropagation(); abrirProduto(p) }}>
+          <button className="add" aria-label="Adicionar" onClick={e => { e.stopPropagation(); abrirProduto(p, foto) }}>
             <svg width="18" height="18" viewBox="0 0 24 24" stroke="#111" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
           </button>
         </div>
@@ -344,7 +349,7 @@ export default function Black() {
       <section className="vitrine">
         <div className="vitrine-topo"><h2>{antes}{depois && <span className="fogo">{depois}</span>}</h2></div>
         {s.texto && <p className="vitrine-desc">{s.texto}</p>}
-        {lista.length ? <div className="trilho sem-barra">{lista.map(card)}</div>
+        {lista.length ? <div className="trilho sem-barra">{lista.map(p => card(p))}</div>
           : <p className="vazio">Nada nessa vitrine pro filtro escolhido. Toque em "Limpar filtro".</p>}
       </section>
     )
@@ -449,7 +454,7 @@ export default function Black() {
                 {nomesSel.length > 0 && <p className="sel">{nomesSel.join(' · ')}</p>}
                 <p>{base.length} {base.length === 1 ? 'opção' : 'opções'}</p>
               </div>
-              {base.length ? <div className="grade">{base.map(card)}</div>
+              {base.length ? <div className="grade">{base.map(p => card(p))}</div>
                 : <p className="vazio">Ainda não temos opções pra esse filtro. Chama a gente no WhatsApp que a gente procura pra você 😊</p>}
               <button className="limpar-grande" onClick={() => { limparTudo(); filtroRef.current?.scrollIntoView({ behavior: 'smooth' }) }}>Ver todas as ofertas</button>
             </section>
@@ -487,7 +492,7 @@ export default function Black() {
             <section className="vitrine todas">
               <div className="vitrine-topo"><h2>Todas as <span className="fogo">capinhas</span></h2></div>
               <p className="vitrine-desc">{base.length} {base.length === 1 ? 'opção' : 'opções'} pra você escolher</p>
-              <div className="grade">{base.map(card)}</div>
+              <div className="grade">{base.map(p => card(p))}</div>
             </section>
           )}
           </>}
@@ -501,21 +506,11 @@ export default function Black() {
           </button>
           <div className="tm-titulo">
             <b>{filtroTipo === 'cordinha' ? 'Cordinhas' : 'Capinhas'} pro <span>{filtroModelo}</span></b>
-            <small>{base.length} {base.length === 1 ? 'opção' : 'opções'}</small>
+            <small>{cardsModelo.length} {cardsModelo.length === 1 ? 'opção' : 'opções'}</small>
           </div>
         </div>
-        <div className="trocar sem-barra">
-          {modelos.map(m => (
-            <button key={m.id} className={filtroModelo === m.nome ? 'on' : ''} onClick={() => abrirModelo(m.nome)}>{m.nome}</button>
-          ))}
-        </div>
-        <div className="tm-abas">
-          {(['tudo', 'capa', 'cordinha'] as TipoFiltro[]).map(t => (
-            <button key={t} className={filtroTipo === t ? 'on' : ''} onClick={() => setFiltroTipo(t)}>{t === 'tudo' ? 'Tudo' : t === 'capa' ? 'Capinhas' : 'Cordinhas'}</button>
-          ))}
-        </div>
         {nomesSel.length > 0 && <p className="tm-sel">{nomesSel.join(' · ')} <button onClick={() => setFiltrosSel([])}>limpar</button></p>}
-        {base.length ? <div className="grade">{base.map(card)}</div>
+        {cardsModelo.length ? <div className="grade">{cardsModelo.map(({ p, i }) => card(p, i))}</div>
           : <p className="vazio">Ainda não temos capinhas pra esse modelo. Chama a gente no WhatsApp que a gente procura pra você 😊</p>}
       </div>
 
