@@ -287,8 +287,25 @@ export default function Black() {
   }, [filtroModelo])
   const telaModeloRef = useRef<HTMLDivElement>(null)
   // na tela do modelo cada foto vira uma capinha na grade (nada de carrossel)
-  const cardsModelo = base.flatMap(p => (p.fotos.length ? p.fotos : ['']).map((_, i) => ({ p, i })))
+  const [estiloSel, setEstiloSel] = useState('')
+  // filtro da tela do modelo: Couro · Brilho · Transparente (vêm do grupo Estilo do painel)
+  const chipsEstilo = [/couro/i, /brilho/i, /transpar/i]
+    .map(re => filtrosOp.find(f => f.grupo === 'estilo' && re.test(f.nome)))
+    .filter((f): f is BlackFiltro => !!f)
+    .map(f => ({ id: f.id, rotulo: f.nome.replace(/^com\s+/i, '').replace(/^./, x => x.toUpperCase()) }))
+  const cardsModelo = base.filter(p => !estiloSel || (p.filtros || []).includes(estiloSel)).flatMap(p => (p.fotos.length ? p.fotos : ['']).map((_, i) => ({ p, i })))
+  function fecharModelo() { setFiltroModelo(''); setFiltroTipo('tudo'); setEstiloSel('') }
+  // gesto/botão voltar do celular fecha a tela do modelo
+  useEffect(() => {
+    if (!filtroModelo) return
+    if (!history.state?.telaModelo) history.pushState({ telaModelo: true }, '')
+    const aoVoltar = () => fecharModelo()
+    window.addEventListener('popstate', aoVoltar)
+    return () => window.removeEventListener('popstate', aoVoltar)
+  }, [filtroModelo])
+  function sairDoModelo() { if (history.state?.telaModelo) history.back(); else fecharModelo() }
   function abrirModelo(nome: string) {
+    setEstiloSel('')
     const topo = raiz.current?.querySelector('.topo')?.getBoundingClientRect().bottom
     if (topo && telaModeloRef.current) telaModeloRef.current.style.top = Math.max(0, Math.round(topo)) + 'px'
     setFiltroModelo(nome)
@@ -368,7 +385,7 @@ export default function Black() {
         <button className="icone" aria-label="Ir pro filtro" onClick={() => filtroRef.current?.scrollIntoView({ behavior: 'smooth' })}>
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2.4" strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
         </button>
-        <a className="logo" href="/black"><span className="m">Marcos</span><span className="g">Magazine</span></a>
+        <a className="logo" href="/black" onClick={e => { if (filtroModelo) { e.preventDefault(); sairDoModelo() } }}><span className="m">Marcos</span><span className="g">Magazine</span></a>
         <div className="direita">
           <button className="icone" aria-label="Buscar" onClick={() => filtroRef.current?.scrollIntoView({ behavior: 'smooth' })}>
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2.4" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
@@ -501,15 +518,17 @@ export default function Black() {
       )}
 
       <div className={`tela-modelo ${filtroModelo ? 'on' : ''}`} ref={telaModeloRef}>
-        <div className="tm-barra">
-          <button className="tm-voltar" aria-label="Voltar" onClick={() => { setFiltroModelo(''); setFiltroTipo('tudo') }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M15 5l-7 7 7 7" /></svg>
-          </button>
-          <div className="tm-titulo">
-            <b>{filtroTipo === 'cordinha' ? 'Cordinhas' : 'Capinhas'} pro <span>{filtroModelo}</span></b>
-            <small>{cardsModelo.length} {cardsModelo.length === 1 ? 'opção' : 'opções'}</small>
-          </div>
+        <div className="tm-titulo">
+          <b>{filtroTipo === 'cordinha' ? 'Cordinhas' : 'Capinhas'} pro <span>{filtroModelo}</span></b>
         </div>
+        {chipsEstilo.length > 0 && (
+          <div className="tm-chips sem-barra">
+            <button className={!estiloSel ? 'on' : ''} onClick={() => setEstiloSel('')}>Todas</button>
+            {chipsEstilo.map(c => (
+              <button key={c.id} className={estiloSel === c.id ? 'on' : ''} onClick={() => setEstiloSel(c.id)}>{c.rotulo}</button>
+            ))}
+          </div>
+        )}
         {nomesSel.length > 0 && <p className="tm-sel">{nomesSel.join(' · ')} <button onClick={() => setFiltrosSel([])}>limpar</button></p>}
         {cardsModelo.length ? <div className="grade">{cardsModelo.map(({ p, i }) => card(p, i))}</div>
           : <p className="vazio">Ainda não temos capinhas pra esse modelo. Chama a gente no WhatsApp que a gente procura pra você 😊</p>}
