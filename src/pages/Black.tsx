@@ -67,7 +67,7 @@ export default function Black() {
     ;(async () => {
       const [p, m, v, c, ve, fi] = await Promise.all([
         supabase.from('black_produtos').select('*').eq('no_site', true).order('ordem').order('criado_em', { ascending: false }),
-        supabase.from('black_modelos').select('*').order('ordem'),
+        supabase.from('black_modelos').select('*').order('ordem', { ascending: false }), // mais novo primeiro
         supabase.from('black_videos').select('*').order('ordem'),
         supabase.from('black_config').select('dados').eq('id', 1).maybeSingle(),
         supabase.from('black_vestidas').select('*'),

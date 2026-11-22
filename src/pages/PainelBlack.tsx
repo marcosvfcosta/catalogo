@@ -90,7 +90,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
   async function carregar() {
     const [p, m, v, c, ve, fi] = await Promise.all([
       supabase.from('black_produtos').select('*').order('ordem').order('criado_em', { ascending: false }),
-      supabase.from('black_modelos').select('*').order('ordem'),
+      supabase.from('black_modelos').select('*').order('ordem', { ascending: false }), // mais novo primeiro
       supabase.from('black_videos').select('*').order('ordem'),
       supabase.from('black_config').select('dados').eq('id', 1).maybeSingle(),
       supabase.from('black_vestidas').select('*').order('criado_em'),
@@ -420,7 +420,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
   async function addModelo() {
     const nome = novoModelo.nome.trim()
     if (!nome) return avisar('Digite o modelo')
-    const { error } = await supabase.from('black_modelos').insert([{ nome, marca: novoModelo.marca.trim() || 'Outros', ordem: modelos.length + 1 }])
+    const { error } = await supabase.from('black_modelos').insert([{ nome, marca: novoModelo.marca.trim() || 'Outros', ordem: Math.max(0, ...modelos.map(x => x.ordem)) + 1 }])
     if (error) return avisar(error.message.includes('duplicate') ? 'Esse modelo já existe' : 'Não salvou: ' + error.message)
     setNovoModelo({ marca: novoModelo.marca, nome: '' })
     avisar('Modelo adicionado ✓')
@@ -433,7 +433,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     const nova = [...modelos]
     ;[nova[i], nova[j]] = [nova[j], nova[i]]
     setModelos(nova)
-    await Promise.all(nova.map((x, k) => supabase.from('black_modelos').update({ ordem: k + 1 }).eq('id', x.id)))
+    await Promise.all(nova.map((x, k) => supabase.from('black_modelos').update({ ordem: nova.length - k }).eq('id', x.id)))
   }
   async function apagarModelo(m: BlackModelo) {
     if (!confirm(`Apagar o modelo ${m.nome}?`)) return
