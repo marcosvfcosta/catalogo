@@ -13,7 +13,7 @@ type Filtro = 'todos' | 'site' | 'pausados' | 'capa' | 'cordinha' | 'promo'
 
 type Props = {
   onSair: () => void
-  enviarFoto: (arquivo: File) => Promise<string> // já deixa no padrão (fundo branco, centralizada)
+  enviarFoto: (arquivo: File) => Promise<string> // envia a foto como está (sem editar)
   enviarArquivo: (arquivo: File, pasta?: string) => Promise<string> // envia como está (vídeos, fotos da IA)
 }
 
@@ -140,7 +140,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     if (!arquivos || !arquivos.length) return
     const fs = Array.from(arquivos)
     for (let i = 0; i < fs.length; i++) {
-      setOcupado(`Deixando a foto ${i + 1} de ${fs.length} no padrão...`)
+      setOcupado(`Enviando foto ${i + 1} de ${fs.length}...`)
       try {
         const url = await enviarFoto(fs[i])
         setForm(f => ({ ...f, fotos: [...f.fotos, url] }))
@@ -387,7 +387,6 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
               <input type="file" accept="image/*" multiple hidden onChange={e => { adicionarFotos(e.target.files); e.target.value = '' }} />
             </label>
           </div>
-          <p className="pb-auto">🪄 Automático: tira o fundo e o dedo, deixa no branco, centraliza e coloca sombra. Dica: fotografe em cima de uma folha branca.</p>
         </div>
 
         <div className="pb-bloco">

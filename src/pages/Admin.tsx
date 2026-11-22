@@ -5,7 +5,6 @@ import { useVoltarDeslizando } from '../lib/voltarDeslizando'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { recortarProduto } from '../lib/recortarProduto'
-import { padraoCapa } from '../lib/padraoCapa'
 import PainelBlack from './PainelBlack'
 import CartaoAparelho, { marcaDoAparelho, precosComFornecedor, listaValida, CORES_BOLINHA, type DiaPreco } from '../components/CartaoAparelho'
 import AssistenteIA from './AssistenteIA'
@@ -658,17 +657,6 @@ export default function Admin() {
   }
 
 
-  // Capinha: SEMPRE no automático → só a capa (sem dedo), fundo branco, centralizada, sombra e reflexo
-  async function enviarCapinhaPadrao(arquivo: File) {
-    let final: File = arquivo
-    try {
-      const recortada = await recortarProduto(arquivo, setAvisoIA, { soProdutoIA: true })
-      setAvisoIA('Deixando no padrão do catálogo...')
-      final = await padraoCapa(recortada)
-    } catch (e) { console.error('Padrão da capinha:', e) }
-    finally { setAvisoIA('') }
-    return enviarOriginal(final, 'black/capa')
-  }
 
 
 
@@ -2118,7 +2106,7 @@ export default function Admin() {
       {aba === 'capas' && (
         <PainelBlack
           onSair={() => setAba('cadastrar')}
-          enviarFoto={enviarCapinhaPadrao}
+          enviarFoto={arquivo => enviarOriginal(arquivo, 'black/capa')}
           enviarArquivo={(arquivo, pasta) => enviarOriginal(arquivo, pasta || 'black/video')}
         />
       )}
