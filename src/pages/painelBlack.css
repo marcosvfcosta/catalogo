@@ -155,6 +155,6 @@ textarea.pb-campo { height: 90px; padding: 12px 14px; resize: vertical; }
 .pb-add-linha .pb-campo { flex: 1; }
 .pb-add-linha .pb-btn-pequeno { flex: 0 0 auto; height: 50px; }
 .pb-foto-modelo { width: 52px; height: 52px; background: #F5F5F7; border: 1px solid var(--pb-line); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; cursor: pointer; }
-.pb-foto-modelo { background: #fff; }
-.pb-foto-modelo img { width: 100%; height: 100%; object-fit: contain; padding: 1px 0; }
+.pb-foto-modelo { background: transparent; border-color: transparent; }
+.pb-foto-modelo img { width: 100%; height: 100%; object-fit: contain; padding: 0; }
 .pb-foto-modelo svg { width: 22px; height: 22px; }
