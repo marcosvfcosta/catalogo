@@ -2119,7 +2119,7 @@ export default function Admin() {
         <PainelBlack
           onSair={() => setAba('cadastrar')}
           enviarFoto={enviarCapinhaPadrao}
-          enviarArquivo={arquivo => enviarOriginal(arquivo, 'black/video')}
+          enviarArquivo={(arquivo, pasta) => enviarOriginal(arquivo, pasta || 'black/video')}
         />
       )}
 

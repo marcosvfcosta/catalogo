@@ -23,6 +23,11 @@ export type BlackVideo = { id: string; video_url: string; capa_url: string | nul
 
 export type BlackSecao = { ativo: boolean; titulo: string; texto: string }
 
+export type BlackCor = { nome: string; hex: string }
+
+// Foto da capinha vestida num modelo + cor de celular (gerada pela IA no painel)
+export type BlackVestida = { id: string; produto_id: string; modelo: string; cor: string; url: string }
+
 export type BlackConfig = {
   faixa: string
   linha1: string
@@ -32,6 +37,7 @@ export type BlackConfig = {
   contagem: string // ISO; vazio = sem contagem
   contagem_titulo: string
   secoes: { filtro: BlackSecao; lancamentos: BlackSecao; videos: BlackSecao; mais: BlackSecao; promo: BlackSecao }
+  experimentar: { ativo: boolean; cores: BlackCor[] }
   whatsapp: string
   instagram: string
   endereco: string
@@ -53,6 +59,13 @@ export const BLACK_PADRAO: BlackConfig = {
     mais: { ativo: true, titulo: 'Mais vendidos', texto: 'Os queridinhos de Bom Jesus' },
     promo: { ativo: true, titulo: 'Promoção Black', texto: 'Preço de Black Friday enquanto durar o estoque' },
   },
+  experimentar: {
+    ativo: true,
+    cores: [
+      { nome: 'Preto', hex: '#1d1d1f' }, { nome: 'Branco', hex: '#f2f1ec' }, { nome: 'Azul', hex: '#5e7fa3' },
+      { nome: 'Rosa', hex: '#f2c6c9' }, { nome: 'Verde', hex: '#a9c3a4' },
+    ],
+  },
   whatsapp: '5564993374281',
   instagram: '@marcosmagazinee',
   endereco: 'Av. Goiás · Centro · Bom Jesus',
@@ -63,9 +76,14 @@ export const BLACK_PADRAO: BlackConfig = {
 export function lerConfig(dados: unknown): BlackConfig {
   const d = (dados && typeof dados === 'object' ? dados : {}) as Partial<BlackConfig>
   const s = (d.secoes || {}) as Partial<BlackConfig['secoes']>
+  const e = (d.experimentar || {}) as Partial<BlackConfig['experimentar']>
   return {
     ...BLACK_PADRAO,
     ...d,
+    experimentar: {
+      ativo: e.ativo ?? BLACK_PADRAO.experimentar.ativo,
+      cores: Array.isArray(e.cores) && e.cores.length ? e.cores : BLACK_PADRAO.experimentar.cores,
+    },
     secoes: {
       filtro: { ...BLACK_PADRAO.secoes.filtro, ...(s.filtro || {}) },
       lancamentos: { ...BLACK_PADRAO.secoes.lancamentos, ...(s.lancamentos || {}) },

@@ -117,3 +117,13 @@ textarea.pb-campo { height: 90px; padding: 12px 14px; resize: vertical; }
 @keyframes pb-gira { to { transform: rotate(360deg); } }
 .pb-toast { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translate(-50%, 20px); background: var(--pb-ink); color: #fff; font-size: 14px; padding: 12px 18px; opacity: 0; transition: .3s; z-index: 70; pointer-events: none; white-space: nowrap; }
 .pb-toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+/* experimentar */
+.pb-laranja { background: var(--pb-laranja) !important; }
+.pb-contorno-escuro { background: #fff !important; color: var(--pb-ink) !important; border: 1px solid var(--pb-ink) !important; }
+.pb-bolinha { display: inline-block; width: 14px; height: 14px; border-radius: 7px; margin-right: 7px; vertical-align: -2px; box-shadow: 0 0 0 1px rgba(0,0,0,.15); }
+.pb-cor { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.pb-cor input[type=color] { width: 50px; height: 50px; border: 1px solid var(--pb-line); padding: 2px; background: #fff; flex-shrink: 0; }
+.pb-cor .pb-campo { flex: 1; }
+.pb-cor button { width: 44px; height: 50px; border: 1px solid var(--pb-line) !important; color: #A3361F; font-size: 18px; flex-shrink: 0; }
+.pb-f .pb-capa { font-size: 9px; letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

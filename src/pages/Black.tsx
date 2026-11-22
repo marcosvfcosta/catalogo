@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react'
 import { supabase } from '../supabase'
 import {
   BLACK_PADRAO, emPromocao, lerConfig, precoFinal, reais, soNumeros,
-  type BlackConfig, type BlackModelo, type BlackProduto, type BlackVideo,
+  type BlackConfig, type BlackModelo, type BlackProduto, type BlackVestida, type BlackVideo,
 } from '../lib/blackConfig'
 import './black.css'
 
@@ -40,6 +40,9 @@ export default function Black() {
   const [produtos, setProdutos] = useState<BlackProduto[]>([])
   const [modelos, setModelos] = useState<BlackModelo[]>([])
   const [videos, setVideos] = useState<BlackVideo[]>([])
+  const [vestidas, setVestidas] = useState<BlackVestida[]>([])
+  const [exp, setExp] = useState<{ modelo: string; cor: string } | null>(null)
+  const [trocando, setTrocando] = useState(false)
   const [cfg, setCfg] = useState<BlackConfig>(BLACK_PADRAO)
   const [filtroModelo, setFiltroModelo] = useState('')
   const [filtroTipo, setFiltroTipo] = useState<TipoFiltro>('tudo')
@@ -59,12 +62,14 @@ export default function Black() {
     const corAntiga = document.body.style.background
     document.body.style.background = '#fff'
     ;(async () => {
-      const [p, m, v, c] = await Promise.all([
+      const [p, m, v, c, ve] = await Promise.all([
         supabase.from('black_produtos').select('*').eq('no_site', true).order('ordem').order('criado_em', { ascending: false }),
         supabase.from('black_modelos').select('*').order('ordem'),
         supabase.from('black_videos').select('*').order('ordem'),
         supabase.from('black_config').select('dados').eq('id', 1).maybeSingle(),
+        supabase.from('black_vestidas').select('*'),
       ])
+      setVestidas(ve.error ? [] : ((ve.data || []) as BlackVestida[]))
       setProdutos((p.data || []) as BlackProduto[])
       setModelos((m.data || []) as BlackModelo[])
       setVideos((v.data || []) as BlackVideo[])
@@ -93,6 +98,30 @@ export default function Black() {
   const itensSacola = sacola.map(i => ({ ...i, p: porId.get(i.id) })).filter((i): i is ItemSacola & { p: BlackProduto } => !!i.p)
   const totalSacola = itensSacola.reduce((s, i) => s + precoFinal(i.p) * i.q, 0)
   const zap = (msg: string) => window.open('https://wa.me/' + soNumeros(cfg.whatsapp) + '?text=' + encodeURIComponent(msg), '_blank')
+
+  // ── experimentar no meu celular ──
+  const vestidasDe = (p: BlackProduto | null) => (p ? vestidas.filter(v => v.produto_id === p.id && p.modelos.includes(v.modelo)) : [])
+  const podeExperimentar = (p: BlackProduto | null) => !!p && p.tipo === 'capa' && cfg.experimentar.ativo && vestidasDe(p).length > 0
+  const corHex = (nome: string) => cfg.experimentar.cores.find(c => c.nome === nome)?.hex || '#999'
+  function abrirExp() {
+    const vs = vestidasDe(aberto)
+    if (!vs.length) return
+    const modelo = modeloEsc && vs.some(v => v.modelo === modeloEsc) ? modeloEsc : vs[0].modelo
+    setExp({ modelo, cor: vs.find(v => v.modelo === modelo)!.cor })
+  }
+  function trocarExp(modelo: string, cor?: string) {
+    const vs = vestidasDe(aberto).filter(v => v.modelo === modelo)
+    const c = cor && vs.some(v => v.cor === cor) ? cor : (exp && vs.some(v => v.cor === exp.cor) ? exp.cor : vs[0]?.cor)
+    if (!c) return
+    setTrocando(true)
+    window.setTimeout(() => { setExp({ modelo, cor: c }); setTrocando(false) }, 280)
+  }
+  function expParaSacola() {
+    if (!exp) return
+    setModeloEsc(exp.modelo)
+    setExp(null)
+    window.setTimeout(() => porNaSacolaCom(exp.modelo), 380)
+  }
 
   function abrirProduto(p: BlackProduto) {
     setAberto(p)
@@ -190,11 +219,12 @@ export default function Black() {
     }
   }
 
-  function porNaSacola() {
+  function porNaSacola() { porNaSacolaCom(modeloEsc) }
+  function porNaSacolaCom(modeloEscolhido: string) {
     const p = aberto
     if (!p) return
-    if (p.tipo === 'capa' && !modeloEsc) return toast('Escolha o modelo do celular 👆')
-    const modelo = p.tipo === 'capa' ? modeloEsc : ''
+    if (p.tipo === 'capa' && !modeloEscolhido) return toast('Escolha o modelo do celular 👆')
+    const modelo = p.tipo === 'capa' ? modeloEscolhido : ''
     const el = raiz.current?.querySelector('.gaveta.on .img img') as HTMLImageElement | null
     const origem = el ? el.getBoundingClientRect() : new DOMRect(window.innerWidth / 2 - 60, window.innerHeight / 2, 120, 160)
     voarParaSacola(origem, p.fotos[fotoAtual] || p.fotos[0] || '', () => {
@@ -415,6 +445,12 @@ export default function Black() {
                   </div>
                 </>
               )}
+              {podeExperimentar(aberto) && (
+                <button className="btn-exp" onClick={abrirExp}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2" strokeLinejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="3" /><path d="M9 7h2" /></svg>
+                  Experimentar no meu celular
+                </button>
+              )}
               <div className="acoes"><button className="btn-preto" onClick={porNaSacola}>Pôr na sacola</button></div>
             </div>
           </>
@@ -451,6 +487,40 @@ export default function Black() {
             <div style={{ padding: 18 }}><button className="btn-preto" style={{ width: '100%', height: 52, borderRadius: 14, fontWeight: 900 }} onClick={fechar}>Ver produtos</button></div>
           </>
         )}
+      </div>
+
+      {/* experimentar no meu celular */}
+      <div className={`exp ${exp ? 'on' : ''}`}>
+        {exp && aberto && (() => {
+          const vs = vestidasDe(aberto)
+          const modelosExp = [...new Set(vs.map(v => v.modelo))]
+          const coresExp = vs.filter(v => v.modelo === exp.modelo).map(v => v.cor)
+          const foto = vs.find(v => v.modelo === exp.modelo && v.cor === exp.cor)?.url
+          return (
+            <>
+              <div className="topo-exp"><b>Como fica no seu celular</b>
+                <button onClick={() => setExp(null)} aria-label="Fechar"><svg width="24" height="24" viewBox="0 0 24 24" stroke="#111" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
+              </div>
+              <div className="palco-exp">
+                {foto && <img key={foto} src={foto} alt={`${aberto.nome} no ${exp.modelo} ${exp.cor}`} className={trocando ? 'troca' : ''} />}
+                <span className="selo-ia">Foto ilustrativa</span>
+                <div className={`gerando ${trocando ? 'on' : ''}`}><i /></div>
+              </div>
+              <div className="painel-exp">
+                <label>Seu celular</label>
+                <div className="linha-mod sem-barra">
+                  {modelosExp.map(m => <button key={m} className={m === exp.modelo ? 'on' : ''} onClick={() => trocarExp(m)}>{m}</button>)}
+                </div>
+                <label>Cor do seu celular</label>
+                <div className="cores">
+                  {coresExp.map(c => <button key={c} style={{ background: corHex(c) }} className={c === exp.cor ? 'on' : ''} aria-label={c} onClick={() => trocarExp(exp.modelo, c)} />)}
+                </div>
+                <p className="cor-nome">{exp.modelo} · {exp.cor}</p>
+                <button className="btn-preto" style={{ width: '100%', height: 52, borderRadius: 14, fontWeight: 900 }} onClick={expParaSacola}>Pôr na sacola</button>
+              </div>
+            </>
+          )
+        })()}
       </div>
 
       {/* stories dos vídeos */}

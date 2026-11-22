@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode
 import { supabase } from '../supabase'
 import {
   BLACK_PADRAO, emPromocao, lerConfig, precoFinal, reais,
-  type BlackConfig, type BlackModelo, type BlackProduto, type BlackSecao, type BlackVideo,
+  type BlackConfig, type BlackModelo, type BlackProduto, type BlackSecao, type BlackVestida, type BlackVideo,
 } from '../lib/blackConfig'
 import './painelBlack.css'
 
@@ -14,7 +14,7 @@ type Filtro = 'todos' | 'site' | 'pausados' | 'capa' | 'cordinha' | 'promo'
 type Props = {
   onSair: () => void
   enviarFoto: (arquivo: File) => Promise<string> // já deixa no padrão (fundo branco, centralizada)
-  enviarArquivo: (arquivo: File) => Promise<string> // envia como está (vídeos)
+  enviarArquivo: (arquivo: File, pasta?: string) => Promise<string> // envia como está (vídeos, fotos da IA)
 }
 
 type Form = {
@@ -58,6 +58,9 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
   const [produtos, setProdutos] = useState<BlackProduto[]>([])
   const [modelos, setModelos] = useState<BlackModelo[]>([])
   const [videos, setVideos] = useState<BlackVideo[]>([])
+  const [vestidas, setVestidas] = useState<BlackVestida[]>([])
+  const [gerando, setGerando] = useState('')
+  const [selCores, setSelCores] = useState<string[]>([])
   const [config, setConfig] = useState<BlackConfig>(BLACK_PADRAO)
   const [carregando, setCarregando] = useState(true)
   const [erroBanco, setErroBanco] = useState('')
@@ -76,12 +79,14 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
   }
 
   async function carregar() {
-    const [p, m, v, c] = await Promise.all([
+    const [p, m, v, c, ve] = await Promise.all([
       supabase.from('black_produtos').select('*').order('ordem').order('criado_em', { ascending: false }),
       supabase.from('black_modelos').select('*').order('ordem'),
       supabase.from('black_videos').select('*').order('ordem'),
       supabase.from('black_config').select('dados').eq('id', 1).maybeSingle(),
+      supabase.from('black_vestidas').select('*').order('criado_em'),
     ])
+    setVestidas(ve.error ? [] : ((ve.data || []) as BlackVestida[]))
     if (p.error) {
       setErroBanco(p.error.message)
     } else {
@@ -186,6 +191,54 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     avisar('Produto excluído')
     await carregar()
     ir('produtos')
+  }
+
+  // ───────── Experimentar no meu celular (fotos da capinha vestida, geradas pelo Gemini) ─────────
+  const coresAtivas = selCores.length ? selCores : config.experimentar.cores.slice(0, 3).map(c => c.nome)
+  async function gerarUma(produto: { id: string; foto: string }, modelo: string, cor: string) {
+    const { data, error } = await supabase.functions.invoke('gerar-banner', {
+      body: { acao: 'capa_estudio', foto_url: produto.foto, modelo, cor, proporcao: '4:5' },
+    })
+    if (error) {
+      let msg = error.message
+      try { const c = await (error as { context?: Response }).context?.json(); if (c?.error) msg = c.error } catch { /* ok */ }
+      throw new Error(msg)
+    }
+    if (data?.error || !data?.imagem) throw new Error(data?.error || 'A IA não devolveu a foto')
+    const blob = await (await fetch(`data:${data.mime || 'image/jpeg'};base64,${data.imagem}`)).blob()
+    const ext = blob.type.includes('png') ? 'png' : 'jpg'
+    const url = await enviarArquivo(new File([blob], `vestida.${ext}`, { type: blob.type || 'image/jpeg' }), 'black/vestida')
+    const { error: e2 } = await supabase.from('black_vestidas').upsert({ produto_id: produto.id, modelo, cor, url }, { onConflict: 'produto_id,modelo,cor' })
+    if (e2) throw e2
+  }
+  async function gerarVestidas(somenteFaltando: boolean) {
+    if (!form.id || !form.fotos[0]) return avisar('Salve o produto com foto antes')
+    const combos: [string, string][] = []
+    for (const m of form.modelos) for (const c of coresAtivas) {
+      if (!somenteFaltando || !vestidas.some(v => v.produto_id === form.id && v.modelo === m && v.cor === c)) combos.push([m, c])
+    }
+    if (!combos.length) return avisar('Todas as fotos já foram geradas ✓')
+    if (!confirm(`Gerar ${combos.length} ${combos.length === 1 ? 'foto' : 'fotos'} com a IA (Gemini)? Leva alguns segundos cada.`)) return
+    let falhas = 0
+    for (let i = 0; i < combos.length; i++) {
+      const [m, c] = combos[i]
+      setGerando(`Vestindo a capinha: ${m} ${c} (${i + 1} de ${combos.length})...`)
+      try { await gerarUma({ id: form.id, foto: form.fotos[0] }, m, c) } catch (e) { falhas++; console.error(e); if (falhas === 1) avisar('Erro da IA: ' + (e instanceof Error ? e.message : String(e))) }
+    }
+    setGerando('')
+    await carregar()
+    avisar(falhas ? `Pronto, mas ${falhas} não deu certo. Toque em gerar de novo.` : 'Fotos geradas ✓')
+  }
+  async function refazerVestida(v: BlackVestida) {
+    if (!form.id || !form.fotos[0]) return
+    setGerando(`Refazendo: ${v.modelo} ${v.cor}...`)
+    try { await gerarUma({ id: form.id, foto: form.fotos[0] }, v.modelo, v.cor); await carregar(); avisar('Foto refeita ✓') }
+    catch (e) { avisar('Erro da IA: ' + (e instanceof Error ? e.message : String(e))) }
+    setGerando('')
+  }
+  async function apagarVestida(v: BlackVestida) {
+    await supabase.from('black_vestidas').delete().eq('id', v.id)
+    setVestidas(l => l.filter(x => x.id !== v.id))
   }
 
   // ───────── Aparência ─────────
@@ -372,6 +425,49 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
           )}
         </div>
 
+        {form.tipo === 'capa' && config.experimentar.ativo && (
+          <div className="pb-bloco">
+            <h3 className="pb-serif">Experimentar no celular</h3>
+            {!form.id ? <p className="pb-dica" style={{ margin: 0 }}>Cadastre a capinha primeiro. Depois volte aqui pra gerar as fotos dela vestida nos celulares.</p> : (
+              <>
+                <p className="pb-dica">A IA veste esta capinha em cada modelo marcado, nas cores escolhidas. O cliente vê no site em "Experimentar no meu celular".</p>
+                <label className="pb-rot">Cores do celular</label>
+                <div className="pb-mods">
+                  {config.experimentar.cores.map(c => (
+                    <button key={c.nome} className={coresAtivas.includes(c.nome) ? 'on' : ''}
+                      onClick={() => setSelCores(l => { const base = l.length ? l : coresAtivas; return base.includes(c.nome) ? base.filter(x => x !== c.nome) : [...base, c.nome] })}>
+                      <span className="pb-bolinha" style={{ background: c.hex }} />{c.nome}
+                    </button>
+                  ))}
+                </div>
+                <p className="pb-dica" style={{ marginTop: 10 }}>{form.modelos.length} {form.modelos.length === 1 ? 'modelo' : 'modelos'} × {coresAtivas.length} {coresAtivas.length === 1 ? 'cor' : 'cores'} = {form.modelos.length * coresAtivas.length} fotos</p>
+                {(() => {
+                  const minhas = vestidas.filter(v => v.produto_id === form.id)
+                  return (
+                    <>
+                      {minhas.length > 0 && (
+                        <div className="pb-fotos pb-sem-barra" style={{ marginTop: 6 }}>
+                          {minhas.map(v => (
+                            <div className="pb-f" key={v.id}>
+                              <img src={v.url} alt="" />
+                              <button className="pb-x" aria-label="Apagar" onClick={() => apagarVestida(v)}>×</button>
+                              <button className="pb-esq" aria-label="Refazer" onClick={() => refazerVestida(v)}>↻</button>
+                              <span className="pb-capa">{v.modelo} · {v.cor}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <button className="pb-btn pb-laranja" onClick={() => gerarVestidas(true)} disabled={!!gerando || !form.modelos.length}>
+                        {minhas.length ? 'Gerar as que faltam' : 'Gerar fotos nos celulares'}
+                      </button>
+                    </>
+                  )
+                })()}
+              </>
+            )}
+          </div>
+        )}
+
         <div className="pb-bloco">
           <h3 className="pb-serif">Onde aparece</h3>
           {itemChave('no_site', 'No site', 'Desligado = pausado, some do catálogo')}
@@ -474,6 +570,23 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
         {blocoSecao('promo', 'Promoção')}
 
         <div className="pb-bloco">
+          <div className="pb-secao-topo"><h3 className="pb-serif">Experimentar no celular</h3>
+            <Chave ligado={config.experimentar.ativo} rotulo="Mostrar Experimentar" onClick={() => setConfig(c => ({ ...c, experimentar: { ...c.experimentar, ativo: !c.experimentar.ativo } }))} /></div>
+          <p className="pb-dica">{config.experimentar.ativo ? 'Botão aparecendo nas capinhas que têm fotos geradas' : 'Botão escondido do site'}</p>
+          <label className="pb-rot">Cores de celular que o cliente pode escolher</label>
+          {config.experimentar.cores.map((c, i) => (
+            <div className="pb-cor" key={i}>
+              <input type="color" value={c.hex} aria-label="Cor"
+                onChange={e => setConfig(cf => ({ ...cf, experimentar: { ...cf.experimentar, cores: cf.experimentar.cores.map((x, k) => (k === i ? { ...x, hex: e.target.value } : x)) } }))} />
+              <input className="pb-campo" value={c.nome}
+                onChange={e => setConfig(cf => ({ ...cf, experimentar: { ...cf.experimentar, cores: cf.experimentar.cores.map((x, k) => (k === i ? { ...x, nome: e.target.value } : x)) } }))} />
+              <button aria-label="Tirar cor" onClick={() => setConfig(cf => ({ ...cf, experimentar: { ...cf.experimentar, cores: cf.experimentar.cores.filter((_, k) => k !== i) } }))}>×</button>
+            </div>
+          ))}
+          <button className="pb-btn pb-contorno-escuro" onClick={() => setConfig(cf => ({ ...cf, experimentar: { ...cf.experimentar, cores: [...cf.experimentar.cores, { nome: 'Nova cor', hex: '#888888' }] } }))}>+ Adicionar cor</button>
+        </div>
+
+        <div className="pb-bloco">
           <h3 className="pb-serif">Contato</h3>
           {campo('whatsapp', 'WhatsApp que recebe os pedidos')}
           {campo('instagram', 'Instagram')}
@@ -559,7 +672,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
         ))}
       </nav>
 
-      {ocupado && <div className="pb-ocupado"><div className="pb-roda" />{ocupado}</div>}
+      {(ocupado || gerando) && <div className="pb-ocupado"><div className="pb-roda" />{ocupado || gerando}</div>}
       <div className={`pb-toast ${aviso ? 'on' : ''}`}>{aviso}</div>
     </div>
   )

@@ -57,7 +57,7 @@ serve(async (req) => {
     const CHAVE = Deno.env.get('GEMINI_API_KEY')
     if (!CHAVE) return json({ error: 'Falta a GEMINI_API_KEY nos Secrets do Supabase' }, 500)
 
-    const { ideia, produto, proporcao, acao, foto_url, celular_url, modelo, ajuste } = await req.json()
+    const { ideia, produto, proporcao, acao, foto_url, celular_url, modelo, cor, ajuste } = await req.json()
     const estudio = acao === 'capa_estudio'
     const tirarFundo = acao === 'tirar_fundo' || estudio
     if (tirarFundo && !foto_url) return json({ error: 'Falta a foto' }, 400)
@@ -89,7 +89,7 @@ serve(async (req) => {
 A PRIMEIRA imagem é a foto real de uma capinha (capa de celular). ${celular ? 'A SEGUNDA imagem é o celular ' + nomeModelo + '.' : 'O celular é o ' + nomeModelo + '.'}
 Mostre essa capinha VESTIDA no celular ${nomeModelo}, vista de TRÁS (traseira), de frente para a câmera, reta, centralizada e ocupando cerca de 80% da altura da imagem.
 A CAPINHA DEVE FICAR IDÊNTICA À DA FOTO: mesmo material e transparência, mesma cor das bordas, mesmo brilho/strass, mesmo anel MagSafe, mesmo recorte e proteção da câmera, mesmos detalhes e acabamento. Não redesenhe, não troque a cor, não acrescente e não remova nada da capinha.
-${celular ? 'O celular por baixo deve ser IGUAL ao da segunda imagem (mesma cor, mesmas câmeras e posição das câmeras).' : 'O celular por baixo deve ter as câmeras na posição correta do modelo ' + nomeModelo + '.'}
+${celular ? 'O celular por baixo deve ser IGUAL ao da segunda imagem (mesma cor, mesmas câmeras e posição das câmeras).' : 'O celular por baixo deve ter as câmeras na posição correta do modelo ' + nomeModelo + '.'}${cor ? '\nCOR DO CELULAR: o aparelho por baixo da capinha é o ' + nomeModelo + ' na cor ' + String(cor).trim() + ' (original de fábrica). Onde a capinha for transparente, essa cor do celular TEM que aparecer por trás dela, de forma realista.' : ''}
 Remova completamente dedos, mãos, mesa, tecido, loja e qualquer objeto da foto original.
 Fundo BRANCO PURO (#FFFFFF) liso e infinito, iluminação de estúdio suave e difusa, com um leve reflexo do produto no chão branco e uma sombra suave embaixo. Aparência de foto de site da Apple: nítida, limpa, realista e luxuosa.
 Sem textos, sem logotipos novos, sem marca d'água.${ajuste ? '\nAJUSTE PEDIDO PELO DONO DA LOJA: ' + String(ajuste).trim() : ''}`
