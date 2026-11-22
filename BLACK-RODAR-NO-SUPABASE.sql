@@ -69,12 +69,37 @@ create policy "site_le" on public.black_config for select to anon using (true);
 drop policy if exists "equipe_tudo" on public.black_config;
 create policy "equipe_tudo" on public.black_config for all to authenticated using (true) with check (true);
 
--- 6) Modelos iniciais (dá pra mudar tudo depois em Admin → Capas → Modelos)
+-- 6) Modelos iniciais: iPhone 11 ao 18 Pro Max, sem 11 Pro e 11 Pro Max (dá pra mudar em Admin → Capas → Modelos)
 insert into public.black_modelos (nome, marca, ordem) values
-  ('iPhone 11', 'Apple', 1), ('iPhone 12', 'Apple', 2), ('iPhone 13', 'Apple', 3), ('iPhone 14', 'Apple', 4),
-  ('iPhone 15', 'Apple', 5), ('iPhone 16', 'Apple', 6), ('iPhone 17', 'Apple', 7),
-  ('Galaxy A06', 'Samsung', 8), ('Galaxy A16', 'Samsung', 9), ('Galaxy A56', 'Samsung', 10),
-  ('Redmi 15C', 'Xiaomi', 11), ('Redmi Note 14', 'Xiaomi', 12), ('Moto G35', 'Motorola', 13)
+  ('iPhone 11', 'Apple', 1),
+  ('iPhone 12 mini', 'Apple', 2),
+  ('iPhone 12', 'Apple', 3),
+  ('iPhone 12 Pro', 'Apple', 4),
+  ('iPhone 12 Pro Max', 'Apple', 5),
+  ('iPhone 13 mini', 'Apple', 6),
+  ('iPhone 13', 'Apple', 7),
+  ('iPhone 13 Pro', 'Apple', 8),
+  ('iPhone 13 Pro Max', 'Apple', 9),
+  ('iPhone 14', 'Apple', 10),
+  ('iPhone 14 Plus', 'Apple', 11),
+  ('iPhone 14 Pro', 'Apple', 12),
+  ('iPhone 14 Pro Max', 'Apple', 13),
+  ('iPhone 15', 'Apple', 14),
+  ('iPhone 15 Plus', 'Apple', 15),
+  ('iPhone 15 Pro', 'Apple', 16),
+  ('iPhone 15 Pro Max', 'Apple', 17),
+  ('iPhone 16e', 'Apple', 18),
+  ('iPhone 16', 'Apple', 19),
+  ('iPhone 16 Plus', 'Apple', 20),
+  ('iPhone 16 Pro', 'Apple', 21),
+  ('iPhone 16 Pro Max', 'Apple', 22),
+  ('iPhone 17e', 'Apple', 23),
+  ('iPhone 17', 'Apple', 24),
+  ('iPhone Air', 'Apple', 25),
+  ('iPhone 17 Pro', 'Apple', 26),
+  ('iPhone 17 Pro Max', 'Apple', 27),
+  ('iPhone 18 Pro', 'Apple', 28),
+  ('iPhone 18 Pro Max', 'Apple', 29)
 on conflict (nome) do nothing;
 
 -- 7) APAGAR O CADASTRO ANTIGO DA ABA CAPAS (modelos e fotos de capinha antigos)
