@@ -193,7 +193,7 @@
 
 /* ── fotos e vídeos de verdade ── */
 .bk { min-height: 100vh; }
-.bk .card .foto img { width: 100%; height: 100%; object-fit: contain; padding: 10px 8px; mix-blend-mode: multiply; transition: transform .6s; }
+.bk .card .foto img { width: 100%; height: 100%; object-fit: contain; padding: 9% 11%; mix-blend-mode: multiply; transition: transform .6s; }
 .bk .card:active .foto img { transform: scale(1.04); }
 .bk .gaveta .img { overflow: hidden; }
 .bk .gaveta .img img { width: 100%; height: 100%; object-fit: contain; padding: 12px; mix-blend-mode: multiply; }
