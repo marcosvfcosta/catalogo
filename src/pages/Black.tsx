@@ -477,7 +477,7 @@ export default function Black() {
                   {m.foto_url ? <img src={m.foto_url} alt="" loading="lazy" onLoad={pintarFundo} />
                     : <svg viewBox="0 0 24 40" width="26" height="42"><rect x="2" y="1" width="20" height="38" rx="5" fill="#2b2b2e" /><rect x="5" y="4" width="7" height="7" rx="2" fill="#555" /></svg>}
                 </span>
-                {m.nome.replace(/^iPhone\s+/i, (x) => (m.nome.length > 14 ? '' : x))}
+                {m.nome.replace(/^iPhone\s+/i, '')}
               </button>
             ))}
           </div>
