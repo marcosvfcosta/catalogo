@@ -345,6 +345,27 @@ export default function Black() {
     if (dx > 70 && Math.abs(dy) < dx * 0.6) voltarUmaTela()
   }
   function sairDoModelo() { voltarUmaTela() }
+  // fileira dos iPhones: o que passa pelo meio cresce
+  const fileiraModelos = useRef<HTMLDivElement>(null)
+  const quadroCrescer = useRef(0)
+  function crescerNoMeio() {
+    cancelAnimationFrame(quadroCrescer.current)
+    quadroCrescer.current = requestAnimationFrame(() => {
+      const f = fileiraModelos.current
+      if (!f) return
+      const caixa = f.getBoundingClientRect()
+      const meio = caixa.left + caixa.width / 2
+      f.querySelectorAll<HTMLElement>('.mod').forEach(m => {
+        const r = m.getBoundingClientRect()
+        const perto = Math.max(0, 1 - Math.abs(r.left + r.width / 2 - meio) / (caixa.width * 0.45))
+        const c = m.querySelector<HTMLElement>('.c')
+        if (c) c.style.transform = `scale(${(0.82 + 0.4 * perto * perto).toFixed(3)})`
+        m.style.opacity = (0.7 + 0.3 * perto).toFixed(2)
+      })
+    })
+  }
+  useEffect(() => { crescerNoMeio() }, [modelos.length])
+
   function abrirModelo(nome: string) {
     setEstiloSel('')
     const topo = raiz.current?.querySelector('.topo')?.getBoundingClientRect().bottom
@@ -470,7 +491,7 @@ export default function Black() {
               <button key={t} className={filtroTipo === t ? 'on' : ''} onClick={() => setFiltroTipo(t)}>{t === 'tudo' ? 'Tudo' : t === 'capa' ? 'Capinhas' : 'Cordinhas'}</button>
             ))}
           </div>
-          <div className="modelos-foto sem-barra">
+          <div className="modelos-foto sem-barra" ref={fileiraModelos} onScroll={crescerNoMeio}>
             {modelos.map(m => (
               <button key={m.id} className={`mod ${filtroModelo === m.nome ? 'on' : ''}`} onClick={() => abrirModelo(m.nome)}>
                 <span className="c">
