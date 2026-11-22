@@ -8,16 +8,17 @@ function carregar(url: string): Promise<HTMLImageElement | null> {
     img.crossOrigin = 'anonymous'
     img.onload = () => resolve(img)
     img.onerror = () => resolve(null)
-    img.src = url + (url.includes('?') ? '&' : '?') + 'cor=1'
+    img.src = url.startsWith('data:') ? url : url + (url.includes('?') ? '&' : '?') + 'cor=1'
   })
 }
 
-export function semFundo(url: string): Promise<string | null> {
-  if (!cache.has(url)) {
-    cache.set(url, carregar(url).then(img => {
+export function semFundo(url: string, lado = 360): Promise<string | null> {
+  const chave = url + '#' + lado
+  if (!cache.has(chave)) {
+    cache.set(chave, carregar(url).then(img => {
       if (!img) return null
       try {
-        const esc = Math.min(1, 360 / Math.max(img.naturalWidth, img.naturalHeight))
+        const esc = Math.min(1, lado / Math.max(img.naturalWidth, img.naturalHeight))
         const w = Math.max(1, Math.round(img.naturalWidth * esc))
         const h = Math.max(1, Math.round(img.naturalHeight * esc))
         const c = document.createElement('canvas')
@@ -60,14 +61,14 @@ export function semFundo(url: string): Promise<string | null> {
       } catch { return null }
     }))
   }
-  return cache.get(url)!
+  return cache.get(chave)!
 }
 
 export function pintarFundo(e: { currentTarget: HTMLImageElement }) {
   const el = e.currentTarget
   if (el.dataset.recortado) { el.classList.add('pronto'); return }
   el.dataset.recortado = '1'
-  semFundo(el.src).then(nova => {
+  semFundo(el.src, Number(el.dataset.lado) || 360).then(nova => {
     if (nova) el.src = nova
     el.classList.add('pronto')
   })

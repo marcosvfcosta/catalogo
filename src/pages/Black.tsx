@@ -9,7 +9,7 @@ import {
 } from '../lib/blackConfig'
 import './black.css'
 
-type ItemSacola = { id: string; modelo: string; q: number }
+type ItemSacola = { id: string; modelo: string; q: number; foto?: string }
 type TipoFiltro = 'tudo' | 'capa' | 'cordinha'
 const CHAVE_SACOLA = 'mm-black-sacola'
 
@@ -244,10 +244,11 @@ export default function Black() {
     const modelo = p.tipo === 'capa' ? modeloEscolhido : ''
     const el = raiz.current?.querySelector('.gaveta.on .img img') as HTMLImageElement | null
     const origem = el ? el.getBoundingClientRect() : new DOMRect(window.innerWidth / 2 - 60, window.innerHeight / 2, 120, 160)
-    voarParaSacola(origem, p.fotos[fotoAtual] || p.fotos[0] || '', () => {
+    const foto = p.fotos[fotoAtual] || p.fotos[0] || ''
+    voarParaSacola(origem, foto, () => {
       setSacola(s => {
-        const igual = s.find(i => i.id === p.id && i.modelo === modelo)
-        const nova = igual ? s.map(i => (i === igual ? { ...i, q: i.q + 1 } : i)) : [...s, { id: p.id, modelo, q: 1 }]
+        const igual = s.find(i => i.id === p.id && i.modelo === modelo && (i.foto || '') === foto)
+        const nova = igual ? s.map(i => (i === igual ? { ...i, q: i.q + 1 } : i)) : [...s, { id: p.id, modelo, q: 1, foto }]
         const n = nova.reduce((t, i) => t + i.q, 0)
         toast(n === 1 ? '1 item na sacola ✓' : n + ' itens na sacola ✓')
         return nova
@@ -261,7 +262,7 @@ export default function Black() {
     setSacola(s => s.map((x, k) => (k === i ? { ...x, q: x.q + d } : x)).filter(x => x.q > 0))
   }
   function finalizar() {
-    const linhas = itensSacola.map(i => `• ${i.q}x ${i.p.nome}${i.modelo ? ' (' + i.modelo + ')' : ''} — ${reais(precoFinal(i.p) * i.q)}`).join('\n')
+    const linhas = itensSacola.map(i => `• ${i.q}x ${i.p.nome}${i.modelo ? ' (' + i.modelo + ')' : ''} — ${reais(precoFinal(i.p) * i.q)}${i.foto ? '\n  ' + i.foto : ''}`).join('\n')
     zap(`Olá! Meu pedido da Black 🔥\n${linhas}\nTotal: ${reais(totalSacola)}`)
   }
 
@@ -327,7 +328,7 @@ export default function Black() {
     return (
       <article className="card" key={p.id + '-' + foto} onClick={() => abrirProduto(p, foto)}>
         <div className="foto">
-          {p.fotos[foto] ? <img src={p.fotos[foto]} alt={p.nome} loading="lazy" /> : <span className="semfoto">sem foto</span>}
+          {p.fotos[foto] ? <img src={p.fotos[foto]} alt={p.nome} loading="lazy" onLoad={pintarFundo} /> : <span className="semfoto">sem foto</span>}
           {promo ? <span className="badge">BLACK -{Math.round((1 - (p.preco_promo as number) / p.preco) * 100)}%</span> : p.lancamento ? <span className="badge novo">NOVO</span> : null}
           <button className="add" aria-label="Adicionar" onClick={e => { e.stopPropagation(); abrirProduto(p, foto) }}>
             <svg width="18" height="18" viewBox="0 0 24 24" stroke="#111" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
@@ -530,10 +531,9 @@ export default function Black() {
         {aberto && (
           <>
             <div className="pega" />
-            <div className="galeria sem-barra" onScroll={e => { const g = e.currentTarget; setFotoAtual(Math.round(g.scrollLeft / Math.max(1, g.clientWidth))) }}>
-              {(aberto.fotos.length ? aberto.fotos : ['']).map((f, i) => <div className="img" key={i}>{f && <img src={f} alt={aberto.nome} />}</div>)}
+            <div className="galeria sem-barra">
+              <div className="img">{aberto.fotos[fotoAtual] && <img key={aberto.fotos[fotoAtual]} src={aberto.fotos[fotoAtual]} alt={aberto.nome} data-lado="900" onLoad={pintarFundo} />}</div>
             </div>
-            {aberto.fotos.length > 1 && <div className="pontos">{aberto.fotos.map((_, i) => <i key={i} className={i === fotoAtual ? 'on' : ''} />)}</div>}
             <div className="corpo">
               <h3>{aberto.nome}</h3>
               <div className="p">{reais(precoFinal(aberto))}{emPromocao(aberto) && <s>{reais(aberto.preco)}</s>}</div>
@@ -572,8 +572,8 @@ export default function Black() {
           <>
             <div className="sacola-lista">
               {itensSacola.map((it, i) => (
-                <div className="sacola-item" key={it.id + it.modelo}>
-                  <div className="mini-foto">{it.p.fotos[0] && <img src={it.p.fotos[0]} alt="" />}</div>
+                <div className="sacola-item" key={it.id + it.modelo + (it.foto || '')}>
+                  <div className="mini-foto">{(it.foto || it.p.fotos[0]) && <img src={it.foto || it.p.fotos[0]} alt="" />}</div>
                   <div className="t"><b>{it.p.nome}</b><small>{it.modelo || 'Serve em todos'}</small><span>{reais(precoFinal(it.p) * it.q)}</span></div>
                   <div className="qtd"><button onClick={() => mudarQtd(i, -1)}>−</button><i>{it.q}</i><button onClick={() => mudarQtd(i, 1)}>+</button></div>
                 </div>
