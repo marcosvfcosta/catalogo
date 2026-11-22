@@ -8,6 +8,7 @@ import Loja from './pages/Loja.tsx'
 import Negociacao from './pages/Negociacao'
 import AvaliacaoEntrada from './pages/AvaliacaoEntrada'
 import Capas from './pages/Capas'
+import Black from './pages/Black'
 import Protegido from './components/Protegido'
 import './index.css'
 
@@ -22,6 +23,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/negociacao" element={<Protegido papel="negociacao"><Negociacao /></Protegido>} />
         <Route path="/entrada" element={<AvaliacaoEntrada />} />
         <Route path="/capas" element={<Capas />} />
+        <Route path="/black" element={<Black />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,
