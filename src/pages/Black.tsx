@@ -94,7 +94,8 @@ export default function Black() {
   }
 
   const porId = useMemo(() => new Map(produtos.map(p => [p.id, p])), [produtos])
-  const serveNo = (p: BlackProduto, m: string) => p.tipo === 'cordinha' || p.modelos.includes(m)
+  // capinha sem modelo marcado aparece em todos os iPhones
+  const serveNo = (p: BlackProduto, m: string) => p.tipo === 'cordinha' || !p.modelos?.length || p.modelos.includes(m)
   // filtros: dentro do mesmo grupo vale qualquer um (OU); entre grupos tem que bater todos (E)
   const gruposSel = GRUPOS.map(g => filtrosOp.filter(f => f.grupo === g.id && filtrosSel.includes(f.id)).map(f => f.id)).filter(l => l.length)
   const passaFiltros = (p: BlackProduto) => gruposSel.every(ids => ids.some(id => (p.filtros || []).includes(id)))

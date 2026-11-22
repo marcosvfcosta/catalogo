@@ -77,7 +77,7 @@
 .bk .filtro .limpar.on { display: inline-block; }
 .bk .vitrine { margin-top: 44px; }
 .bk .vitrine-topo { position: relative; display: flex; justify-content: center; align-items: baseline; padding: 0 16px; margin-bottom: 6px; }
-.bk .vitrine-topo h2 { font-size: 21px; font-weight: 300; letter-spacing: .3px; }
+.bk .vitrine-topo h2 { font-size: 21px; font-weight: 400; color: var(--tinta); letter-spacing: .3px; }
 .bk .vitrine-topo h2 .fogo { color: var(--laranja); font-weight: 800; }
 .bk .ver-tudo { position: absolute; right: 16px; font-size: 12px; text-decoration: underline; color: var(--cinza); }
 .bk .vitrine-desc { text-align: center; font-size: 13px; color: var(--cinza); padding: 0 24px; margin-bottom: 16px; }
