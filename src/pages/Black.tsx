@@ -262,15 +262,34 @@ export default function Black() {
   }
 
   // escolheu modelo ou tipo: desce até a grade com todas as opções
-  const filtrando = !!filtroModelo || filtroTipo !== 'tudo' || filtrosSel.length > 0
+  const filtrando = !filtroModelo && (filtroTipo !== 'tudo' || filtrosSel.length > 0)
   useEffect(() => {
     if (!filtrando) return
+    if (filtroModelo) return
     const t = window.setTimeout(() => {
       const el = resultadoRef.current
       if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 76, behavior: 'smooth' })
     }, 60)
     return () => window.clearTimeout(t)
   }, [filtroModelo, filtroTipo, filtrosSel.length, filtrando])
+
+  // tela do modelo aberta: trava a rolagem da página de trás
+  useEffect(() => {
+    if (!filtroModelo) return
+    const antes = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = antes }
+  }, [filtroModelo])
+  const telaModeloRef = useRef<HTMLDivElement>(null)
+  function abrirModelo(nome: string) {
+    const topo = raiz.current?.querySelector('.topo')?.getBoundingClientRect().bottom
+    if (topo && telaModeloRef.current) telaModeloRef.current.style.top = Math.max(0, Math.round(topo)) + 'px'
+    setFiltroModelo(nome)
+    window.setTimeout(() => {
+      telaModeloRef.current?.scrollTo({ top: 0 })
+      telaModeloRef.current?.querySelector('.trocar .on')?.scrollIntoView({ inline: 'center', block: 'nearest' })
+    }, 30)
+  }
 
   // pulinho da sacola do topo quando chega item
   useEffect(() => {
@@ -389,7 +408,7 @@ export default function Black() {
           </div>
           <div className="modelos-foto sem-barra">
             {modelos.map(m => (
-              <button key={m.id} className={`mod ${filtroModelo === m.nome ? 'on' : ''}`} onClick={() => setFiltroModelo(filtroModelo === m.nome ? '' : m.nome)}>
+              <button key={m.id} className={`mod ${filtroModelo === m.nome ? 'on' : ''}`} onClick={() => abrirModelo(m.nome)}>
                 <span className="c">
                   {m.foto_url ? <img src={m.foto_url} alt="" loading="lazy" onLoad={pintarFundo} />
                     : <svg viewBox="0 0 24 40" width="26" height="42"><rect x="2" y="1" width="20" height="38" rx="5" fill="#2b2b2e" /><rect x="5" y="4" width="7" height="7" rx="2" fill="#555" /></svg>}
@@ -474,6 +493,31 @@ export default function Black() {
           </>}
         </>
       )}
+
+      <div className={`tela-modelo ${filtroModelo ? 'on' : ''}`} ref={telaModeloRef}>
+        <div className="tm-barra">
+          <button className="tm-voltar" aria-label="Voltar" onClick={() => { setFiltroModelo(''); setFiltroTipo('tudo') }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M15 5l-7 7 7 7" /></svg>
+          </button>
+          <div className="tm-titulo">
+            <b>{filtroTipo === 'cordinha' ? 'Cordinhas' : 'Capinhas'} pro <span>{filtroModelo}</span></b>
+            <small>{base.length} {base.length === 1 ? 'opção' : 'opções'}</small>
+          </div>
+        </div>
+        <div className="trocar sem-barra">
+          {modelos.map(m => (
+            <button key={m.id} className={filtroModelo === m.nome ? 'on' : ''} onClick={() => abrirModelo(m.nome)}>{m.nome}</button>
+          ))}
+        </div>
+        <div className="tm-abas">
+          {(['tudo', 'capa', 'cordinha'] as TipoFiltro[]).map(t => (
+            <button key={t} className={filtroTipo === t ? 'on' : ''} onClick={() => setFiltroTipo(t)}>{t === 'tudo' ? 'Tudo' : t === 'capa' ? 'Capinhas' : 'Cordinhas'}</button>
+          ))}
+        </div>
+        {nomesSel.length > 0 && <p className="tm-sel">{nomesSel.join(' · ')} <button onClick={() => setFiltrosSel([])}>limpar</button></p>}
+        {base.length ? <div className="grade">{base.map(card)}</div>
+          : <p className="vazio">Ainda não temos capinhas pra esse modelo. Chama a gente no WhatsApp que a gente procura pra você 😊</p>}
+      </div>
 
       <footer className="rodape">
         <div className="logo"><span className="m">Marcos</span><span className="g">Magazine</span></div>
