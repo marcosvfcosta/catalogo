@@ -57,6 +57,19 @@ export function semFundo(url: string, lado = 360): Promise<string | null> {
         }
         if (apagados < w * h * 0.05) return null // foto sem fundo liso: deixa como está
         ctx.putImageData(dados, 0, 0)
+        // corta a sobra transparente em volta pra o aparelho/capinha ocupar o espaço todo
+        let x0 = w, y0 = h, x1 = -1, y1 = -1
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+          if (px[(y * w + x) * 4 + 3] > 10) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y }
+        }
+        if (x1 < 0) return null
+        const cw = x1 - x0 + 1, ch = y1 - y0 + 1
+        if (cw < w || ch < h) {
+          const c2 = document.createElement('canvas')
+          c2.width = cw; c2.height = ch
+          c2.getContext('2d')?.drawImage(c, x0, y0, cw, ch, 0, 0, cw, ch)
+          return c2.toDataURL('image/png')
+        }
         return c.toDataURL('image/png')
       } catch { return null }
     }))
