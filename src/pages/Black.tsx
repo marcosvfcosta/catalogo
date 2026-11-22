@@ -359,8 +359,7 @@ export default function Black() {
         const r = m.getBoundingClientRect()
         const perto = Math.max(0, 1 - Math.abs(r.left + r.width / 2 - meio) / (caixa.width * 0.45))
         const c = m.querySelector<HTMLElement>('.c')
-        if (c) c.style.transform = `scale(${(0.82 + 0.4 * perto * perto).toFixed(3)})`
-        m.style.opacity = (0.7 + 0.3 * perto).toFixed(2)
+        if (c) c.style.transform = `scale(${(1 + 0.07 * perto * perto).toFixed(3)})`
       })
     })
   }
