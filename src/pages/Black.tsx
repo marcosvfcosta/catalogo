@@ -1,7 +1,7 @@
 // Site da Black — catálogo só de capinhas e cordinhas (Esquenta Black).
 import { pintarFundo } from '../lib/corDoFundo'
 // Lê tudo do painel (Admin → Capas). Separado do catálogo e da Negociação.
-import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type TouchEvent as ToqueEvento, type UIEvent } from 'react'
 import { supabase } from '../supabase'
 import {
   BLACK_PADRAO, GRUPOS, emPromocao, lerConfig, precoFinal, reais, soNumeros, type BlackFiltro,
@@ -295,15 +295,56 @@ export default function Black() {
     .map(f => ({ id: f.id, rotulo: f.nome.replace(/^com\s+/i, '').replace(/^./, x => x.toUpperCase()) }))
   const cardsModelo = base.filter(p => !estiloSel || (p.filtros || []).includes(estiloSel)).flatMap(p => (p.fotos.length ? p.fotos : ['']).map((_, i) => ({ p, i })))
   function fecharModelo() { setFiltroModelo(''); setFiltroTipo('tudo'); setEstiloSel('') }
-  // gesto/botão voltar do celular fecha a tela do modelo
+  // ── voltar: cada tela aberta (modelo, capinha, sacola, experimentar, vídeo) vira um passo do "voltar" do celular.
+  // Arrastar o dedo da esquerda pra direita (ou o botão voltar) fecha a de cima, uma por vez.
+  const camadas = (filtroModelo ? 1 : 0) + (aberto || sacolaAberta ? 1 : 0) + (exp ? 1 : 0) + (story !== null ? 1 : 0)
+  const empilhadas = useRef(0)
+  const ignorar = useRef(0)
+  const fecharTopo = useRef(() => {})
+  fecharTopo.current = () => {
+    if (story !== null) setStory(null)
+    else if (exp) setExp(null)
+    else if (aberto || sacolaAberta) fechar()
+    else if (filtroModelo) fecharModelo()
+  }
   useEffect(() => {
-    if (!filtroModelo) return
-    if (!history.state?.telaModelo) history.pushState({ telaModelo: true }, '')
-    const aoVoltar = () => fecharModelo()
+    if (camadas > empilhadas.current) {
+      for (let i = empilhadas.current; i < camadas; i++) history.pushState({ bk: i + 1 }, '')
+      empilhadas.current = camadas
+    } else if (camadas < empilhadas.current) {
+      const d = empilhadas.current - camadas
+      empilhadas.current = camadas
+      ignorar.current++
+      history.go(-d)
+    }
+  }, [camadas])
+  useEffect(() => {
+    const aoVoltar = () => {
+      if (ignorar.current > 0) { ignorar.current--; return }
+      empilhadas.current = Math.max(0, empilhadas.current - 1)
+      fecharTopo.current()
+    }
     window.addEventListener('popstate', aoVoltar)
     return () => window.removeEventListener('popstate', aoVoltar)
-  }, [filtroModelo])
-  function sairDoModelo() { if (history.state?.telaModelo) history.back(); else fecharModelo() }
+  }, [])
+  function voltarUmaTela() { if (empilhadas.current > 0) history.back(); else fecharTopo.current() }
+  const toque = useRef<{ x: number; y: number; ok: boolean } | null>(null)
+  function inicioToque(e: ToqueEvento) {
+    const t = e.touches[0]
+    const alvo = e.target as HTMLElement
+    // não briga com fileiras que rolam pro lado
+    const rolaLado = !!alvo.closest('.sem-barra, .trilho, .trilho-video, .galeria')
+    toque.current = { x: t.clientX, y: t.clientY, ok: camadas > 0 && !rolaLado && t.clientX > 22 }
+  }
+  function fimToque(e: ToqueEvento) {
+    const i = toque.current
+    toque.current = null
+    if (!i?.ok) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - i.x, dy = t.clientY - i.y
+    if (dx > 70 && Math.abs(dy) < dx * 0.6) voltarUmaTela()
+  }
+  function sairDoModelo() { voltarUmaTela() }
   function abrirModelo(nome: string) {
     setEstiloSel('')
     const topo = raiz.current?.querySelector('.topo')?.getBoundingClientRect().bottom
@@ -378,7 +419,7 @@ export default function Black() {
   const produtoStory = storyAtual?.produto_id ? porId.get(storyAtual.produto_id) : undefined
 
   return (
-    <div className="bk" ref={raiz}>
+    <div className="bk" ref={raiz} onTouchStart={inicioToque} onTouchEnd={fimToque}>
       <div className="aviso"><div className="rolo"><span className="cartao" /><b>{cfg.faixa.split('·')[0].trim()}</b>{cfg.faixa.includes('·') && <> · {cfg.faixa.split('·').slice(1).join('·').trim()}</>}</div></div>
 
       <header className="topo">
