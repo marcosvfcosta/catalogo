@@ -56,6 +56,7 @@ export default function Black() {
   const [story, setStory] = useState<number | null>(null)
   const [clipeAtivo, setClipeAtivo] = useState(0)
   const timerToast = useRef<number | undefined>(undefined)
+  const resultadoRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     document.title = 'Marcos Magazine · Black Friday'
@@ -248,6 +249,17 @@ export default function Black() {
     zap(`Olá! Meu pedido da Black 🔥\n${linhas}\nTotal: ${reais(totalSacola)}`)
   }
 
+  // escolheu modelo ou tipo: desce até a grade com todas as opções
+  const filtrando = !!filtroModelo || filtroTipo !== 'tudo'
+  useEffect(() => {
+    if (!filtrando) return
+    const t = window.setTimeout(() => {
+      const el = resultadoRef.current
+      if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 76, behavior: 'smooth' })
+    }, 60)
+    return () => window.clearTimeout(t)
+  }, [filtroModelo, filtroTipo, filtrando])
+
   // pulinho da sacola do topo quando chega item
   useEffect(() => {
     if (!pulo || !btnSacola.current) return
@@ -366,7 +378,7 @@ export default function Black() {
           <div className="chips sem-barra">
             {modelos.map(m => (
               <button key={m.id} className={`chip ${filtroModelo === m.nome ? 'on' : ''}`}
-                onClick={() => { const novo = filtroModelo === m.nome ? '' : m.nome; setFiltroModelo(novo); if (novo) toast('Mostrando o que serve no ' + novo) }}>
+                onClick={() => setFiltroModelo(filtroModelo === m.nome ? '' : m.nome)}>
                 📱 {m.nome}
               </button>
             ))}
@@ -379,6 +391,17 @@ export default function Black() {
         <p className="carregando">Em breve as ofertas da Black aparecem aqui 🔥</p>
       ) : (
         <>
+          {filtrando ? (
+            <section className="resultado" ref={resultadoRef}>
+              <div className="resultado-topo">
+                <h2>{filtroTipo === 'cordinha' ? 'Cordinhas' : filtroTipo === 'capa' ? 'Capinhas' : 'Capinhas e cordinhas'}{filtroModelo ? <> pro <b>{filtroModelo}</b></> : null}</h2>
+                <p>{base.length} {base.length === 1 ? 'opção' : 'opções'}</p>
+              </div>
+              {base.length ? <div className="grade">{base.map(card)}</div>
+                : <p className="vazio">Ainda não temos opções pra esse filtro. Chama a gente no WhatsApp que a gente procura pra você 😊</p>}
+              <button className="limpar-grande" onClick={() => { setFiltroModelo(''); setFiltroTipo('tudo'); filtroRef.current?.scrollIntoView({ behavior: 'smooth' }) }}>Ver todas as ofertas</button>
+            </section>
+          ) : <>
           {vitrine('lancamentos', lancamentos)}
 
           {cfg.secoes.videos.ativo && listaVideos.length > 0 && (
@@ -407,6 +430,7 @@ export default function Black() {
 
           {vitrine('mais', maisVendidos)}
           {vitrine('promo', promocao)}
+          </>}
         </>
       )}
 
