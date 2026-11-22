@@ -14,10 +14,21 @@ export type BlackProduto = {
   lancamento: boolean
   destaque: boolean
   ordem: number
+  filtros?: string[] // ids de black_filtros
+  rascunho?: boolean
   criado_em?: string
 }
 
-export type BlackModelo = { id: string; nome: string; marca: string | null; ordem: number }
+export type BlackModelo = { id: string; nome: string; marca: string | null; ordem: number; foto_url?: string | null }
+
+export type BlackGrupo = 'publico' | 'estilo' | 'funcao' | 'cor'
+export type BlackFiltro = { id: string; grupo: BlackGrupo; nome: string; cor_hex: string | null; ordem: number }
+export const GRUPOS: { id: BlackGrupo; nome: string }[] = [
+  { id: 'publico', nome: 'Público' },
+  { id: 'estilo', nome: 'Estilo' },
+  { id: 'funcao', nome: 'Função' },
+  { id: 'cor', nome: 'Cor' },
+]
 
 export type BlackVideo = { id: string; video_url: string; capa_url: string | null; produto_id: string | null; ordem: number }
 

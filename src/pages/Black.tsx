@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react'
 import { supabase } from '../supabase'
 import {
-  BLACK_PADRAO, emPromocao, lerConfig, precoFinal, reais, soNumeros,
+  BLACK_PADRAO, GRUPOS, emPromocao, lerConfig, precoFinal, reais, soNumeros, type BlackFiltro,
   type BlackConfig, type BlackModelo, type BlackProduto, type BlackVestida, type BlackVideo,
 } from '../lib/blackConfig'
 import './black.css'
@@ -46,6 +46,8 @@ export default function Black() {
   const [cfg, setCfg] = useState<BlackConfig>(BLACK_PADRAO)
   const [filtroModelo, setFiltroModelo] = useState('')
   const [filtroTipo, setFiltroTipo] = useState<TipoFiltro>('tudo')
+  const [filtrosOp, setFiltrosOp] = useState<BlackFiltro[]>([])
+  const [filtrosSel, setFiltrosSel] = useState<string[]>([])
   const [aberto, setAberto] = useState<BlackProduto | null>(null)
   const [fotoAtual, setFotoAtual] = useState(0)
   const [modeloEsc, setModeloEsc] = useState('')
@@ -63,13 +65,15 @@ export default function Black() {
     const corAntiga = document.body.style.background
     document.body.style.background = '#fff'
     ;(async () => {
-      const [p, m, v, c, ve] = await Promise.all([
+      const [p, m, v, c, ve, fi] = await Promise.all([
         supabase.from('black_produtos').select('*').eq('no_site', true).order('ordem').order('criado_em', { ascending: false }),
         supabase.from('black_modelos').select('*').order('ordem'),
         supabase.from('black_videos').select('*').order('ordem'),
         supabase.from('black_config').select('dados').eq('id', 1).maybeSingle(),
         supabase.from('black_vestidas').select('*'),
+        supabase.from('black_filtros').select('*').order('grupo').order('ordem'),
       ])
+      setFiltrosOp(fi.error ? [] : ((fi.data || []) as BlackFiltro[]))
       setVestidas(ve.error ? [] : ((ve.data || []) as BlackVestida[]))
       setProdutos((p.data || []) as BlackProduto[])
       setModelos((m.data || []) as BlackModelo[])
@@ -90,7 +94,13 @@ export default function Black() {
 
   const porId = useMemo(() => new Map(produtos.map(p => [p.id, p])), [produtos])
   const serveNo = (p: BlackProduto, m: string) => p.tipo === 'cordinha' || p.modelos.includes(m)
-  const base = produtos.filter(p => (filtroTipo === 'tudo' || p.tipo === filtroTipo) && (!filtroModelo || serveNo(p, filtroModelo)))
+  // filtros: dentro do mesmo grupo vale qualquer um (OU); entre grupos tem que bater todos (E)
+  const gruposSel = GRUPOS.map(g => filtrosOp.filter(f => f.grupo === g.id && filtrosSel.includes(f.id)).map(f => f.id)).filter(l => l.length)
+  const passaFiltros = (p: BlackProduto) => gruposSel.every(ids => ids.some(id => (p.filtros || []).includes(id)))
+  const base = produtos.filter(p => (filtroTipo === 'tudo' || p.tipo === filtroTipo) && (!filtroModelo || serveNo(p, filtroModelo)) && passaFiltros(p))
+  const usados = new Set(produtos.flatMap(p => p.filtros || []))
+  const nomesSel = filtrosOp.filter(f => filtrosSel.includes(f.id)).map(f => f.nome)
+  const limparTudo = () => { setFiltroModelo(''); setFiltroTipo('tudo'); setFiltrosSel([]) }
   const lancamentos = base.filter(p => p.lancamento)
   const maisVendidos = base.filter(p => p.destaque)
   const promocao = base.filter(emPromocao)
@@ -250,7 +260,7 @@ export default function Black() {
   }
 
   // escolheu modelo ou tipo: desce até a grade com todas as opções
-  const filtrando = !!filtroModelo || filtroTipo !== 'tudo'
+  const filtrando = !!filtroModelo || filtroTipo !== 'tudo' || filtrosSel.length > 0
   useEffect(() => {
     if (!filtrando) return
     const t = window.setTimeout(() => {
@@ -258,7 +268,7 @@ export default function Black() {
       if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 76, behavior: 'smooth' })
     }, 60)
     return () => window.clearTimeout(t)
-  }, [filtroModelo, filtroTipo, filtrando])
+  }, [filtroModelo, filtroTipo, filtrosSel.length, filtrando])
 
   // pulinho da sacola do topo quando chega item
   useEffect(() => {
@@ -307,7 +317,7 @@ export default function Black() {
   function vitrine(chave: 'lancamentos' | 'mais' | 'promo', lista: BlackProduto[]) {
     const s = cfg.secoes[chave]
     if (!s.ativo) return null
-    if (!lista.length && !filtroModelo && filtroTipo === 'tudo') return null
+    if (!lista.length && !filtrando) return null
     const [antes, depois] = chave === 'promo' && /black/i.test(s.titulo) ? s.titulo.split(/(?=black)/i) : [s.titulo, '']
     return (
       <section className="vitrine">
@@ -375,15 +385,35 @@ export default function Black() {
               <button key={t} className={filtroTipo === t ? 'on' : ''} onClick={() => setFiltroTipo(t)}>{t === 'tudo' ? 'Tudo' : t === 'capa' ? 'Capinhas' : 'Cordinhas'}</button>
             ))}
           </div>
-          <div className="chips sem-barra">
+          <div className="modelos-foto sem-barra">
             {modelos.map(m => (
-              <button key={m.id} className={`chip ${filtroModelo === m.nome ? 'on' : ''}`}
-                onClick={() => setFiltroModelo(filtroModelo === m.nome ? '' : m.nome)}>
-                📱 {m.nome}
+              <button key={m.id} className={`mod ${filtroModelo === m.nome ? 'on' : ''}`} onClick={() => setFiltroModelo(filtroModelo === m.nome ? '' : m.nome)}>
+                <span className="c">
+                  {m.foto_url ? <img src={m.foto_url} alt="" loading="lazy" />
+                    : <svg viewBox="0 0 24 40" width="26" height="42"><rect x="2" y="1" width="20" height="38" rx="5" fill="#2b2b2e" /><rect x="5" y="4" width="7" height="7" rx="2" fill="#555" /></svg>}
+                </span>
+                {m.nome.replace(/^iPhone\s+/i, (x) => (m.nome.length > 14 ? '' : x))}
               </button>
             ))}
           </div>
-          {(filtroModelo || filtroTipo !== 'tudo') && <button className="limpar on" onClick={() => { setFiltroModelo(''); setFiltroTipo('tudo') }}>Limpar filtro</button>}
+          {GRUPOS.map(g => {
+            const ops = filtrosOp.filter(f => f.grupo === g.id && usados.has(f.id))
+            if (!ops.length) return null
+            return (
+              <div className="grupo-filtro" key={g.id}>
+                <span className="rot">{g.nome}</span>
+                <div className="chips sem-barra">
+                  {ops.map(f => (
+                    <button key={f.id} className={`chip ${filtrosSel.includes(f.id) ? 'on' : ''}`}
+                      onClick={() => setFiltrosSel(l => (l.includes(f.id) ? l.filter(x => x !== f.id) : [...l, f.id]))}>
+                      {g.id === 'cor' && <i className="bolinha" style={{ background: f.cor_hex || '#999' }} />}{f.nome}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+          {filtrando && <button className="limpar on" onClick={limparTudo}>Limpar filtro</button>}
         </section>
       )}
 
@@ -395,11 +425,12 @@ export default function Black() {
             <section className="resultado" ref={resultadoRef}>
               <div className="resultado-topo">
                 <h2>{filtroTipo === 'cordinha' ? 'Cordinhas' : filtroTipo === 'capa' ? 'Capinhas' : 'Capinhas e cordinhas'}{filtroModelo ? <> pro <b>{filtroModelo}</b></> : null}</h2>
+                {nomesSel.length > 0 && <p className="sel">{nomesSel.join(' · ')}</p>}
                 <p>{base.length} {base.length === 1 ? 'opção' : 'opções'}</p>
               </div>
               {base.length ? <div className="grade">{base.map(card)}</div>
                 : <p className="vazio">Ainda não temos opções pra esse filtro. Chama a gente no WhatsApp que a gente procura pra você 😊</p>}
-              <button className="limpar-grande" onClick={() => { setFiltroModelo(''); setFiltroTipo('tudo'); filtroRef.current?.scrollIntoView({ behavior: 'smooth' }) }}>Ver todas as ofertas</button>
+              <button className="limpar-grande" onClick={() => { limparTudo(); filtroRef.current?.scrollIntoView({ behavior: 'smooth' }) }}>Ver todas as ofertas</button>
             </section>
           ) : <>
           {vitrine('lancamentos', lancamentos)}
