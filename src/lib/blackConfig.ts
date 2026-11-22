@@ -40,8 +40,8 @@ export type BlackConfig = {
 
 export const BLACK_PADRAO: BlackConfig = {
   faixa: 'Parcele em até 18x · Aceitamos seu usado',
-  linha1: 'ESQUENTA',
-  linha2: 'BLACK',
+  linha1: 'BLACK',
+  linha2: 'FRIDAY',
   frase: 'O melhor jeito de comprar.',
   botao: 'Aproveite',
   contagem: '2026-11-27T00:00:00-03:00',

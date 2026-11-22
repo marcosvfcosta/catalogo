@@ -55,7 +55,7 @@ export default function Black() {
   const timerToast = useRef<number | undefined>(undefined)
 
   useEffect(() => {
-    document.title = 'Marcos Magazine · Esquenta Black'
+    document.title = 'Marcos Magazine · Black Friday'
     const corAntiga = document.body.style.background
     document.body.style.background = '#fff'
     ;(async () => {
@@ -128,7 +128,7 @@ export default function Black() {
         <path d="M150 84 L174 84 L186 226 Q186 234 178 234 L160 234 Z" fill="#fff" opacity=".05"/>
         <text x="100" y="160" text-anchor="middle" font-family="Nunito, Avenir Next, Arial" font-weight="900" font-size="30" fill="#EE6F2D">Marcos</text>
         <text x="128" y="182" text-anchor="middle" font-family="Nunito, Avenir Next, Arial" font-weight="800" font-size="15" fill="#EE6F2D">Magazine</text>
-        <text x="100" y="214" text-anchor="middle" font-family="Arial Black, Arial" font-weight="900" font-size="12" letter-spacing="3" fill="#fff" opacity=".85">ESQUENTA BLACK</text>
+        <text x="100" y="214" text-anchor="middle" font-family="Arial Black, Arial" font-weight="900" font-size="12" letter-spacing="3" fill="#fff" opacity=".85">BLACK FRIDAY</text>
       </svg>`
     casa.appendChild(cj)
 
@@ -302,7 +302,7 @@ export default function Black() {
       </header>
 
       <section className="black">
-        <div className="esquenta">{cfg.linha1}
+        <div className="esquenta" style={cfg.linha1.length > 8 ? { fontSize: `clamp(40px, ${Math.round(120 / cfg.linha1.length)}vw, 96px)` } : undefined}>{cfg.linha1}
           <svg className="chama" viewBox="0 0 40 56" fill="none" stroke="#EE6F2D" strokeWidth="4" strokeLinejoin="round"><path d="M20 3c2 9 12 15 12 29a12 12 0 0 1-24 0c0-7 4-11 6-15 1 5 3 7 5 8-1-8 0-15 1-22z" /><circle cx="20" cy="44" r="4.5" fill="#EE6F2D" stroke="none" /></svg>
         </div>
         <div className="linha-black">
@@ -310,7 +310,7 @@ export default function Black() {
             <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="none" stroke="#EE6F2D" strokeWidth="4" strokeDasharray="230 60" strokeLinecap="round" /></svg>
             <span className="m">Marcos</span><span className="g">Magazine</span>
           </div>
-          <div className="palavra-black" data-texto={cfg.linha2}>{cfg.linha2}</div>
+          <div className="palavra-black" data-texto={cfg.linha2} style={cfg.linha2.length > 5 ? { fontSize: `clamp(40px, ${Math.round(85 / cfg.linha2.length)}vw, 100px)` } : undefined}>{cfg.linha2}</div>
         </div>
         <div className="caixa-cta">
           <span>{cfg.frase}</span>
