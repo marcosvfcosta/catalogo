@@ -1,4 +1,5 @@
 // Site da Black — catálogo só de capinhas e cordinhas (Esquenta Black).
+import { pintarFundo } from '../lib/corDoFundo'
 // Lê tudo do painel (Admin → Capas). Separado do catálogo e da Negociação.
 import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react'
 import { supabase } from '../supabase'
@@ -389,7 +390,7 @@ export default function Black() {
             {modelos.map(m => (
               <button key={m.id} className={`mod ${filtroModelo === m.nome ? 'on' : ''}`} onClick={() => setFiltroModelo(filtroModelo === m.nome ? '' : m.nome)}>
                 <span className="c">
-                  {m.foto_url ? <img src={m.foto_url} alt="" loading="lazy" />
+                  {m.foto_url ? <img src={m.foto_url} alt="" loading="lazy" onLoad={pintarFundo} />
                     : <svg viewBox="0 0 24 40" width="26" height="42"><rect x="2" y="1" width="20" height="38" rx="5" fill="#2b2b2e" /><rect x="5" y="4" width="7" height="7" rx="2" fill="#555" /></svg>}
                 </span>
                 {m.nome.replace(/^iPhone\s+/i, (x) => (m.nome.length > 14 ? '' : x))}

@@ -1,4 +1,5 @@
 // Painel do catálogo da Black (capinhas e cordinhas) — abre em Admin → Capas.
+import { pintarFundo } from '../lib/corDoFundo'
 // Visual igual ao painel da Elegância. Separado da Negociação.
 import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { supabase } from '../supabase'
@@ -845,7 +846,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
               return (
                 <div className="pb-modelo" key={m.id}>
                   <label className="pb-foto-modelo" aria-label={'Foto do ' + m.nome}>
-                    {m.foto_url ? <img src={m.foto_url} alt="" /> : <IcCamera />}
+                    {m.foto_url ? <img src={m.foto_url} alt="" onLoad={pintarFundo} /> : <IcCamera />}
                     <input type="file" accept="image/*" hidden onChange={e => { fotoModelo(m, e.target.files); e.target.value = '' }} />
                   </label>
                   <div className="pb-n"><b>{m.nome}</b><small>{q} {q === 1 ? 'capinha' : 'capinhas'}</small></div>
