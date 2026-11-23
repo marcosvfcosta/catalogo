@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode
 import { supabase } from '../supabase'
 import {
   BLACK_PADRAO, emPromocao, lerConfig, precoFinal, reais,
-  FILTROS_FIXOS, filtrosFixosDe, temFiltro, type FiltroFixo, type BlackConfig, type BlackFiltro, type BlackModelo, type BlackProduto, type BlackSecao, type BlackVestida, type BlackVideo,
+  filtrosFixosDe, slugDe, temFiltro, type FiltroFixo, type BlackConfig, type BlackFiltro, type BlackModelo, type BlackProduto, type BlackSecao, type BlackVestida, type BlackVideo,
 } from '../lib/blackConfig'
 import './painelBlack.css'
 
@@ -115,7 +115,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     if (v === 'editar') {
       setForm(p ? {
         id: p.id, nome: p.nome, tipo: p.tipo, preco: paraTexto(p.preco), promo: paraTexto(p.preco_promo), descricao: p.descricao || '',
-        fotos: [...(p.fotos || [])], modelos: [...(p.modelos || [])], no_site: p.rascunho ? true : p.no_site, lancamento: p.lancamento, destaque: p.destaque, filtros: filtrosFixosDe(p, filtrosOp),
+        fotos: [...(p.fotos || [])], modelos: [...(p.modelos || [])], no_site: p.rascunho ? true : p.no_site, lancamento: p.lancamento, destaque: p.destaque, filtros: filtrosFixosDe(p, filtrosOp, config.filtros),
       } : { ...FORM_VAZIO })
     }
     setVista(v)
@@ -337,7 +337,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     for (const p of escolhidos) {
       const dados: Record<string, unknown> = {
         modelos: [...new Set([...p.modelos, ...lote.modelos])],
-        filtros: [...new Set([...filtrosFixosDe(p, filtrosOp), ...lote.filtros])],
+        filtros: [...new Set([...filtrosFixosDe(p, filtrosOp, config.filtros), ...lote.filtros])],
       }
       if (lote.nome.trim()) dados.nome = lote.nome.trim()
       if (lote.tipo) dados.tipo = lote.tipo
@@ -381,7 +381,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
   function escolhaFiltros(marcados: string[], trocar: (id: string) => void) {
     return (
       <div className="pb-mods">
-        {FILTROS_FIXOS.map(f => (
+        {config.filtros.map(f => (
           <button key={f.slug} className={marcados.includes(f.slug) ? 'on' : ''} onClick={() => trocar(f.slug)}>{f.nome}</button>
         ))}
       </div>
@@ -460,7 +460,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
                       <div className="pb-nome pb-serif">{p.nome}</div>
                       <div className="pb-preco pb-serif">{reais(precoFinal(p))}{emPromocao(p) && <s>{reais(p.preco)}</s>}</div>
                       <div className="pb-meta">{p.rascunho ? <span className="pb-tag-rascunho">Rascunho · falta preencher</span> : p.tipo === 'capa' ? `Capinha · ${p.modelos.length} ${p.modelos.length === 1 ? 'modelo' : 'modelos'}` : 'Cordinha · serve em todos'}</div>
-                      {FILTROS_FIXOS.some(f => temFiltro(p, f.slug, filtrosOp)) && <div className="pb-meta pb-meta-filtros">{FILTROS_FIXOS.filter(f => temFiltro(p, f.slug, filtrosOp)).map(f => f.nome).join(' · ')}</div>}
+                      {config.filtros.some(f => temFiltro(p, f.slug, filtrosOp)) && <div className="pb-meta pb-meta-filtros">{config.filtros.filter(f => temFiltro(p, f.slug, filtrosOp)).map(f => f.nome).join(' · ')}</div>}
                     </div>
                     {!selecionando && <IcSeta />}
                   </div>
@@ -819,10 +819,11 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
   type Ed = { filtros: FiltroFixo[]; black: boolean; preco: string; promo: string }
   const [modeloAdm, setModeloAdm] = useState('')
   const [edicoes, setEdicoes] = useState<Record<string, Ed>>({})
+  const [valorTodas, setValorTodas] = useState('')
   const capasDo = (nome: string) => produtos.filter(p => p.tipo === 'capa' && (p.modelos.includes(nome) || !p.modelos.length))
   const itensDo = (nome: string) => capasDo(nome).flatMap(p => (p.fotos.length ? p.fotos : ['']).map((foto, i) => ({ p, i, foto, chave: p.id + '|' + i })))
   const edDe = (p: BlackProduto, chave: string): Ed => edicoes[chave] || {
-    filtros: filtrosFixosDe(p, filtrosOp), black: emPromocao(p),
+    filtros: filtrosFixosDe(p, filtrosOp, config.filtros), black: emPromocao(p),
     preco: p.preco ? paraTexto(p.preco) : '', promo: p.preco_promo ? paraTexto(p.preco_promo) : '',
   }
   function mudarEd(p: BlackProduto, chave: string, x: Partial<Ed>) {
@@ -831,7 +832,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
   const qtdSujos = Object.keys(edicoes).length
   function sairDoModeloAdm() {
     if (qtdSujos && !confirm('Tem alterações sem salvar. Sair mesmo assim?')) return
-    setEdicoes({}); setModeloAdm(''); window.scrollTo(0, 0)
+    setEdicoes({}); setValorTodas(''); setModeloAdm(''); window.scrollTo(0, 0)
   }
   function dadosDe(ed: Ed, p: BlackProduto) {
     const preco = paraNumero(ed.preco)
@@ -846,8 +847,9 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
   }
   async function salvarCapas() {
     const itens = itensDo(modeloAdm)
-    const mexidos = new Set(itens.filter(it => edicoes[it.chave]).map(it => it.p.id))
-    if (!mexidos.size) return avisar('Nada pra salvar')
+    // salva tudo do modelo do jeito que está — não precisa marcar filtro nem preço
+    const mexidos = new Set(itens.map(it => it.p.id))
+    if (!mexidos.size) return avisar('Nenhuma capinha nesse modelo')
     for (const it of itens) {
       const ed = edicoes[it.chave]
       if (!ed) continue
@@ -883,6 +885,42 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     avisar('Salvo ✓')
     await carregar()
   }
+  const [novoFiltroCfg, setNovoFiltroCfg] = useState('')
+  async function gravarFiltros(filtros: BlackConfig['filtros']) {
+    const novo = { ...config, filtros }
+    setConfig(novo)
+    const { error } = await supabase.from('black_config').upsert({ id: 1, dados: novo })
+    if (error) avisar('Não salvou: ' + error.message)
+    return !error
+  }
+  async function criarFiltroCfg() {
+    const nome = novoFiltroCfg.trim()
+    const slug = slugDe(nome)
+    if (!slug) return avisar('Digite o nome do filtro')
+    if (slug === 'black' || config.filtros.some(f => f.slug === slug)) return avisar('Esse filtro já existe')
+    if (await gravarFiltros([...config.filtros, { slug, nome: nome.charAt(0).toUpperCase() + nome.slice(1) }])) {
+      setNovoFiltroCfg('')
+      avisar('Filtro criado ✓ Já está no menu do site')
+    }
+  }
+  async function apagarFiltroCfg(slug: string) {
+    const f = config.filtros.find(x => x.slug === slug)
+    if (!f || !confirm(`Apagar o filtro ${f.nome}? Ele sai do menu do site.`)) return
+    if (await gravarFiltros(config.filtros.filter(x => x.slug !== slug))) avisar('Filtro apagado')
+  }
+  async function apagarCapa(p: BlackProduto, i: number) {
+    if (!confirm('Apagar essa capinha?')) return
+    setOcupado('Apagando...')
+    const r = p.fotos.length > 1
+      ? await supabase.from('black_produtos').update({ fotos: p.fotos.filter((_, k) => k !== i) }).eq('id', p.id)
+      : await supabase.from('black_produtos').delete().eq('id', p.id)
+    setOcupado('')
+    if (r.error) return avisar('Não apagou: ' + r.error.message)
+    // as fotos desse cadastro mudaram de posição: descarta o que não foi salvo dele
+    setEdicoes(e => Object.fromEntries(Object.entries(e).filter(([k]) => !k.startsWith(p.id + '|'))))
+    avisar('Capinha apagada')
+    await carregar()
+  }
   async function subirFotosDoModelo(arquivos: FileList | null) {
     if (!arquivos || !arquivos.length || !modeloAdm) return
     const fs = Array.from(arquivos)
@@ -907,6 +945,19 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
         <>
           <h1 className="pb-titulo pb-serif">Capas</h1>
           <p className="pb-sub">Toque no modelo pra abrir todas as capinhas dele</p>
+          <div className="pb-bloco pb-filtros-cfg">
+            <h3 className="pb-serif">Filtros</h3>
+            <p className="pb-dica">Aparecem sozinhos no menu ☰ do site e nos checks de cada capinha. "Black" é automático (capinha com preço Black).</p>
+            <div className="pb-opcoes">
+              {config.filtros.map(f => (
+                <span className="pb-opcao" key={f.slug}>{f.nome}<button aria-label={'Apagar ' + f.nome} onClick={() => apagarFiltroCfg(f.slug)}>×</button></span>
+              ))}
+            </div>
+            <div className="pb-add-linha">
+              <input className="pb-campo" placeholder="Novo filtro (ex.: Silicone)" value={novoFiltroCfg} onChange={e => setNovoFiltroCfg(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') criarFiltroCfg() }} />
+              <button className="pb-btn-pequeno pb-escuro" onClick={criarFiltroCfg}>Criar</button>
+            </div>
+          </div>
           {carregando ? <p className="pb-sub pb-vazio">Carregando...</p> : (
             <div className="pb-grade-mods">
               {modelos.map(m => {
@@ -933,22 +984,42 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
           <button className="pb-cap-voltar" onClick={sairDoModeloAdm} aria-label="Voltar">‹</button>
           <div><b className="pb-serif">{modeloAdm}</b><small>{itens.length} {itens.length === 1 ? 'capinha' : 'capinhas'}</small></div>
         </div>
-        <p className="pb-cap-nota">Marque o filtro de cada capinha e ponha o valor. Marcou <b>Black</b>? Aparecem 2 preços: o <b>atual</b> e o <b>com desconto</b>.</p>
+        <p className="pb-cap-nota">Ponha o valor e salve — o filtro pode marcar depois. Marcou <b>Black</b>? Aparecem 2 preços: o <b>atual</b> e o <b>com desconto</b>.</p>
         <label className="pb-btn-pequeno pb-escuro" style={{ marginBottom: 12 }}>
           <IcCamera />Subir fotos pra esse modelo
           <input type="file" accept="image/*" multiple hidden onChange={e => { subirFotosDoModelo(e.target.files); e.target.value = '' }} />
         </label>
+        {itens.length > 0 && (
+          <div className="pb-cap-todas">
+            <div className="pb-cap-campo"><small>VALOR PRA TODAS</small>
+              <input inputMode="decimal" placeholder="0,00" value={valorTodas} onChange={e => setValorTodas(e.target.value)} /></div>
+            <button className="pb-btn-pequeno pb-escuro" onClick={() => {
+              if (!paraNumero(valorTodas)) return avisar('Digite o valor')
+              setEdicoes(e => {
+                const n = { ...e }
+                for (const it of itens) n[it.chave] = { ...edDe(it.p, it.chave), preco: valorTodas }
+                return n
+              })
+              avisar('Valor colocado em todas. Agora é só Salvar tudo')
+            }}>Pôr em todas</button>
+          </div>
+        )}
         {!itens.length ? <p className="pb-sub pb-vazio">Nenhuma capinha nesse modelo ainda.</p> : (
           <div className="pb-cap-grade">
-            {itens.map(({ p, foto, chave }) => {
+            {itens.map(({ p, i, foto, chave }) => {
               const ed = edDe(p, chave)
               const pr = paraNumero(ed.preco), pm = paraNumero(ed.promo)
               return (
                 <div key={chave} className={`pb-cap ${ed.black ? 'preto' : ''} ${edicoes[chave] ? 'sujo' : ''}`}>
-                  <div className="pb-cap-foto">{foto ? <img src={foto} alt="" loading="lazy" /> : <IcCamera />}</div>
+                  <div className="pb-cap-foto">
+                    {foto ? <img src={foto} alt="" loading="lazy" /> : <IcCamera />}
+                    <button className="pb-cap-apagar" aria-label="Apagar capinha" onClick={() => apagarCapa(p, i)}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A3361F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>
+                    </button>
+                  </div>
                   <div className="pb-cap-checks">
                     <label className="blk"><input type="checkbox" checked={ed.black} onChange={e => mudarEd(p, chave, { black: e.target.checked })} />Black</label>
-                    {FILTROS_FIXOS.map(f => (
+                    {config.filtros.map(f => (
                       <label key={f.slug}><input type="checkbox" checked={ed.filtros.includes(f.slug)}
                         onChange={() => mudarEd(p, chave, { filtros: ed.filtros.includes(f.slug) ? ed.filtros.filter(x => x !== f.slug) : [...ed.filtros, f.slug] })} />{f.nome}</label>
                     ))}
@@ -967,7 +1038,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
           </div>
         )}
         <div style={{ height: 80 }} />
-        <button className="pb-cap-salvar" disabled={!qtdSujos} onClick={salvarCapas}>{qtdSujos ? `Salvar tudo (${qtdSujos})` : 'Salvar tudo'}</button>
+        <button className="pb-cap-salvar" disabled={!itens.length} onClick={salvarCapas}>{qtdSujos ? `Salvar tudo (${qtdSujos} alteradas)` : 'Salvar tudo'}</button>
       </>
     )
   }

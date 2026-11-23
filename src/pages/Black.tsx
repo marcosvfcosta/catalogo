@@ -4,7 +4,7 @@ import { pintarFundo } from '../lib/corDoFundo'
 import { useEffect, useMemo, useRef, useState, type TouchEvent as ToqueEvento, type UIEvent } from 'react'
 import { supabase } from '../supabase'
 import {
-  BLACK_PADRAO, FILTROS_FIXOS, GRUPOS, temFiltro, type FiltroFixo, emPromocao, lerConfig, precoFinal, reais, soNumeros, type BlackFiltro,
+  BLACK_PADRAO, GRUPOS, temFiltro, type FiltroFixo, emPromocao, lerConfig, precoFinal, reais, soNumeros, type BlackFiltro,
   type BlackConfig, type BlackModelo, type BlackProduto, type BlackVestida, type BlackVideo,
 } from '../lib/blackConfig'
 import './black.css'
@@ -574,13 +574,13 @@ export default function Black() {
       <div className={`tela-modelo ${telaAberta ? 'on' : ''}`} ref={telaModeloRef}>
         <div className="tm-titulo">
           {filtroMenu === 'black' ? <b>Ofertas <span>Black</span></b>
-            : filtroMenu ? <b>Capinhas de <span>{FILTROS_FIXOS.find(f => f.slug === filtroMenu)?.nome.toLowerCase()}</span></b>
+            : filtroMenu ? <b>Capinhas de <span>{cfg.filtros.find(f => f.slug === filtroMenu)?.nome.toLowerCase()}</span></b>
             : <b>{filtroTipo === 'cordinha' ? 'Cordinhas' : 'Capinhas'} pro <span>{filtroModelo}</span></b>}
         </div>
         {!filtroMenu && (
           <div className="tm-chips sem-barra">
             <button className={!estiloSel ? 'on' : ''} onClick={() => setEstiloSel('')}>Todas</button>
-            {FILTROS_FIXOS.map(c => (
+            {cfg.filtros.map(c => (
               <button key={c.slug} className={estiloSel === c.slug ? 'on' : ''} onClick={() => setEstiloSel(c.slug)}>{c.nome}</button>
             ))}
           </div>
@@ -596,7 +596,7 @@ export default function Black() {
           <button aria-label="Fechar" onClick={() => setMenuAberto(false)}><svg width="24" height="24" viewBox="0 0 24 24" stroke="#111" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
         </div>
         <button className="menu-item black" onClick={() => abrirMenuFiltro('black')}><span>BLACK <b>Marcos Magazine</b></span><small>ofertas ›</small></button>
-        {FILTROS_FIXOS.map(f => (
+        {cfg.filtros.map(f => (
           <button key={f.slug} className="menu-item" onClick={() => abrirMenuFiltro(f.slug)}><span>{f.nome}</span><small>›</small></button>
         ))}
       </nav>

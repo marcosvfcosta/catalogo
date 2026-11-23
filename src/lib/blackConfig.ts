@@ -53,7 +53,9 @@ export type BlackConfig = {
   instagram: string
   endereco: string
   horario: string
+  filtros: FiltroCfg[] // filtros das capinhas (menu ☰, tela do modelo, Admin → Capas)
 }
+export type FiltroCfg = { slug: string; nome: string }
 
 export const BLACK_PADRAO: BlackConfig = {
   faixa: 'Parcele em até 18x · Aceitamos seu usado',
@@ -81,6 +83,7 @@ export const BLACK_PADRAO: BlackConfig = {
   instagram: '@marcosmagazinee',
   endereco: 'Av. Goiás · Centro · Bom Jesus',
   horario: 'Seg a Sáb · 8h às 18h',
+  filtros: [{ slug: 'couro', nome: 'Couro' }, { slug: 'brilho', nome: 'Brilho' }, { slug: 'transparente', nome: 'Transparente' }],
 }
 
 // Junta o que está salvo com o padrão (campos novos nunca ficam vazios)
@@ -91,6 +94,7 @@ export function lerConfig(dados: unknown): BlackConfig {
   return {
     ...BLACK_PADRAO,
     ...d,
+    filtros: Array.isArray(d.filtros) ? d.filtros.filter(f => f && f.slug && f.nome) : BLACK_PADRAO.filtros,
     experimentar: {
       ativo: e.ativo ?? BLACK_PADRAO.experimentar.ativo,
       cores: Array.isArray(e.cores) && e.cores.length ? e.cores : BLACK_PADRAO.experimentar.cores,
@@ -111,8 +115,9 @@ export const reais = (v: number) => v.toLocaleString('pt-BR', { style: 'currency
 export const soNumeros = (t: string) => t.replace(/\D/g, '')
 
 // ── filtros fixos da Black: só esses 3 (+ "Black" = capinha com preço de promoção) ──
-export type FiltroFixo = 'couro' | 'brilho' | 'transparente'
-export const FILTROS_FIXOS: { slug: FiltroFixo; nome: string; re: RegExp }[] = [
+export type FiltroFixo = string
+// os 3 primeiros: reconhece também as marcações antigas (tabela black_filtros)
+export const FILTROS_FIXOS: { slug: string; nome: string; re: RegExp }[] = [
   { slug: 'couro', nome: 'Couro', re: /couro/i },
   { slug: 'brilho', nome: 'Brilho', re: /brilho/i },
   { slug: 'transparente', nome: 'Transparente', re: /transpar/i },
@@ -121,10 +126,12 @@ export const FILTROS_FIXOS: { slug: FiltroFixo; nome: string; re: RegExp }[] = [
 export function temFiltro(p: BlackProduto, slug: FiltroFixo, antigos: BlackFiltro[] = []) {
   const f = p.filtros || []
   if (f.includes(slug)) return true
-  const re = FILTROS_FIXOS.find(x => x.slug === slug)!.re
-  return antigos.some(a => re.test(a.nome) && f.includes(a.id))
+  const re = FILTROS_FIXOS.find(x => x.slug === slug)?.re
+  return !!re && antigos.some(a => re.test(a.nome) && f.includes(a.id))
 }
 // regrava a lista de filtros só com os slugs novos
-export function filtrosFixosDe(p: BlackProduto, antigos: BlackFiltro[] = []): FiltroFixo[] {
-  return FILTROS_FIXOS.filter(x => temFiltro(p, x.slug, antigos)).map(x => x.slug)
+export function filtrosFixosDe(p: BlackProduto, antigos: BlackFiltro[] = [], lista: FiltroCfg[] = BLACK_PADRAO.filtros): FiltroFixo[] {
+  return lista.filter(x => temFiltro(p, x.slug, antigos)).map(x => x.slug)
 }
+// "Meu Filtro Novo" -> "meu-filtro-novo"
+export const slugDe = (nome: string) => nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
