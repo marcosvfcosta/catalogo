@@ -336,3 +336,4 @@
 .bk .tarja-black { position: relative; overflow: hidden; background: radial-gradient(ellipse at 50% 40%, #2a160c 0%, #0b0705 70%); padding: 22px 16px 20px; margin: 0 0 16px; text-align: center; }
 .bk .tarja-black::before { content: ""; position: absolute; inset: -40%; background: radial-gradient(circle at 50% 40%, rgba(238,111,45,.18), transparent 45%); animation: bk-brasa 5s ease-in-out infinite alternate; }
 .bk .tarja-black .esquenta { position: relative; font-size: clamp(40px, 12vw, 72px); }
+.bk .tarja-black .tarja-frase { position: relative; margin-top: 8px; font-size: 13px; letter-spacing: .3px; color: var(--laranja); opacity: .75; }

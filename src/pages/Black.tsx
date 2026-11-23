@@ -474,9 +474,10 @@ export default function Black() {
             <span className="esquenta">BLACK
               <svg className="chama" viewBox="0 0 40 56" fill="none" stroke="#EE6F2D" strokeWidth="4" strokeLinejoin="round"><path d="M20 3c2 9 12 15 12 29a12 12 0 0 1-24 0c0-7 4-11 6-15 1 5 3 7 5 8-1-8 0-15 1-22z" /><circle cx="20" cy="44" r="4.5" fill="#EE6F2D" stroke="none" /></svg>
             </span>
+            {s.texto && <p className="tarja-frase">{s.texto}</p>}
           </div>
         ) : <div className="vitrine-topo"><h2>{antes}{depois && <span className="fogo">{depois}</span>}</h2></div>}
-        {s.texto && <p className="vitrine-desc">{s.texto}</p>}
+        {s.texto && chave !== 'promo' && <p className="vitrine-desc">{s.texto}</p>}
         {lista.length ? <div className="trilho sem-barra">{lista.map(p => card(p))}</div>
           : <p className="vazio">Nada nessa vitrine pro filtro escolhido. Toque em "Limpar filtro".</p>}
       </section>
