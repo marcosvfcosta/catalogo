@@ -561,13 +561,6 @@ export default function Black() {
 
           {vitrine('mais', maisVendidos)}
 
-          {base.length > 0 && (
-            <section className="vitrine todas">
-              <div className="vitrine-topo"><h2>Todas as <span className="fogo">capinhas</span></h2></div>
-              <p className="vitrine-desc">{base.length} {base.length === 1 ? 'opção' : 'opções'} pra você escolher</p>
-              <div className="grade">{base.map(p => card(p))}</div>
-            </section>
-          )}
           </>}
         </>
       )}
