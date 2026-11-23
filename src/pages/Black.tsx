@@ -480,7 +480,7 @@ export default function Black() {
         <span className="nome">{p.nome}</span>
         {promo && <s>{reais(p.preco)}</s>}
         <span className="preco">{valor(precoFinal(p))}</span>
-        <span className="parc">{precoFinal(p) > 0 ? 'ou 18x no cartão' : 'o valor no WhatsApp'}</span>
+        {(precoFinal(p) <= 0 || cfg.parcelas) && <span className="parc">{precoFinal(p) > 0 ? cfg.parcelas : 'o valor no WhatsApp'}</span>}
       </article>
     )
   }
@@ -714,7 +714,7 @@ export default function Black() {
             <div className="corpo">
               <h3>{aberto.nome}</h3>
               <div className="p">{valor(precoFinal(aberto))}{emPromocao(aberto) && <s>{reais(aberto.preco)}</s>}</div>
-              <div className="parc2">ou em até 18x no cartão</div>
+              {cfg.parcelas && <div className="parc2">{cfg.parcelas}</div>}
               {aberto.descricao && <p className="desc">{aberto.descricao}</p>}
               {aberto.tipo === 'cordinha' ? (
                 <><label>Serve em</label><p style={{ fontSize: 14 }}>Todos os celulares</p></>
@@ -784,7 +784,7 @@ export default function Black() {
                 <button className={entrega === 'entrega' ? 'on' : ''} onClick={() => setEntrega('entrega')}>🚚 Entrega</button>
               </div>
             </div>
-            <div className="sacola-total"><span>Total</span><div><b>{reais(cupom ? totalComCupom : totalSacola)}</b><small>ou em até 18x no cartão</small></div></div>
+            <div className="sacola-total"><span>Total</span><div><b>{reais(cupom ? totalComCupom : totalSacola)}</b>{cfg.parcelas && <small>{cfg.parcelas}</small>}</div></div>
             <div style={{ padding: 18 }}>
               <button className="btn-laranja" style={{ width: '100%', fontSize: 18, padding: 16 }} onClick={finalizar}>Finalizar pedido</button>
               <button style={{ width: '100%', marginTop: 12, fontSize: 14, textDecoration: 'underline', color: '#777' }} onClick={fechar}>Continuar comprando</button>
@@ -853,7 +853,7 @@ export default function Black() {
           </div>
           {produtoStory && (
             <div className="comprar">
-              <div className="t"><b>{produtoStory.nome}</b><small>{valor(precoFinal(produtoStory))} · até 18x</small></div>
+              <div className="t"><b>{produtoStory.nome}</b><small>{valor(precoFinal(produtoStory))}{cfg.parcelas ? ' · ' + cfg.parcelas : ''}</small></div>
               <button className="btn-laranja" style={{ fontSize: 15, padding: '11px 16px' }} onClick={() => { setStory(null); abrirProduto(produtoStory) }}>Comprar</button>
             </div>
           )}

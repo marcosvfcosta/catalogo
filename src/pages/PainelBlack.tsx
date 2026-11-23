@@ -697,7 +697,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     )
   }
 
-  function campo(chave: 'faixa' | 'linha1' | 'linha2' | 'frase' | 'botao' | 'contagem_titulo' | 'whatsapp' | 'instagram' | 'endereco' | 'horario', rotulo: string) {
+  function campo(chave: 'faixa' | 'linha1' | 'linha2' | 'frase' | 'botao' | 'contagem_titulo' | 'whatsapp' | 'instagram' | 'endereco' | 'horario' | 'parcelas', rotulo: string) {
     return (
       <>
         <label className="pb-rot">{rotulo}</label>
@@ -872,6 +872,11 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
               </div>
             </>
           )}
+        </div>
+
+        <div className="pb-bloco">
+          <h3 className="pb-serif">Preço</h3>
+          {campo('parcelas', 'Frase embaixo do preço (deixe vazio pra não mostrar)')}
         </div>
 
         <div className="pb-bloco">

@@ -53,6 +53,7 @@ export type BlackConfig = {
   instagram: string
   endereco: string
   horario: string
+  parcelas: string // frase embaixo do preço (vazio = não mostra)
   filtros: FiltroCfg[] // filtros das capinhas (menu ☰, tela do modelo, Admin → Capas)
 }
 export type FiltroCfg = { slug: string; nome: string }
@@ -83,6 +84,7 @@ export const BLACK_PADRAO: BlackConfig = {
   instagram: '@marcosmagazinee',
   endereco: 'Av. Goiás · Centro · Bom Jesus',
   horario: 'Seg a Sáb · 8h às 18h',
+  parcelas: 'ou em até 18x no cartão',
   filtros: [{ slug: 'couro', nome: 'Couro' }, { slug: 'brilho', nome: 'Brilho' }, { slug: 'transparente', nome: 'Transparente' }],
 }
 
