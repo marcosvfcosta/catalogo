@@ -4,7 +4,7 @@ import { pintarFundo } from '../lib/corDoFundo'
 import { useEffect, useMemo, useRef, useState, type TouchEvent as ToqueEvento, type UIEvent } from 'react'
 import { supabase } from '../supabase'
 import {
-  BLACK_PADRAO, GRUPOS, temFiltro, type FiltroFixo, emPromocao, lerConfig, precoFinal, reais, soNumeros, type BlackFiltro,
+  BLACK_PADRAO, GRUPOS, temFiltro, type FiltroFixo, ehBlack, emPromocao, lerConfig, precoFinal, reais, soNumeros, type BlackFiltro,
   type BlackConfig, type BlackModelo, type BlackProduto, type BlackVestida, type BlackVideo,
 } from '../lib/blackConfig'
 import './black.css'
@@ -105,9 +105,8 @@ export default function Black() {
   const base = produtos.filter(p => (filtroTipo === 'tudo' || p.tipo === filtroTipo) && (!filtroModelo || serveNo(p, filtroModelo)) && passaFiltros(p))
   const nomesSel = filtrosOp.filter(f => filtrosSel.includes(f.id)).map(f => f.nome)
   const limparTudo = () => { setFiltroModelo(''); setFiltroTipo('tudo'); setFiltrosSel([]) }
-  const lancamentos = base.filter(p => p.lancamento)
   const maisVendidos = base.filter(p => p.destaque)
-  const promocao = base.filter(emPromocao)
+  const daBlack = base.filter(ehBlack)
   const listaVideos = videos.filter(v => !v.produto_id || (porId.has(v.produto_id) && base.includes(porId.get(v.produto_id) as BlackProduto)))
   const totalItens = sacola.reduce((s, i) => s + i.q, 0)
   const itensSacola = sacola.map(i => ({ ...i, p: porId.get(i.id) })).filter((i): i is ItemSacola & { p: BlackProduto } => !!i.p)
@@ -293,7 +292,7 @@ export default function Black() {
   // menu ☰: Black · Couro · Brilho · Transparente
   const porFotos = (l: BlackProduto[]) => l.flatMap(p => (p.fotos.length ? p.fotos : ['']).map((_, i) => ({ p, i })))
   const cardsModelo = filtroMenu
-    ? porFotos(produtos.filter(p => (filtroMenu === 'black' ? emPromocao(p) : temFiltro(p, filtroMenu, filtrosOp))))
+    ? porFotos(produtos.filter(p => (filtroMenu === 'black' ? ehBlack(p) : temFiltro(p, filtroMenu, filtrosOp))))
     : porFotos(base.filter(p => !estiloSel || temFiltro(p, estiloSel, filtrosOp)))
   function abrirMenuFiltro(f: FiltroFixo | 'black') {
     const topo = raiz.current?.querySelector('.topo')?.getBoundingClientRect().bottom
@@ -419,7 +418,7 @@ export default function Black() {
       <article className="card" key={p.id + '-' + foto} onClick={() => abrirProduto(p, foto)}>
         <div className="foto">
           {p.fotos[foto] ? <img src={p.fotos[foto]} alt={p.nome} loading="lazy" onLoad={pintarFundo} /> : <span className="semfoto">sem foto</span>}
-          {promo ? <span className="badge">BLACK -{Math.round((1 - (p.preco_promo as number) / p.preco) * 100)}%</span> : null}
+          {promo ? <span className="badge">BLACK -{Math.round((1 - (p.preco_promo as number) / p.preco) * 100)}%</span> : ehBlack(p) ? <span className="badge">BLACK</span> : null}
           <button className="add" aria-label="Adicionar" onClick={e => { e.stopPropagation(); abrirProduto(p, foto) }}>
             <svg width="18" height="18" viewBox="0 0 24 24" stroke="#111" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
           </button>
@@ -435,7 +434,8 @@ export default function Black() {
     const s = cfg.secoes[chave]
     if (!s.ativo) return null
     if (!lista.length && !filtrando) return null
-    const [antes, depois] = chave === 'promo' && /black/i.test(s.titulo) ? s.titulo.split(/(?=black)/i) : [s.titulo, '']
+    // a vitrine da Black tem título só "Black"
+    const [antes, depois] = chave === 'promo' ? ['', 'Black'] : [s.titulo, '']
     return (
       <section className="vitrine">
         <div className="vitrine-topo"><h2>{antes}{depois && <span className="fogo">{depois}</span>}</h2></div>
@@ -533,7 +533,7 @@ export default function Black() {
               <button className="limpar-grande" onClick={() => { limparTudo(); filtroRef.current?.scrollIntoView({ behavior: 'smooth' }) }}>Ver todas as ofertas</button>
             </section>
           ) : <>
-          {vitrine('lancamentos', lancamentos)}
+          {vitrine('promo', daBlack)}
 
           {cfg.secoes.videos.ativo && listaVideos.length > 0 && (
             <section className="videos">
@@ -560,7 +560,6 @@ export default function Black() {
           )}
 
           {vitrine('mais', maisVendidos)}
-          {vitrine('promo', promocao)}
 
           {base.length > 0 && (
             <section className="vitrine todas">

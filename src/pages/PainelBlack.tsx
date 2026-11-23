@@ -4,7 +4,7 @@ import { pintarFundo } from '../lib/corDoFundo'
 import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { supabase } from '../supabase'
 import {
-  BLACK_PADRAO, emPromocao, lerConfig, precoFinal, reais,
+  BLACK_PADRAO, ehBlack, emPromocao, lerConfig, precoFinal, reais,
   filtrosFixosDe, slugDe, temFiltro, type FiltroFixo, type BlackConfig, type BlackFiltro, type BlackModelo, type BlackProduto, type BlackSecao, type BlackVestida, type BlackVideo,
 } from '../lib/blackConfig'
 import './painelBlack.css'
@@ -848,7 +848,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
   const capasDo = (nome: string) => produtos.filter(p => p.tipo === 'capa' && (p.modelos.includes(nome) || !p.modelos.length))
   const itensDo = (nome: string) => capasDo(nome).flatMap(p => (p.fotos.length ? p.fotos : ['']).map((foto, i) => ({ p, i, foto, chave: p.id + '|' + i })))
   const edDe = (p: BlackProduto, chave: string): Ed => edicoes[chave] || {
-    filtros: filtrosFixosDe(p, filtrosOp, config.filtros), black: emPromocao(p),
+    filtros: filtrosFixosDe(p, filtrosOp, config.filtros).filter(x => x !== 'black'), black: ehBlack(p),
     preco: p.preco ? paraTexto(p.preco) : '', promo: p.preco_promo ? paraTexto(p.preco_promo) : '',
   }
   function mudarEd(p: BlackProduto, chave: string, x: Partial<Ed>) {
@@ -863,7 +863,8 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     const preco = paraNumero(ed.preco)
     const promo = ed.black && ed.promo.trim() ? paraNumero(ed.promo) : null
     const d: Record<string, unknown> = {
-      filtros: ed.filtros, preco, preco_promo: promo,
+      filtros: [...new Set(ed.filtros.filter(x => x !== 'black'))].concat(ed.black ? ['black'] : []),
+      preco, preco_promo: promo && preco && promo < preco ? promo : null,
       modelos: p.modelos.length ? p.modelos : [modeloAdm],
     }
     d.rascunho = false; d.no_site = true // salvou = vai pro site (sem preço aparece "Consulte")
@@ -879,8 +880,8 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
       const ed = edicoes[it.chave]
       if (!ed) continue
       const pr = paraNumero(ed.preco), pm = paraNumero(ed.promo)
-      if (ed.black && (!pr || !pm)) return avisar('Capinha Black precisa dos 2 preços: atual e com desconto')
-      if (ed.black && pm >= pr) return avisar('O preço Black tem que ser menor que o atual')
+      // Black pode ficar sem preço; se tiver os 2, o Black tem que ser menor
+      if (ed.black && pr && pm && pm >= pr) return avisar('O preço Black tem que ser menor que o atual')
     }
     setOcupado('Salvando...')
     let erro = ''
@@ -1009,7 +1010,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
           <button className="pb-cap-voltar" onClick={sairDoModeloAdm} aria-label="Voltar">‹</button>
           <div><b className="pb-serif">{modeloAdm}</b><small>{itens.length} {itens.length === 1 ? 'capinha' : 'capinhas'}</small></div>
         </div>
-        <p className="pb-cap-nota">Ponha o valor e salve — o filtro pode marcar depois. Marcou <b>Black</b>? Aparecem 2 preços: o <b>atual</b> e o <b>com desconto</b>.</p>
+        <p className="pb-cap-nota">Ponha o valor e salve — o filtro pode marcar depois. Marcou <b>Black</b>? Ela já entra na vitrine Black do site — os 2 preços (<b>atual</b> e <b>com desconto</b>) pode pôr depois.</p>
         <label className="pb-btn-pequeno pb-escuro" style={{ marginBottom: 12 }}>
           <IcCamera />Subir fotos pra esse modelo
           <input type="file" accept="image/*" multiple hidden onChange={e => { subirFotosDoModelo(e.target.files); e.target.value = '' }} />

@@ -111,6 +111,8 @@ export function lerConfig(dados: unknown): BlackConfig {
 
 export const precoFinal = (p: BlackProduto) => (p.preco_promo && p.preco_promo < p.preco ? p.preco_promo : p.preco)
 export const emPromocao = (p: BlackProduto) => !!(p.preco_promo && p.preco_promo < p.preco)
+// capinha da Black: marcada no Admin (mesmo sem preço) ou com preço de promoção
+export const ehBlack = (p: BlackProduto) => (p.filtros || []).includes('black') || emPromocao(p)
 export const reais = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 export const soNumeros = (t: string) => t.replace(/\D/g, '')
 
@@ -131,7 +133,8 @@ export function temFiltro(p: BlackProduto, slug: FiltroFixo, antigos: BlackFiltr
 }
 // regrava a lista de filtros só com os slugs novos
 export function filtrosFixosDe(p: BlackProduto, antigos: BlackFiltro[] = [], lista: FiltroCfg[] = BLACK_PADRAO.filtros): FiltroFixo[] {
-  return lista.filter(x => temFiltro(p, x.slug, antigos)).map(x => x.slug)
+  const r = lista.filter(x => temFiltro(p, x.slug, antigos)).map(x => x.slug)
+  return (p.filtros || []).includes('black') ? [...r, 'black'] : r // mantém a marca Black
 }
 // "Meu Filtro Novo" -> "meu-filtro-novo"
 export const slugDe = (nome: string) => nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
