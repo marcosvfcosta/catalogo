@@ -331,7 +331,9 @@ export default function Black() {
   const [blackModelo, setBlackModelo] = useState('')
   const modelosComBlack = modelos.filter(m => produtos.some(p => ehBlack(p) && p.tipo === 'capa' && p.modelos.includes(m.nome)))
   const cardsModelo = filtroMenu
-    ? porFotos(produtos.filter(p => (filtroMenu === 'black' ? ehBlack(p) && (!blackModelo || serveNo(p, blackModelo)) : temFiltro(p, filtroMenu, filtrosOp))))
+    ? porFotos(produtos.filter(p => (filtroMenu === 'black' ? ehBlack(p) && (!blackModelo || serveNo(p, blackModelo))
+      : filtroMenu === '__cordinhas' ? p.tipo === 'cordinha'
+      : temFiltro(p, filtroMenu, filtrosOp))))
     : porFotos(base.filter(p => !estiloSel || temFiltro(p, estiloSel, filtrosOp)))
   function abrirMenuFiltro(f: FiltroFixo | 'black') {
     const topo = raiz.current?.querySelector('.topo')?.getBoundingClientRect().bottom
@@ -583,9 +585,9 @@ export default function Black() {
           <h2>{cfg.secoes.filtro.titulo}</h2>
           {cfg.secoes.filtro.texto && <p>{cfg.secoes.filtro.texto}</p>}
           <div className="abas">
-            {(['tudo', 'capa', 'cordinha'] as TipoFiltro[]).map(t => (
-              <button key={t} className={filtroTipo === t ? 'on' : ''} onClick={() => setFiltroTipo(t)}>{t === 'tudo' ? 'Tudo' : t === 'capa' ? 'Capinhas' : 'Cordinhas'}</button>
-            ))}
+            {/* Capinhas = fica aqui mesmo (escolhe o iPhone embaixo); Cordinhas abre a tela com todas */}
+            <button className={filtroMenu !== '__cordinhas' ? 'on' : ''} onClick={() => setFiltroTipo('tudo')}>Capinhas</button>
+            <button className={filtroMenu === '__cordinhas' ? 'on' : ''} onClick={() => abrirMenuFiltro('__cordinhas')}>Cordinhas</button>
           </div>
           <div className="modelos-foto sem-barra" ref={fileiraModelos} onScroll={crescerNoMeio}>
             {modelos.map(m => (
@@ -648,6 +650,7 @@ export default function Black() {
         )}
         <div className="tm-titulo" style={filtroMenu === 'black' ? { display: 'none' } : undefined}>
           {filtroMenu === 'black' ? null
+            : filtroMenu === '__cordinhas' ? <b>Todas as <span>cordinhas</span></b>
             : filtroMenu ? <b>Capinhas de <span>{cfg.filtros.find(f => f.slug === filtroMenu)?.nome.toLowerCase()}</span></b>
             : <b>{filtroTipo === 'cordinha' ? 'Cordinhas' : 'Capinhas'} pro <span>{filtroModelo}</span></b>}
         </div>
