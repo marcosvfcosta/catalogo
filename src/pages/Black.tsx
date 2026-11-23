@@ -113,6 +113,8 @@ export default function Black() {
   const itensSacola = sacola.map(i => ({ ...i, p: porId.get(i.id) })).filter((i): i is ItemSacola & { p: BlackProduto } => !!i.p)
   const totalSacola = itensSacola.reduce((s, i) => s + precoFinal(i.p) * i.q, 0)
   // ── cupom de desconto (vale sobre o total da sacola) ──
+  const [entrega, setEntrega] = useState<'' | 'retirar' | 'entrega'>('')
+  const [avisoEntrega, setAvisoEntrega] = useState(false)
   const [cupomTexto, setCupomTexto] = useState('')
   const [cupom, setCupom] = useState<{ codigo: string; pct: number } | null>(null)
   const [cupomMsg, setCupomMsg] = useState('')
@@ -284,6 +286,7 @@ export default function Black() {
     setSacola(s => s.map((x, k) => (k === i ? { ...x, q: x.q + d } : x)).filter(x => x.q > 0))
   }
   async function finalizar() {
+    if (!entrega) { setAvisoEntrega(true); return }
     let usado = cupom
     if (cupom) {
       // gasta 1 uso do cupom agora; se acabou no meio do caminho, avisa e não manda
@@ -296,7 +299,9 @@ export default function Black() {
     const fim = usado
       ? `Subtotal: ${reais(totalSacola)}\nCupom ${usado.codigo} (-${usado.pct}%): -${reais(descontoCupom)}\nTotal: ${reais(totalComCupom)}`
       : `Total: ${reais(totalSacola)}`
-    zap(`Olá! Meu pedido da Black 🔥\n${linhas}\n${fim}`)
+    const topo = entrega === 'entrega' ? '🚚 *QUERO ENTREGA* 🚚\n\n' : ''
+    const rodape = entrega === 'entrega' ? '\n\n🚚 *ENTREGA* — vou mandar meu endereço' : '\n\n🏪 Vou *retirar na loja*'
+    zap(`${topo}Olá! Meu pedido da Black 🔥\n${linhas}\n${fim}${rodape}`)
   }
 
   // escolheu modelo ou tipo: desce até a grade com todas as opções
@@ -769,6 +774,13 @@ export default function Black() {
                 <div className="desc"><span>Cupom -{cupom.pct}%</span><span>-{reais(descontoCupom)}</span></div>
               </div>
             )}
+            <div className="sacola-entrega">
+              <p className={avisoEntrega && !entrega ? 'falta' : ''}>{avisoEntrega && !entrega ? 'Escolha como quer receber 👇' : 'Como quer receber?'}</p>
+              <div>
+                <button className={entrega === 'retirar' ? 'on' : ''} onClick={() => setEntrega('retirar')}>🏪 Retirar na loja</button>
+                <button className={entrega === 'entrega' ? 'on' : ''} onClick={() => setEntrega('entrega')}>🚚 Entrega</button>
+              </div>
+            </div>
             <div className="sacola-total"><span>Total</span><div><b>{reais(cupom ? totalComCupom : totalSacola)}</b><small>ou em até 18x no cartão</small></div></div>
             <div style={{ padding: 18 }}>
               <button className="btn-laranja" style={{ width: '100%', fontSize: 18, padding: 16 }} onClick={finalizar}>Finalizar pedido</button>
