@@ -328,9 +328,10 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
         const nome = lote.nome.trim() || p.nome
         const pr = preco ?? p.preco
         const mods = [...new Set([...p.modelos, ...lote.modelos])]
-        return !pr || !nome || nome === 'Rascunho' || (tipo === 'capa' && !mods.length)
+        void pr
+        return !nome || nome === 'Rascunho' || (tipo === 'capa' && !mods.length)
       })
-      if (faltando) return avisar('Pra publicar, todos precisam de nome, preço e (capinha) modelos')
+      if (faltando) return avisar('Pra publicar, todos precisam de nome e (capinha) modelos')
     }
     setOcupado(`Aplicando em ${escolhidos.length} ${escolhidos.length === 1 ? 'produto' : 'produtos'}...`)
     let erro = ''
@@ -865,7 +866,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
       filtros: ed.filtros, preco, preco_promo: promo,
       modelos: p.modelos.length ? p.modelos : [modeloAdm],
     }
-    if (preco > 0) { d.rascunho = false; d.no_site = true }
+    d.rascunho = false; d.no_site = true // salvou = vai pro site (sem preço aparece "Consulte")
     if (p.nome === 'Rascunho') d.nome = 'Capinha'
     return d
   }
@@ -1055,7 +1056,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
                       <input inputMode="decimal" placeholder="0,00" value={ed.promo} onChange={e => mudarEd(p, chave, { promo: e.target.value })} /></div>
                     {pr > 0 && pm > 0 && pm < pr && <div className="pb-cap-pct">-{Math.round((1 - pm / pr) * 100)}% na Black</div>}
                   </>}
-                  {!p.no_site && <div className="pb-cap-status">{p.rascunho ? 'Rascunho — aparece no site quando tiver valor' : 'Pausada (fora do site)'}</div>}
+                  {!p.no_site && <div className="pb-cap-status">{p.rascunho ? 'Ainda não está no site — toque em Salvar tudo' : 'Pausada (fora do site)'}</div>}
                 </div>
               )
             })}

@@ -264,7 +264,7 @@ export default function Black() {
     setSacola(s => s.map((x, k) => (k === i ? { ...x, q: x.q + d } : x)).filter(x => x.q > 0))
   }
   function finalizar() {
-    const linhas = itensSacola.map(i => `• ${i.q}x ${i.p.nome}${i.modelo ? ' (' + i.modelo + ')' : ''} — ${reais(precoFinal(i.p) * i.q)}${i.foto ? '\n  ' + i.foto : ''}`).join('\n')
+    const linhas = itensSacola.map(i => `• ${i.q}x ${i.p.nome}${i.modelo ? ' (' + i.modelo + ')' : ''} — ${precoFinal(i.p) > 0 ? reais(precoFinal(i.p) * i.q) : 'valor a consultar'}${i.foto ? '\n  ' + i.foto : ''}`).join('\n')
     zap(`Olá! Meu pedido da Black 🔥\n${linhas}\nTotal: ${reais(totalSacola)}`)
   }
 
@@ -411,6 +411,8 @@ export default function Black() {
   }, [clipeAtivo, listaVideos.length])
 
   // ── pedaços da tela ──
+  // capinha ainda sem preço aparece com "Consulte"
+  const valor = (v: number) => (v > 0 ? reais(v) : 'Consulte')
   function card(p: BlackProduto, foto = 0) {
     const promo = emPromocao(p)
     return (
@@ -424,8 +426,8 @@ export default function Black() {
         </div>
         <span className="nome">{p.nome}</span>
         {promo && <s>{reais(p.preco)}</s>}
-        <span className="preco">{reais(precoFinal(p))}</span>
-        <span className="parc">ou 18x no cartão</span>
+        <span className="preco">{valor(precoFinal(p))}</span>
+        <span className="parc">{precoFinal(p) > 0 ? 'ou 18x no cartão' : 'o valor no WhatsApp'}</span>
       </article>
     )
   }
@@ -547,7 +549,7 @@ export default function Black() {
                       {p && (
                         <span className="mini">
                           <span className="ico">{p.fotos[0] && <img src={p.fotos[0]} alt="" />}</span>
-                          <span><span>{p.nome}</span><b>{reais(precoFinal(p))}</b></span>
+                          <span><span>{p.nome}</span><b>{valor(precoFinal(p))}</b></span>
                         </span>
                       )}
                     </button>
@@ -622,7 +624,7 @@ export default function Black() {
             </div>
             <div className="corpo">
               <h3>{aberto.nome}</h3>
-              <div className="p">{reais(precoFinal(aberto))}{emPromocao(aberto) && <s>{reais(aberto.preco)}</s>}</div>
+              <div className="p">{valor(precoFinal(aberto))}{emPromocao(aberto) && <s>{reais(aberto.preco)}</s>}</div>
               <div className="parc2">ou em até 18x no cartão</div>
               {aberto.descricao && <p className="desc">{aberto.descricao}</p>}
               {aberto.tipo === 'cordinha' ? (
@@ -660,7 +662,7 @@ export default function Black() {
               {itensSacola.map((it, i) => (
                 <div className="sacola-item" key={it.id + it.modelo + (it.foto || '')}>
                   <div className="mini-foto">{(it.foto || it.p.fotos[0]) && <img src={it.foto || it.p.fotos[0]} alt="" />}</div>
-                  <div className="t"><b>{it.p.nome}</b><small>{it.modelo || 'Serve em todos'}</small><span>{reais(precoFinal(it.p) * it.q)}</span></div>
+                  <div className="t"><b>{it.p.nome}</b><small>{it.modelo || 'Serve em todos'}</small><span>{valor(precoFinal(it.p) * it.q)}</span></div>
                   <div className="qtd"><button onClick={() => mudarQtd(i, -1)}>−</button><i>{it.q}</i><button onClick={() => mudarQtd(i, 1)}>+</button></div>
                 </div>
               ))}
@@ -733,7 +735,7 @@ export default function Black() {
           </div>
           {produtoStory && (
             <div className="comprar">
-              <div className="t"><b>{produtoStory.nome}</b><small>{reais(precoFinal(produtoStory))} · até 18x</small></div>
+              <div className="t"><b>{produtoStory.nome}</b><small>{valor(precoFinal(produtoStory))} · até 18x</small></div>
               <button className="btn-laranja" style={{ fontSize: 15, padding: '11px 16px' }} onClick={() => { setStory(null); abrirProduto(produtoStory) }}>Comprar</button>
             </div>
           )}
