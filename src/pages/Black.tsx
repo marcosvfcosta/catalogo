@@ -425,6 +425,19 @@ export default function Black() {
     b.classList.remove('recebe'); void b.offsetWidth; b.classList.add('recebe')
   }, [pulo])
 
+  // iPhone: vídeo só toca sozinho se estiver mudo de verdade (o React não marca o "muted" no HTML)
+  const mutarVideo = (el: HTMLVideoElement | null) => { if (el) { el.muted = true; el.defaultMuted = true; el.setAttribute('muted', '') } }
+  // stories: tenta tocar com som; se o iPhone bloquear, toca mudo e mostra "toque pra ouvir"
+  const videoStory = useRef<HTMLVideoElement>(null)
+  const [semSom, setSemSom] = useState(false)
+  useEffect(() => {
+    const v = videoStory.current
+    if (!v) return
+    setSemSom(false)
+    v.muted = false
+    v.play().catch(() => { v.muted = true; setSemSom(true); v.play().catch(() => {}) })
+  }, [story])
+
   // vídeo do meio do carrossel toca, os outros pausam
   function aoRolarVideos(e: UIEvent<HTMLDivElement>) {
     const tv = e.currentTarget
@@ -544,7 +557,7 @@ export default function Black() {
               const p = v.produto_id ? porId.get(v.produto_id) : undefined
               return (
                 <button key={v.id} className={`clipe ${i === clipeAtivo ? 'ativo' : ''}`} style={{ background: fundosClipe[i % fundosClipe.length] }} onClick={() => setStory(i)}>
-                  <video src={v.video_url} poster={v.capa_url || undefined} muted loop playsInline preload="metadata" />
+                  <video ref={mutarVideo} src={v.video_url + '#t=0.1'} poster={v.capa_url || undefined} muted loop playsInline preload="auto" />
                   <span className="play"><svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M7 4l14 8-14 8z" /></svg></span>
                   {p && (
                     <span className="mini">
@@ -812,13 +825,14 @@ export default function Black() {
             <button onClick={() => setStory(null)} aria-label="Fechar"><svg width="26" height="26" viewBox="0 0 24 24" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
           </div>
           <div className="palco">
-            <video key={storyAtual.id} src={storyAtual.video_url} autoPlay playsInline muted={false}
+            <video key={storyAtual.id} ref={videoStory} src={storyAtual.video_url} autoPlay playsInline
               onEnded={() => setStory(s => (s !== null && s + 1 < listaVideos.length ? s + 1 : null))}
               onTimeUpdate={e => {
                 const v = e.currentTarget
                 const b = raiz.current?.querySelectorAll<HTMLElement>('.stories .barras b')[story as number]
                 if (b && v.duration) b.style.width = (v.currentTime / v.duration) * 100 + '%'
               }} />
+            {semSom && <button className="ligar-som" onClick={() => { const v = videoStory.current; if (v) { v.muted = false; v.play().catch(() => {}) } setSemSom(false) }}>🔇 Toque pra ouvir</button>}
             <button className="lado" style={{ left: 0 }} onClick={() => setStory(s => (s ? s - 1 : 0))} aria-label="Anterior" />
             <button className="lado" style={{ right: 0 }} onClick={() => setStory(s => (s !== null && s + 1 < listaVideos.length ? s + 1 : null))} aria-label="Próximo" />
           </div>
