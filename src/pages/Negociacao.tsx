@@ -1994,7 +1994,7 @@ export default function Negociacao() {
                           <div style={{ ...s.vendedorPos, background: i === 0 && v.vendido > 0 ? '#ff6600' : '#1a1a1a', color: i === 0 && v.vendido > 0 ? 'white' : '#888' }}>{i + 1}º</div>
                           <div>
                             <p style={{ color: 'white', fontWeight: 700, fontSize: 17 }}>{v.nome}</p>
-                            <p style={{ color: '#666', fontSize: 12 }}>{v.lista.length} negociação(ões) · {aberto ? '▲ fechar' : '▼ ver lista'}</p>
+                            <p style={{ color: '#666', fontSize: 12 }}>{v.fechadas} venda(s) fechada(s) · {aberto ? '▲ fechar' : '▼ ver vendas'}</p>
                           </div>
                         </div>
                         <div style={s.vendedorStats}>
@@ -2003,7 +2003,7 @@ export default function Negociacao() {
                             { st: 'Venda Pendente', n: v.pendentes, l: 'Andamento', cor: '#ffc800' },
                             { st: 'Desistiram', n: v.desistiram, l: 'Desistiram', cor: '#ff3333' },
                           ].map(x => {
-                            const on = aberto && vendedorFiltro === x.st
+                            const on = aberto && (vendedorFiltro || 'Venda Fechada') === x.st
                             return (
                               <div key={x.st} onClick={e => { e.stopPropagation(); setVendedorAberto(v.chave); setVendedorFiltro(on ? null : x.st) }}
                                 style={{ ...s.vendedorStat, cursor: 'pointer', borderRadius: 12, padding: '6px 10px', border: '1px solid ' + x.cor, background: on ? x.cor : 'transparent' }}>
@@ -2020,10 +2020,12 @@ export default function Negociacao() {
                         </div>
                       </div>
                       {aberto && (() => {
-                        const itens = vendedorFiltro ? v.lista.filter(c => c.status === vendedorFiltro) : v.lista
+                        // clicando no nome: só as vendas fechadas (os outros números mostram andamento/desistiram)
+                        const filtroAtual = vendedorFiltro || 'Venda Fechada'
+                        const itens = v.lista.filter(c => c.status === filtroAtual)
                         return (
                           <>
-                            {vendedorFiltro && <p style={{ color: '#888', fontSize: 13, margin: '10px 0 0' }}>Mostrando só: <b style={{ color: '#fff' }}>{vendedorFiltro === 'Venda Fechada' ? 'Fechadas' : vendedorFiltro === 'Venda Pendente' ? 'Andamento' : 'Desistiram'}</b> · <span onClick={() => setVendedorFiltro(null)} style={{ color: '#ff8a3d', cursor: 'pointer' }}>ver todas</span></p>}
+                            <p style={{ color: '#888', fontSize: 13, margin: '10px 0 0' }}>Mostrando: <b style={{ color: '#fff' }}>{filtroAtual === 'Venda Fechada' ? 'Vendas fechadas' : filtroAtual === 'Venda Pendente' ? 'Em andamento' : 'Desistiram'}</b>{filtroAtual !== 'Venda Fechada' && <> · <span onClick={() => setVendedorFiltro(null)} style={{ color: '#ff8a3d', cursor: 'pointer' }}>voltar pras fechadas</span></>}</p>
                             {itens.length === 0
                               ? <p style={{ color: '#555', textAlign: 'center', padding: 16 }}>Nenhuma negociação aqui</p>
                               : <div style={{ ...s.listaGrid, marginTop: 10 }}>{itens.map(c => miniCard(c))}</div>}
