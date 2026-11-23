@@ -408,6 +408,29 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     setModelos(nova)
     await Promise.all(nova.map((x, k) => supabase.from('black_modelos').update({ ordem: nova.length - k }).eq('id', x.id)))
   }
+  // renomear modelo: leva junto as capinhas. Se o nome novo já existe, junta os dois.
+  async function renomearModelo(m: BlackModelo) {
+    const nome = (prompt('Novo nome do modelo', m.nome) || '').trim()
+    if (!nome || nome === m.nome) return
+    const existente = modelos.find(x => x.id !== m.id && x.nome.toLowerCase() === nome.toLowerCase())
+    if (existente && !confirm(`Já existe "${existente.nome}". Juntar as capinhas do ${m.nome} nele e apagar o ${m.nome}?`)) return
+    const destino = existente ? existente.nome : nome
+    setOcupado('Salvando...')
+    let erro = ''
+    for (const p of produtos.filter(x => x.modelos.includes(m.nome))) {
+      const novos = [...new Set(p.modelos.map(x => (x === m.nome ? destino : x)))]
+      const { error } = await supabase.from('black_produtos').update({ modelos: novos }).eq('id', p.id)
+      if (error) erro = error.message
+    }
+    await supabase.from('black_vestidas').update({ modelo: destino }).eq('modelo', m.nome)
+    const r = existente
+      ? await supabase.from('black_modelos').delete().eq('id', m.id)
+      : await supabase.from('black_modelos').update({ nome: destino }).eq('id', m.id)
+    if (r.error) erro = r.error.message
+    setOcupado('')
+    avisar(erro ? 'Não salvou tudo: ' + erro : existente ? 'Modelos juntados ✓' : 'Nome trocado ✓')
+    carregar()
+  }
   async function apagarModelo(m: BlackModelo) {
     if (!confirm(`Apagar o modelo ${m.nome}?`)) return
     await supabase.from('black_modelos').delete().eq('id', m.id)
@@ -802,6 +825,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
                     <input type="file" accept="image/*" hidden onChange={e => { fotoModelo(m, e.target.files); e.target.value = '' }} />
                   </label>
                   <div className="pb-n"><b>{m.nome}</b><small>{q} {q === 1 ? 'capinha' : 'capinhas'}</small></div>
+                  <button aria-label="Editar nome" onClick={() => renomearModelo(m)}>✎</button>
                   <button aria-label="Subir" onClick={() => moverModelo(m, -1)}>↑</button>
                   <button aria-label="Descer" onClick={() => moverModelo(m, 1)}>↓</button>
                   <button aria-label="Apagar" className="pb-perigo" onClick={() => apagarModelo(m)}>×</button>
