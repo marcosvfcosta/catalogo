@@ -955,7 +955,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
       preco, preco_promo: promo && preco && promo < preco ? promo : null, destaque: ed.mais,
       modelos: p.modelos.length ? p.modelos : [modeloAdm],
     }
-    d.rascunho = false; d.no_site = true // salvou = vai pro site (sem preço aparece "Consulte")
+    d.rascunho = false; d.no_site = p.no_site || !!p.rascunho // salvar publica; a que você escondeu no 👁️ continua escondida // salvou = vai pro site (sem preço aparece "Consulte")
     if (p.nome === 'Rascunho') d.nome = 'Capinha'
     return d
   }
@@ -1021,6 +1021,14 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     const f = config.filtros.find(x => x.slug === slug)
     if (!f || !confirm(`Apagar o filtro ${f.nome}? Ele sai do menu do site.`)) return
     if (await gravarFiltros(config.filtros.filter(x => x.slug !== slug))) avisar('Filtro apagado')
+  }
+  // 👁️ mostrar/esconder no site, na hora (sem precisar salvar)
+  async function alternarVisivel(p: BlackProduto) {
+    const visivel = p.no_site || !!p.rascunho
+    const { error } = await supabase.from('black_produtos').update({ no_site: !visivel, rascunho: false }).eq('id', p.id)
+    if (error) return avisar('Não mudou: ' + error.message)
+    setProdutos(l => l.map(x => (x.id === p.id ? { ...x, no_site: !visivel, rascunho: false } : x)))
+    avisar(visivel ? 'Escondida do site' : 'Aparecendo no site')
   }
   async function apagarCapa(p: BlackProduto, i: number) {
     if (!confirm('Apagar essa capinha?')) return
@@ -1124,8 +1132,13 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
               const ed = edDe(p, chave)
               const pr = paraNumero(ed.preco), pm = paraNumero(ed.promo)
               return (
-                <div key={chave} className={`pb-cap ${ed.black ? 'preto' : ''} ${edicoes[chave] ? 'sujo' : ''}`}>
+                <div key={chave} className={`pb-cap ${ed.black ? 'preto' : ''} ${edicoes[chave] ? 'sujo' : ''} ${p.no_site || p.rascunho ? '' : 'escondida'}`}>
                   <div className="pb-cap-foto">
+                    <button className="pb-cap-olho" aria-label={p.no_site || p.rascunho ? 'Esconder do site' : 'Mostrar no site'} onClick={() => alternarVisivel(p)}>
+                      {p.no_site || p.rascunho
+                        ? <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#1d1d1f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+                        : <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#A3361F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4M6.6 6.6A17 17 0 0 0 2 12s3.6 7 10 7a9.6 9.6 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg>}
+                    </button>
                     {foto ? <img src={foto} alt="" loading="lazy" /> : <IcCamera />}
                     <button className="pb-cap-apagar" aria-label="Apagar capinha" onClick={() => apagarCapa(p, i)}>
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A3361F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>
@@ -1147,7 +1160,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
                       <input inputMode="decimal" placeholder="0,00" value={ed.promo} onChange={e => mudarEd(p, chave, { promo: e.target.value })} /></div>
                     {pr > 0 && pm > 0 && pm < pr && <div className="pb-cap-pct">-{Math.round((1 - pm / pr) * 100)}% na Black</div>}
                   </>}
-                  {!p.no_site && <div className="pb-cap-status">{p.rascunho ? 'Ainda não está no site — toque em Salvar tudo' : 'Pausada (fora do site)'}</div>}
+                  {!p.no_site && <div className="pb-cap-status">{p.rascunho ? 'Ainda não está no site — toque em Salvar tudo' : '👁️ Escondida — não aparece no site'}</div>}
                 </div>
               )
             })}
