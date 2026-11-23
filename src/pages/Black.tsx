@@ -4,7 +4,7 @@ import { pintarFundo } from '../lib/corDoFundo'
 import { useEffect, useMemo, useRef, useState, type TouchEvent as ToqueEvento, type UIEvent } from 'react'
 import { supabase } from '../supabase'
 import {
-  BLACK_PADRAO, GRUPOS, emPromocao, lerConfig, precoFinal, reais, soNumeros, type BlackFiltro,
+  BLACK_PADRAO, FILTROS_FIXOS, GRUPOS, temFiltro, type FiltroFixo, emPromocao, lerConfig, precoFinal, reais, soNumeros, type BlackFiltro,
   type BlackConfig, type BlackModelo, type BlackProduto, type BlackVestida, type BlackVideo,
 } from '../lib/blackConfig'
 import './black.css'
@@ -46,6 +46,9 @@ export default function Black() {
   const [trocando, setTrocando] = useState(false)
   const [cfg, setCfg] = useState<BlackConfig>(BLACK_PADRAO)
   const [filtroModelo, setFiltroModelo] = useState('')
+  const [menuAberto, setMenuAberto] = useState(false)
+  const [filtroMenu, setFiltroMenu] = useState<FiltroFixo | 'black' | ''>('')
+  const telaAberta = !!filtroModelo || !!filtroMenu
   const [filtroTipo, setFiltroTipo] = useState<TipoFiltro>('tudo')
   const [filtrosOp, setFiltrosOp] = useState<BlackFiltro[]>([])
   const [filtrosSel, setFiltrosSel] = useState<string[]>([])
@@ -100,7 +103,6 @@ export default function Black() {
   const gruposSel = GRUPOS.map(g => filtrosOp.filter(f => f.grupo === g.id && filtrosSel.includes(f.id)).map(f => f.id)).filter(l => l.length)
   const passaFiltros = (p: BlackProduto) => gruposSel.every(ids => ids.some(id => (p.filtros || []).includes(id)))
   const base = produtos.filter(p => (filtroTipo === 'tudo' || p.tipo === filtroTipo) && (!filtroModelo || serveNo(p, filtroModelo)) && passaFiltros(p))
-  const usados = new Set(produtos.flatMap(p => p.filtros || []))
   const nomesSel = filtrosOp.filter(f => filtrosSel.includes(f.id)).map(f => f.nome)
   const limparTudo = () => { setFiltroModelo(''); setFiltroTipo('tudo'); setFiltrosSel([]) }
   const lancamentos = base.filter(p => p.lancamento)
@@ -280,24 +282,31 @@ export default function Black() {
 
   // tela do modelo aberta: trava a rolagem da página de trás
   useEffect(() => {
-    if (!filtroModelo) return
+    if (!telaAberta) return
     const antes = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = antes }
-  }, [filtroModelo])
+  }, [telaAberta])
   const telaModeloRef = useRef<HTMLDivElement>(null)
   // na tela do modelo cada foto vira uma capinha na grade (nada de carrossel)
-  const [estiloSel, setEstiloSel] = useState('')
-  // filtro da tela do modelo: Couro · Brilho · Transparente (vêm do grupo Estilo do painel)
-  const chipsEstilo = [/couro/i, /brilho/i, /transpar/i]
-    .map(re => filtrosOp.find(f => f.grupo === 'estilo' && re.test(f.nome)))
-    .filter((f): f is BlackFiltro => !!f)
-    .map(f => ({ id: f.id, rotulo: f.nome.replace(/^com\s+/i, '').replace(/^./, x => x.toUpperCase()) }))
-  const cardsModelo = base.filter(p => !estiloSel || (p.filtros || []).includes(estiloSel)).flatMap(p => (p.fotos.length ? p.fotos : ['']).map((_, i) => ({ p, i })))
-  function fecharModelo() { setFiltroModelo(''); setFiltroTipo('tudo'); setEstiloSel('') }
+  const [estiloSel, setEstiloSel] = useState<FiltroFixo | ''>('')
+  // menu ☰: Black · Couro · Brilho · Transparente
+  const porFotos = (l: BlackProduto[]) => l.flatMap(p => (p.fotos.length ? p.fotos : ['']).map((_, i) => ({ p, i })))
+  const cardsModelo = filtroMenu
+    ? porFotos(produtos.filter(p => (filtroMenu === 'black' ? emPromocao(p) : temFiltro(p, filtroMenu, filtrosOp))))
+    : porFotos(base.filter(p => !estiloSel || temFiltro(p, estiloSel, filtrosOp)))
+  function abrirMenuFiltro(f: FiltroFixo | 'black') {
+    const topo = raiz.current?.querySelector('.topo')?.getBoundingClientRect().bottom
+    if (topo && telaModeloRef.current) telaModeloRef.current.style.top = Math.max(0, Math.round(topo)) + 'px'
+    setFiltroModelo(''); setEstiloSel('')
+    setFiltroMenu(f)
+    setMenuAberto(false)
+    window.setTimeout(() => telaModeloRef.current?.scrollTo({ top: 0 }), 30)
+  }
+  function fecharModelo() { setFiltroModelo(''); setFiltroMenu(''); setFiltroTipo('tudo'); setEstiloSel('') }
   // ── voltar: cada tela aberta (modelo, capinha, sacola, experimentar, vídeo) vira um passo do "voltar" do celular.
   // Arrastar o dedo da esquerda pra direita (ou o botão voltar) fecha a de cima, uma por vez.
-  const camadas = (filtroModelo ? 1 : 0) + (aberto || sacolaAberta ? 1 : 0) + (exp ? 1 : 0) + (story !== null ? 1 : 0)
+  const camadas = (telaAberta ? 1 : 0) + (menuAberto ? 1 : 0) + (aberto || sacolaAberta ? 1 : 0) + (exp ? 1 : 0) + (story !== null ? 1 : 0)
   const empilhadas = useRef(0)
   const ignorar = useRef(0)
   const fecharTopo = useRef(() => {})
@@ -305,7 +314,8 @@ export default function Black() {
     if (story !== null) setStory(null)
     else if (exp) setExp(null)
     else if (aberto || sacolaAberta) fechar()
-    else if (filtroModelo) fecharModelo()
+    else if (menuAberto) setMenuAberto(false)
+    else if (telaAberta) fecharModelo()
   }
   useEffect(() => {
     if (camadas > empilhadas.current) {
@@ -443,10 +453,10 @@ export default function Black() {
       <div className="aviso"><div className="rolo"><span className="cartao" /><b>{cfg.faixa.split('·')[0].trim()}</b>{cfg.faixa.includes('·') && <> · {cfg.faixa.split('·').slice(1).join('·').trim()}</>}</div></div>
 
       <header className="topo">
-        <button className="icone" aria-label="Ir pro filtro" onClick={() => filtroRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+        <button className="icone" aria-label="Menu" onClick={() => setMenuAberto(true)}>
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2.4" strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
         </button>
-        <a className="logo" href="/black" onClick={e => { if (filtroModelo) { e.preventDefault(); sairDoModelo() } }}><span className="m">Marcos</span><span className="g">Magazine</span></a>
+        <a className="logo" href="/black" onClick={e => { if (telaAberta) { e.preventDefault(); sairDoModelo() } }}><span className="m">Marcos</span><span className="g">Magazine</span></a>
         <div className="direita">
           <button className="icone" aria-label="Buscar" onClick={() => filtroRef.current?.scrollIntoView({ behavior: 'smooth' })}>
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2.4" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
@@ -501,23 +511,6 @@ export default function Black() {
               </button>
             ))}
           </div>
-          {GRUPOS.map(g => {
-            const ops = filtrosOp.filter(f => f.grupo === g.id && usados.has(f.id))
-            if (!ops.length) return null
-            return (
-              <div className="grupo-filtro" key={g.id}>
-                <span className="rot">{g.nome}</span>
-                <div className="chips sem-barra">
-                  {ops.map(f => (
-                    <button key={f.id} className={`chip ${filtrosSel.includes(f.id) ? 'on' : ''}`}
-                      onClick={() => setFiltrosSel(l => (l.includes(f.id) ? l.filter(x => x !== f.id) : [...l, f.id]))}>
-                      {g.id === 'cor' && <i className="bolinha" style={{ background: f.cor_hex || '#999' }} />}{f.nome}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
           {filtrando && <button className="limpar on" onClick={limparTudo}>Limpar filtro</button>}
         </section>
       )}
@@ -578,22 +571,35 @@ export default function Black() {
         </>
       )}
 
-      <div className={`tela-modelo ${filtroModelo ? 'on' : ''}`} ref={telaModeloRef}>
+      <div className={`tela-modelo ${telaAberta ? 'on' : ''}`} ref={telaModeloRef}>
         <div className="tm-titulo">
-          <b>{filtroTipo === 'cordinha' ? 'Cordinhas' : 'Capinhas'} pro <span>{filtroModelo}</span></b>
+          {filtroMenu === 'black' ? <b>Ofertas <span>Black</span></b>
+            : filtroMenu ? <b>Capinhas de <span>{FILTROS_FIXOS.find(f => f.slug === filtroMenu)?.nome.toLowerCase()}</span></b>
+            : <b>{filtroTipo === 'cordinha' ? 'Cordinhas' : 'Capinhas'} pro <span>{filtroModelo}</span></b>}
         </div>
-        {chipsEstilo.length > 0 && (
+        {!filtroMenu && (
           <div className="tm-chips sem-barra">
             <button className={!estiloSel ? 'on' : ''} onClick={() => setEstiloSel('')}>Todas</button>
-            {chipsEstilo.map(c => (
-              <button key={c.id} className={estiloSel === c.id ? 'on' : ''} onClick={() => setEstiloSel(c.id)}>{c.rotulo}</button>
+            {FILTROS_FIXOS.map(c => (
+              <button key={c.slug} className={estiloSel === c.slug ? 'on' : ''} onClick={() => setEstiloSel(c.slug)}>{c.nome}</button>
             ))}
           </div>
         )}
-        {nomesSel.length > 0 && <p className="tm-sel">{nomesSel.join(' · ')} <button onClick={() => setFiltrosSel([])}>limpar</button></p>}
         {cardsModelo.length ? <div className="grade">{cardsModelo.map(({ p, i }) => card(p, i))}</div>
-          : <p className="vazio">Ainda não temos capinhas pra esse modelo. Chama a gente no WhatsApp que a gente procura pra você 😊</p>}
+          : <p className="vazio">{filtroMenu ? 'Em breve tem capinha aqui 😊' : 'Ainda não temos capinhas pra esse modelo. Chama a gente no WhatsApp que a gente procura pra você 😊'}</p>}
       </div>
+
+      <div className={`menu-veu ${menuAberto ? 'on' : ''}`} onClick={() => setMenuAberto(false)} />
+      <nav className={`menu-lado ${menuAberto ? 'on' : ''}`}>
+        <div className="menu-topo">
+          <div className="logo"><span className="m">Marcos</span><span className="g">Magazine</span></div>
+          <button aria-label="Fechar" onClick={() => setMenuAberto(false)}><svg width="24" height="24" viewBox="0 0 24 24" stroke="#111" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
+        </div>
+        <button className="menu-item black" onClick={() => abrirMenuFiltro('black')}><span>BLACK <b>Marcos Magazine</b></span><small>ofertas ›</small></button>
+        {FILTROS_FIXOS.map(f => (
+          <button key={f.slug} className="menu-item" onClick={() => abrirMenuFiltro(f.slug)}><span>{f.nome}</span><small>›</small></button>
+        ))}
+      </nav>
 
       <footer className="rodape">
         <div className="logo"><span className="m">Marcos</span><span className="g">Magazine</span></div>

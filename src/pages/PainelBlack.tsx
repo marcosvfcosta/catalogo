@@ -5,11 +5,11 @@ import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode
 import { supabase } from '../supabase'
 import {
   BLACK_PADRAO, emPromocao, lerConfig, precoFinal, reais,
-  GRUPOS, type BlackConfig, type BlackFiltro, type BlackGrupo, type BlackModelo, type BlackProduto, type BlackSecao, type BlackVestida, type BlackVideo,
+  FILTROS_FIXOS, filtrosFixosDe, temFiltro, type FiltroFixo, type BlackConfig, type BlackFiltro, type BlackModelo, type BlackProduto, type BlackSecao, type BlackVestida, type BlackVideo,
 } from '../lib/blackConfig'
 import './painelBlack.css'
 
-type Vista = 'produtos' | 'editar' | 'aparencia' | 'modelos'
+type Vista = 'capas' | 'produtos' | 'editar' | 'aparencia' | 'modelos'
 type Filtro = 'todos' | 'site' | 'pausados' | 'rascunhos' | 'capa' | 'cordinha' | 'promo'
 
 type Props = {
@@ -59,7 +59,7 @@ function Chave({ ligado, onClick, rotulo }: { ligado: boolean; onClick: () => vo
 }
 
 export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props) {
-  const [vista, setVista] = useState<Vista>('produtos')
+  const [vista, setVista] = useState<Vista>('capas')
   const [produtos, setProdutos] = useState<BlackProduto[]>([])
   const [modelos, setModelos] = useState<BlackModelo[]>([])
   const [videos, setVideos] = useState<BlackVideo[]>([])
@@ -76,7 +76,6 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
   const [aviso, setAviso] = useState('')
   const [novoModelo, setNovoModelo] = useState({ marca: '', nome: '' })
   const [filtrosOp, setFiltrosOp] = useState<BlackFiltro[]>([])
-  const [novoFiltro, setNovoFiltro] = useState<Record<string, string>>({})
   const [selecionando, setSelecionando] = useState(false)
   const [sel, setSel] = useState<string[]>([])
   const [lote, setLote] = useState<Lote | null>(null)
@@ -116,7 +115,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     if (v === 'editar') {
       setForm(p ? {
         id: p.id, nome: p.nome, tipo: p.tipo, preco: paraTexto(p.preco), promo: paraTexto(p.preco_promo), descricao: p.descricao || '',
-        fotos: [...(p.fotos || [])], modelos: [...(p.modelos || [])], no_site: p.rascunho ? true : p.no_site, lancamento: p.lancamento, destaque: p.destaque, filtros: [...(p.filtros || [])],
+        fotos: [...(p.fotos || [])], modelos: [...(p.modelos || [])], no_site: p.rascunho ? true : p.no_site, lancamento: p.lancamento, destaque: p.destaque, filtros: filtrosFixosDe(p, filtrosOp),
       } : { ...FORM_VAZIO })
     }
     setVista(v)
@@ -338,7 +337,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     for (const p of escolhidos) {
       const dados: Record<string, unknown> = {
         modelos: [...new Set([...p.modelos, ...lote.modelos])],
-        filtros: [...new Set([...(p.filtros || []), ...lote.filtros])],
+        filtros: [...new Set([...filtrosFixosDe(p, filtrosOp), ...lote.filtros])],
       }
       if (lote.nome.trim()) dados.nome = lote.nome.trim()
       if (lote.tipo) dados.tipo = lote.tipo
@@ -366,23 +365,6 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
   }
 
   // ───────── Filtros (opções de cada grupo) ─────────
-  async function addFiltro(grupo: BlackGrupo) {
-    const nome = (novoFiltro[grupo] || '').trim()
-    if (!nome) return avisar('Digite o nome')
-    const { error } = await supabase.from('black_filtros').insert([{ grupo, nome, cor_hex: grupo === 'cor' ? '#999999' : null, ordem: filtrosOp.filter(f => f.grupo === grupo).length + 1 }])
-    if (error) return avisar(error.message.includes('duplicate') ? 'Essa opção já existe' : 'Não salvou: ' + error.message)
-    setNovoFiltro(n => ({ ...n, [grupo]: '' }))
-    carregar()
-  }
-  async function apagarFiltro(f: BlackFiltro) {
-    if (!confirm(`Apagar "${f.nome}"?`)) return
-    await supabase.from('black_filtros').delete().eq('id', f.id)
-    carregar()
-  }
-  async function corFiltro(f: BlackFiltro, hex: string) {
-    setFiltrosOp(l => l.map(x => (x.id === f.id ? { ...x, cor_hex: hex } : x)))
-    await supabase.from('black_filtros').update({ cor_hex: hex }).eq('id', f.id)
-  }
   async function fotoModelo(m: BlackModelo, arquivos: FileList | null) {
     if (!arquivos || !arquivos[0]) return
     setOcupado('Enviando foto do ' + m.nome + '...')
@@ -397,23 +379,13 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
 
   // chips de filtro (usado no produto e no lote)
   function escolhaFiltros(marcados: string[], trocar: (id: string) => void) {
-    if (!filtrosOp.length) return <p className="pb-dica" style={{ margin: 0 }}>Nenhum filtro criado. Crie em <b>Filtros</b>, no menu de baixo.</p>
-    return GRUPOS.map(g => {
-      const ops = filtrosOp.filter(f => f.grupo === g.id)
-      if (!ops.length) return null
-      return (
-        <div key={g.id}>
-          <label className="pb-rot">{g.nome}</label>
-          <div className="pb-mods">
-            {ops.map(f => (
-              <button key={f.id} className={marcados.includes(f.id) ? 'on' : ''} onClick={() => trocar(f.id)}>
-                {f.grupo === 'cor' && <span className="pb-bolinha" style={{ background: f.cor_hex || '#999' }} />}{f.nome}
-              </button>
-            ))}
-          </div>
-        </div>
-      )
-    })
+    return (
+      <div className="pb-mods">
+        {FILTROS_FIXOS.map(f => (
+          <button key={f.slug} className={marcados.includes(f.slug) ? 'on' : ''} onClick={() => trocar(f.slug)}>{f.nome}</button>
+        ))}
+      </div>
+    )
   }
   const alternarId = (lista: string[], id: string) => (lista.includes(id) ? lista.filter(x => x !== id) : [...lista, id])
 
@@ -488,7 +460,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
                       <div className="pb-nome pb-serif">{p.nome}</div>
                       <div className="pb-preco pb-serif">{reais(precoFinal(p))}{emPromocao(p) && <s>{reais(p.preco)}</s>}</div>
                       <div className="pb-meta">{p.rascunho ? <span className="pb-tag-rascunho">Rascunho · falta preencher</span> : p.tipo === 'capa' ? `Capinha · ${p.modelos.length} ${p.modelos.length === 1 ? 'modelo' : 'modelos'}` : 'Cordinha · serve em todos'}</div>
-                      {!!p.filtros?.length && <div className="pb-meta pb-meta-filtros">{filtrosOp.filter(f => p.filtros?.includes(f.id)).map(f => f.nome).join(' · ')}</div>}
+                      {FILTROS_FIXOS.some(f => temFiltro(p, f.slug, filtrosOp)) && <div className="pb-meta pb-meta-filtros">{FILTROS_FIXOS.filter(f => temFiltro(p, f.slug, filtrosOp)).map(f => f.nome).join(' · ')}</div>}
                     </div>
                     {!selecionando && <IcSeta />}
                   </div>
@@ -805,30 +777,10 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
   function telaModelos() {
     return (
       <>
-        <h1 className="pb-titulo pb-serif">Filtros</h1>
-        <p className="pb-sub">"Qual é o seu iPhone?" com foto, e os filtros de Público, Estilo, Função e Cor</p>
+        <h1 className="pb-titulo pb-serif">Modelos</h1>
+        <p className="pb-sub">Os iPhones do "Qual é o seu celular?". Filtros agora são só Black, Couro, Brilho e Transparente — marque em Capas.</p>
 
-        {GRUPOS.map(g => (
-          <div className="pb-bloco" key={g.id}>
-            <h3 className="pb-serif">{g.nome}</h3>
-            <div className="pb-opcoes">
-              {filtrosOp.filter(f => f.grupo === g.id).map(f => (
-                <span className="pb-opcao" key={f.id}>
-                  {g.id === 'cor' && <input type="color" value={f.cor_hex || '#999999'} onChange={e => corFiltro(f, e.target.value)} aria-label={'Cor ' + f.nome} />}
-                  {f.nome}
-                  <button aria-label={'Apagar ' + f.nome} onClick={() => apagarFiltro(f)}>×</button>
-                </span>
-              ))}
-            </div>
-            <div className="pb-add-linha">
-              <input className="pb-campo" placeholder={`Nova opção de ${g.nome.toLowerCase()}`} value={novoFiltro[g.id] || ''}
-                onChange={e => setNovoFiltro(n => ({ ...n, [g.id]: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter') addFiltro(g.id) }} />
-              <button className="pb-btn-pequeno pb-escuro" onClick={() => addFiltro(g.id)}>Adicionar</button>
-            </div>
-          </div>
-        ))}
-
-        <h3 className="pb-serif" style={{ fontSize: 26, marginTop: 30 }}>Qual é o seu iPhone?</h3>
+        <h3 className="pb-serif" style={{ fontSize: 26, marginTop: 22 }}>Qual é o seu iPhone?</h3>
         <p className="pb-dica">Toque na foto pra trocar. Ela aparece no quadradinho do site.</p>
         <div className="pb-bloco">
           <h3 className="pb-serif">Novo modelo</h3>
@@ -862,11 +814,169 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     )
   }
 
+
+  // ───────── Capas por modelo: abre todas as capinhas do modelo, marca filtro e valor de cada uma ─────────
+  type Ed = { filtros: FiltroFixo[]; black: boolean; preco: string; promo: string }
+  const [modeloAdm, setModeloAdm] = useState('')
+  const [edicoes, setEdicoes] = useState<Record<string, Ed>>({})
+  const capasDo = (nome: string) => produtos.filter(p => p.tipo === 'capa' && (p.modelos.includes(nome) || !p.modelos.length))
+  const itensDo = (nome: string) => capasDo(nome).flatMap(p => (p.fotos.length ? p.fotos : ['']).map((foto, i) => ({ p, i, foto, chave: p.id + '|' + i })))
+  const edDe = (p: BlackProduto, chave: string): Ed => edicoes[chave] || {
+    filtros: filtrosFixosDe(p, filtrosOp), black: emPromocao(p),
+    preco: p.preco ? paraTexto(p.preco) : '', promo: p.preco_promo ? paraTexto(p.preco_promo) : '',
+  }
+  function mudarEd(p: BlackProduto, chave: string, x: Partial<Ed>) {
+    setEdicoes(e => ({ ...e, [chave]: { ...edDe(p, chave), ...x } }))
+  }
+  const qtdSujos = Object.keys(edicoes).length
+  function sairDoModeloAdm() {
+    if (qtdSujos && !confirm('Tem alterações sem salvar. Sair mesmo assim?')) return
+    setEdicoes({}); setModeloAdm(''); window.scrollTo(0, 0)
+  }
+  function dadosDe(ed: Ed, p: BlackProduto) {
+    const preco = paraNumero(ed.preco)
+    const promo = ed.black && ed.promo.trim() ? paraNumero(ed.promo) : null
+    const d: Record<string, unknown> = {
+      filtros: ed.filtros, preco, preco_promo: promo,
+      modelos: p.modelos.length ? p.modelos : [modeloAdm],
+    }
+    if (preco > 0) { d.rascunho = false; d.no_site = true }
+    if (p.nome === 'Rascunho') d.nome = 'Capinha'
+    return d
+  }
+  async function salvarCapas() {
+    const itens = itensDo(modeloAdm)
+    const mexidos = new Set(itens.filter(it => edicoes[it.chave]).map(it => it.p.id))
+    if (!mexidos.size) return avisar('Nada pra salvar')
+    for (const it of itens) {
+      const ed = edicoes[it.chave]
+      if (!ed) continue
+      const pr = paraNumero(ed.preco), pm = paraNumero(ed.promo)
+      if (ed.black && (!pr || !pm)) return avisar('Capinha Black precisa dos 2 preços: atual e com desconto')
+      if (ed.black && pm >= pr) return avisar('O preço Black tem que ser menor que o atual')
+    }
+    setOcupado('Salvando...')
+    let erro = ''
+    for (const id of mexidos) {
+      const p = produtos.find(x => x.id === id)!
+      const fotos = p.fotos.length ? p.fotos : ['']
+      const doProduto = itens.filter(it => it.p.id === id)
+      if (fotos.length <= 1) {
+        const { error } = await supabase.from('black_produtos').update(dadosDe(edDe(p, doProduto[0].chave), p)).eq('id', p.id)
+        if (error) erro = error.message
+        continue
+      }
+      // várias fotos no mesmo cadastro: separa cada foto num cadastro próprio (pra mexer uma por uma)
+      const { error } = await supabase.from('black_produtos').update({ ...dadosDe(edDe(p, doProduto[0].chave), p), fotos: [fotos[0]] }).eq('id', p.id)
+      if (error) { erro = error.message; continue }
+      const novos = doProduto.slice(1).map((it, k) => ({
+        nome: p.nome, tipo: p.tipo, descricao: p.descricao, lancamento: p.lancamento, destaque: p.destaque,
+        no_site: p.no_site, rascunho: !!p.rascunho, ordem: (p.ordem || 0) + k + 1,
+        ...dadosDe(edDe(p, it.chave), p), fotos: [it.foto],
+      }))
+      const r = await supabase.from('black_produtos').insert(novos)
+      if (r.error) erro = r.error.message
+    }
+    setOcupado('')
+    if (erro) return avisar('Não salvou tudo: ' + erro)
+    setEdicoes({})
+    avisar('Salvo ✓')
+    await carregar()
+  }
+  async function subirFotosDoModelo(arquivos: FileList | null) {
+    if (!arquivos || !arquivos.length || !modeloAdm) return
+    const fs = Array.from(arquivos)
+    for (let i = 0; i < fs.length; i++) {
+      setOcupado(`Enviando foto ${i + 1} de ${fs.length}...`)
+      try {
+        const url = await enviarFoto(fs[i])
+        const { error } = await supabase.from('black_produtos').insert([{
+          nome: 'Capinha', tipo: 'capa', preco: 0, fotos: [url], modelos: [modeloAdm], filtros: [],
+          no_site: false, rascunho: true, lancamento: true, ordem: produtos.length + i,
+        }])
+        if (error) throw error
+      } catch (e) { avisar('Foto não enviada: ' + (e instanceof Error ? e.message : String(e))) }
+    }
+    setOcupado('')
+    await carregar()
+    avisar('Fotos no modelo ✓ Agora marque o filtro e o valor de cada uma')
+  }
+  function telaCapas() {
+    if (!modeloAdm) {
+      return (
+        <>
+          <h1 className="pb-titulo pb-serif">Capas</h1>
+          <p className="pb-sub">Toque no modelo pra abrir todas as capinhas dele</p>
+          {carregando ? <p className="pb-sub pb-vazio">Carregando...</p> : (
+            <div className="pb-grade-mods">
+              {modelos.map(m => {
+                const its = itensDo(m.nome)
+                const falta = its.filter(it => !it.p.preco).length
+                return (
+                  <button key={m.id} className="pb-mod-tile" onClick={() => { setEdicoes({}); setModeloAdm(m.nome); window.scrollTo(0, 0) }}>
+                    <span className="pb-mod-foto">{m.foto_url ? <img src={m.foto_url} alt="" onLoad={pintarFundo} /> : <IcProdutos />}</span>
+                    <b>{m.nome.replace(/^iPhone\s+/i, '')}</b>
+                    <small>{its.length} {its.length === 1 ? 'capinha' : 'capinhas'}</small>
+                    {falta > 0 && <em>{falta} sem preço</em>}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )
+    }
+    const itens = itensDo(modeloAdm)
+    return (
+      <>
+        <div className="pb-cap-topo">
+          <button className="pb-cap-voltar" onClick={sairDoModeloAdm} aria-label="Voltar">‹</button>
+          <div><b className="pb-serif">{modeloAdm}</b><small>{itens.length} {itens.length === 1 ? 'capinha' : 'capinhas'}</small></div>
+        </div>
+        <p className="pb-cap-nota">Marque o filtro de cada capinha e ponha o valor. Marcou <b>Black</b>? Aparecem 2 preços: o <b>atual</b> e o <b>com desconto</b>.</p>
+        <label className="pb-btn-pequeno pb-escuro" style={{ marginBottom: 12 }}>
+          <IcCamera />Subir fotos pra esse modelo
+          <input type="file" accept="image/*" multiple hidden onChange={e => { subirFotosDoModelo(e.target.files); e.target.value = '' }} />
+        </label>
+        {!itens.length ? <p className="pb-sub pb-vazio">Nenhuma capinha nesse modelo ainda.</p> : (
+          <div className="pb-cap-grade">
+            {itens.map(({ p, foto, chave }) => {
+              const ed = edDe(p, chave)
+              const pr = paraNumero(ed.preco), pm = paraNumero(ed.promo)
+              return (
+                <div key={chave} className={`pb-cap ${ed.black ? 'preto' : ''} ${edicoes[chave] ? 'sujo' : ''}`}>
+                  <div className="pb-cap-foto">{foto ? <img src={foto} alt="" loading="lazy" /> : <IcCamera />}</div>
+                  <div className="pb-cap-checks">
+                    <label className="blk"><input type="checkbox" checked={ed.black} onChange={e => mudarEd(p, chave, { black: e.target.checked })} />Black</label>
+                    {FILTROS_FIXOS.map(f => (
+                      <label key={f.slug}><input type="checkbox" checked={ed.filtros.includes(f.slug)}
+                        onChange={() => mudarEd(p, chave, { filtros: ed.filtros.includes(f.slug) ? ed.filtros.filter(x => x !== f.slug) : [...ed.filtros, f.slug] })} />{f.nome}</label>
+                    ))}
+                  </div>
+                  <div className="pb-cap-campo"><small>{ed.black ? 'ATUAL' : 'VALOR'}</small>
+                    <input inputMode="decimal" placeholder="0,00" value={ed.preco} onChange={e => mudarEd(p, chave, { preco: e.target.value })} /></div>
+                  {ed.black && <>
+                    <div className="pb-cap-campo desc"><small>BLACK</small>
+                      <input inputMode="decimal" placeholder="0,00" value={ed.promo} onChange={e => mudarEd(p, chave, { promo: e.target.value })} /></div>
+                    {pr > 0 && pm > 0 && pm < pr && <div className="pb-cap-pct">-{Math.round((1 - pm / pr) * 100)}% na Black</div>}
+                  </>}
+                  {!p.no_site && <div className="pb-cap-status">{p.rascunho ? 'Rascunho — aparece no site quando tiver valor' : 'Pausada (fora do site)'}</div>}
+                </div>
+              )
+            })}
+          </div>
+        )}
+        <div style={{ height: 80 }} />
+        <button className="pb-cap-salvar" disabled={!qtdSujos} onClick={salvarCapas}>{qtdSujos ? `Salvar tudo (${qtdSujos})` : 'Salvar tudo'}</button>
+      </>
+    )
+  }
+
   const abas: { v: Vista; rotulo: string; Icone: () => ReactElement; ativa: boolean }[] = [
-    { v: 'produtos', rotulo: 'Produtos', Icone: IcProdutos, ativa: vista === 'produtos' || (vista === 'editar' && !ehNovo) },
-    { v: 'editar', rotulo: 'Novo produto', Icone: IcMais, ativa: ehNovo },
+    { v: 'capas', rotulo: 'Capas', Icone: IcProdutos, ativa: vista === 'capas' },
+    { v: 'produtos', rotulo: 'Lista', Icone: IcLista, ativa: vista === 'produtos' || vista === 'editar' },
     { v: 'aparencia', rotulo: 'Aparência', Icone: IcPincel, ativa: vista === 'aparencia' },
-    { v: 'modelos', rotulo: 'Filtros', Icone: IcLista, ativa: vista === 'modelos' },
+    { v: 'modelos', rotulo: 'Modelos', Icone: IcMais, ativa: vista === 'modelos' },
   ]
 
   return (
@@ -894,7 +1004,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
             <p className="pb-dica" style={{ color: '#A3361F' }}>{erroBanco}</p>
             <button className="pb-btn" onClick={() => { setCarregando(true); carregar() }}>Tentar de novo</button>
           </div>
-        ) : vista === 'produtos' ? telaProdutos() : vista === 'editar' ? telaEditar() : vista === 'aparencia' ? telaAparencia() : telaModelos()}
+        ) : vista === 'capas' ? telaCapas() : vista === 'produtos' ? telaProdutos() : vista === 'editar' ? telaEditar() : vista === 'aparencia' ? telaAparencia() : telaModelos()}
       </main>
 
       {telaLote()}

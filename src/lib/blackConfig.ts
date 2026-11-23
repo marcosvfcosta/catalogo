@@ -109,3 +109,22 @@ export const precoFinal = (p: BlackProduto) => (p.preco_promo && p.preco_promo <
 export const emPromocao = (p: BlackProduto) => !!(p.preco_promo && p.preco_promo < p.preco)
 export const reais = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 export const soNumeros = (t: string) => t.replace(/\D/g, '')
+
+// ── filtros fixos da Black: só esses 3 (+ "Black" = capinha com preço de promoção) ──
+export type FiltroFixo = 'couro' | 'brilho' | 'transparente'
+export const FILTROS_FIXOS: { slug: FiltroFixo; nome: string; re: RegExp }[] = [
+  { slug: 'couro', nome: 'Couro', re: /couro/i },
+  { slug: 'brilho', nome: 'Brilho', re: /brilho/i },
+  { slug: 'transparente', nome: 'Transparente', re: /transpar/i },
+]
+// aceita o jeito novo (slug) e o antigo (id de black_filtros com o nome parecido)
+export function temFiltro(p: BlackProduto, slug: FiltroFixo, antigos: BlackFiltro[] = []) {
+  const f = p.filtros || []
+  if (f.includes(slug)) return true
+  const re = FILTROS_FIXOS.find(x => x.slug === slug)!.re
+  return antigos.some(a => re.test(a.nome) && f.includes(a.id))
+}
+// regrava a lista de filtros só com os slugs novos
+export function filtrosFixosDe(p: BlackProduto, antigos: BlackFiltro[] = []): FiltroFixo[] {
+  return FILTROS_FIXOS.filter(x => temFiltro(p, x.slug, antigos)).map(x => x.slug)
+}

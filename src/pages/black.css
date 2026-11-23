@@ -300,3 +300,16 @@
 .bk .tm-chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 12px 16px; justify-content: center; }
 .bk .tm-chips button { flex-shrink: 0; height: 36px; padding: 0 16px; border-radius: 18px; border: 1.5px solid #ddd; font-size: 13.5px; font-weight: 700; color: var(--tinta); background: #fff; }
 .bk .tm-chips button.on { background: var(--laranja); border-color: var(--laranja); color: #fff; }
+
+/* menu ☰ */
+.bk .menu-veu { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 45; opacity: 0; pointer-events: none; transition: opacity .25s; }
+.bk .menu-veu.on { opacity: 1; pointer-events: auto; }
+.bk .menu-lado { position: fixed; top: 0; bottom: 0; left: 0; width: 82%; max-width: 340px; background: #fff; z-index: 46; transform: translateX(-102%); transition: transform .3s cubic-bezier(.2,.8,.2,1); display: flex; flex-direction: column; padding-top: env(safe-area-inset-top); }
+.bk .menu-lado.on { transform: none; }
+.bk .menu-topo { display: flex; align-items: center; justify-content: space-between; padding: 18px 18px 12px; }
+.bk .menu-topo .logo { align-items: flex-end; }
+.bk .menu-item { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 18px 22px; border-bottom: 1px solid #f0f0f0; font-size: 17px; font-weight: 700; color: var(--tinta); text-align: left; }
+.bk .menu-item small { font-size: 13px; color: #999; font-weight: 600; white-space: nowrap; margin-left: 8px; }
+.bk .menu-item.black { width: auto; background: #000; color: #fff; margin: 6px 14px 10px; border-radius: 14px; border: 0; }
+.bk .menu-item.black b { color: var(--laranja); font-weight: 800; }
+.bk .menu-item.black small { color: #bbb; }
