@@ -198,3 +198,5 @@ textarea.pb-campo { height: 90px; padding: 12px 14px; resize: vertical; }
 .pb-cap-todas .pb-btn-pequeno { margin: 0; height: 44px; white-space: nowrap; }
 .pb-cap-foto { position: relative; }
 .pb-cap-apagar { position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; border-radius: 50%; background: #fff !important; box-shadow: 0 2px 6px rgba(0,0,0,.15); display: flex; align-items: center; justify-content: center; }
+.pb-cap-checks label.mais { background: #FFE9DA; color: #B4501A; }
+.pb-cap-campo small { white-space: nowrap; }
