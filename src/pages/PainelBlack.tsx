@@ -33,7 +33,7 @@ type Form = {
   filtros: string[]
 }
 
-const FORM_VAZIO: Form = { id: null, nome: '', tipo: 'capa', preco: '', promo: '', descricao: '', fotos: [], modelos: [], no_site: true, lancamento: true, destaque: false, filtros: [] }
+const FORM_VAZIO: Form = { id: null, nome: '', tipo: 'capa', preco: '', promo: '', descricao: '', fotos: [], modelos: [], no_site: true, lancamento: false, destaque: false, filtros: [] }
 
 type Lote = { nome: string; tipo: '' | 'capa' | 'cordinha'; preco: string; promo: string; modelos: string[]; filtros: string[]; publicar: boolean }
 const LOTE_VAZIO: Lote = { nome: '', tipo: '', preco: '', promo: '', modelos: [], filtros: [], publicar: false }
@@ -301,7 +301,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
         const url = await enviarFoto(fs[i])
         const { error } = await supabase.from('black_produtos').insert([{
           nome: 'Rascunho', tipo: 'capa', preco: 0, fotos: [url], modelos: [], filtros: [],
-          no_site: false, rascunho: true, lancamento: true, ordem: produtos.length + i,
+          no_site: false, rascunho: true, lancamento: false, ordem: produtos.length + i,
         }])
         if (error) throw error
         ok++
@@ -753,7 +753,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
                   <video src={v.video_url + '#t=0.5'} muted playsInline preload="metadata" />
                   <button className="pb-x" aria-label="Apagar vídeo" onClick={() => apagarVideo(v)}>×</button>
                   <select value={v.produto_id || ''} onChange={e => ligarVideo(v, e.target.value)} aria-label="Produto do vídeo">
-                    <option value="">Ligar a um produto...</option>
+                    <option value="">Sem produto (opcional)</option>
                     {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
                   </select>
                 </div>
@@ -955,7 +955,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
         const url = await enviarFoto(fs[i])
         const { error } = await supabase.from('black_produtos').insert([{
           nome: 'Capinha', tipo: 'capa', preco: 0, fotos: [url], modelos: [modeloAdm], filtros: [],
-          no_site: false, rascunho: true, lancamento: true, ordem: produtos.length + i,
+          no_site: false, rascunho: true, lancamento: false, ordem: produtos.length + i,
         }])
         if (error) throw error
       } catch (e) { avisar('Foto não enviada: ' + (e instanceof Error ? e.message : String(e))) }
