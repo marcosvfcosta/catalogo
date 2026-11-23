@@ -929,7 +929,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
 
 
   // ───────── Capas por modelo: abre todas as capinhas do modelo, marca filtro e valor de cada uma ─────────
-  type Ed = { filtros: FiltroFixo[]; black: boolean; destBlack: boolean; mais: boolean; preco: string; promo: string }
+  type Ed = { filtros: FiltroFixo[]; black: boolean; destBlack: boolean; mais: boolean; preco: string; promo: string; pct: string }
   const [modeloAdm, setModeloAdm] = useState('')
   const [edicoes, setEdicoes] = useState<Record<string, Ed>>({})
   const [valorTodas, setValorTodas] = useState('')
@@ -938,6 +938,12 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
   const edDe = (p: BlackProduto, chave: string): Ed => edicoes[chave] || {
     filtros: filtrosFixosDe(p, filtrosOp, config.filtros).filter(x => x !== 'black' && x !== 'destaque-black'), black: ehBlack(p), destBlack: (p.filtros || []).includes('destaque-black'), mais: !!p.destaque,
     preco: p.preco ? paraTexto(p.preco) : '', promo: p.preco_promo ? paraTexto(p.preco_promo) : '',
+    pct: p.preco && p.preco_promo && p.preco_promo < p.preco ? String(Math.round((1 - p.preco_promo / p.preco) * 100)) : '',
+  }
+  // % da Black: preço Black = atual - %
+  const comPct = (preco: string, pct: string) => {
+    const pr = paraNumero(preco), pc = paraNumero(pct)
+    return pr > 0 && pc > 0 && pc < 100 ? paraTexto(Math.round(pr * (100 - pc)) / 100) : ''
   }
   function mudarEd(p: BlackProduto, chave: string, x: Partial<Ed>) {
     setEdicoes(e => ({ ...e, [chave]: { ...edDe(p, chave), ...x } }))
@@ -1119,7 +1125,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
               if (!paraNumero(valorTodas)) return avisar('Digite o valor')
               setEdicoes(e => {
                 const n = { ...e }
-                for (const it of itens) n[it.chave] = { ...edDe(it.p, it.chave), preco: valorTodas }
+                for (const it of itens) { const ed = edDe(it.p, it.chave); n[it.chave] = { ...ed, preco: valorTodas, ...(ed.black && ed.pct ? { promo: comPct(valorTodas, ed.pct) } : {}) } }
                 return n
               })
               avisar('Valor colocado em todas. Agora é só Salvar tudo')
@@ -1154,10 +1160,12 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
                     ))}
                   </div>
                   <div className="pb-cap-campo"><small>{ed.black ? 'ATUAL' : 'VALOR'}</small>
-                    <input inputMode="decimal" placeholder="0,00" value={ed.preco} onChange={e => mudarEd(p, chave, { preco: e.target.value })} /></div>
+                    <input inputMode="decimal" placeholder="0,00" value={ed.preco} onChange={e => mudarEd(p, chave, { preco: e.target.value, ...(ed.black && ed.pct ? { promo: comPct(e.target.value, ed.pct) } : {}) })} /></div>
                   {ed.black && <>
+                    <div className="pb-cap-campo pct"><small>DESCONTO</small>
+                      <input inputMode="decimal" placeholder="30" value={ed.pct} onChange={e => mudarEd(p, chave, { pct: e.target.value, promo: comPct(ed.preco, e.target.value) || ed.promo })} /><b>%</b></div>
                     <div className="pb-cap-campo desc"><small>BLACK</small>
-                      <input inputMode="decimal" placeholder="0,00" value={ed.promo} onChange={e => mudarEd(p, chave, { promo: e.target.value })} /></div>
+                      <input inputMode="decimal" placeholder="0,00" value={ed.promo} onChange={e => mudarEd(p, chave, { promo: e.target.value, pct: '' })} /></div>
                     {pr > 0 && pm > 0 && pm < pr && <div className="pb-cap-pct">-{Math.round((1 - pm / pr) * 100)}% na Black</div>}
                   </>}
                   {!p.no_site && <div className="pb-cap-status">{p.rascunho ? 'Ainda não está no site — toque em Salvar tudo' : '👁️ Escondida — não aparece no site'}</div>}

@@ -218,3 +218,6 @@ textarea.pb-campo { height: 90px; padding: 12px 14px; resize: vertical; }
 .pb-cap-olho { position: absolute; top: 6px; left: 6px; width: 34px; height: 34px; border-radius: 50%; background: #fff !important; box-shadow: 0 2px 6px rgba(0,0,0,.15); display: flex; align-items: center; justify-content: center; z-index: 1; }
 .pb-cap.escondida .pb-cap-foto img { opacity: .3; filter: grayscale(1); }
 .pb-cap.escondida { background: #F3F0EB; }
+.pb-cap-campo.pct { border-color: var(--pb-laranja); background: #FFF7EF; }
+.pb-cap-campo.pct small { color: var(--pb-laranja); }
+.pb-cap-campo.pct b { font-size: 16px; font-weight: 800; color: var(--pb-laranja); }
