@@ -1768,10 +1768,23 @@ export default function Admin() {
               <input style={inputStyle} value={fornecedorLista} onChange={e => setFornecedorLista(e.target.value)} placeholder="Ex: João Importados" />
               {fornecedoresSalvos.length > 0 && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '-4px 0 12px' }}>
-                  {fornecedoresSalvos.map(f => (
-                    <button key={f} type="button" onClick={() => setFornecedorLista(f)}
-                      style={{ background: fornecedorLista === f ? '#ff6600' : '#1a1a1a', color: fornecedorLista === f ? '#fff' : '#ccc', border: '1px solid #333', borderRadius: 16, padding: '5px 12px', fontSize: 12, cursor: 'pointer' }}>{f}</button>
-                  ))}
+                  {fornecedoresSalvos.map(f => {
+                    const on = fornecedorLista === f
+                    return (
+                      <span key={f} style={{ display: 'inline-flex', alignItems: 'center', background: on ? '#ff6600' : '#1a1a1a', border: '1px solid #333', borderRadius: 16, overflow: 'hidden' }}>
+                        <button type="button" onClick={() => setFornecedorLista(f)}
+                          style={{ background: 'none', color: on ? '#fff' : '#ccc', border: 'none', padding: '5px 4px 5px 12px', fontSize: 12, cursor: 'pointer' }}>{f}</button>
+                        <button type="button" aria-label={'Excluir ' + f} onClick={() => {
+                          if (!confirm(`Tirar "${f}" da lista de fornecedores?`)) return
+                          const novos = fornecedoresSalvos.filter(x => x !== f)
+                          setFornecedoresSalvos(novos)
+                          try { localStorage.setItem('fornecedores', JSON.stringify(novos)) } catch { /* sem armazenamento */ }
+                          if (on) setFornecedorLista('')
+                        }}
+                          style={{ background: 'none', color: on ? '#fff' : '#888', border: 'none', padding: '5px 10px 5px 6px', fontSize: 14, lineHeight: 1, cursor: 'pointer' }}>×</button>
+                      </span>
+                    )
+                  })}
                 </div>
               )}
               <label style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 12px', fontSize: 14, color: incluirCpo ? '#ffc800' : '#888', cursor: 'pointer' }}>
