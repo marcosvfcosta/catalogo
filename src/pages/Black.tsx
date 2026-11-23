@@ -588,7 +588,9 @@ export default function Black() {
           </div>
         )}
         {cardsModelo.length ? <div className="grade">{cardsModelo.map(({ p, i }) => card(p, i))}</div>
-          : <p className="vazio">{filtroMenu ? 'Em breve tem capinha aqui 😊' : 'Ainda não temos capinhas pra esse modelo. Chama a gente no WhatsApp que a gente procura pra você 😊'}</p>}
+          : estiloSel && !filtroMenu
+            ? <div className="vazio">Nenhuma capinha de {cfg.filtros.find(f => f.slug === estiloSel)?.nome.toLowerCase()} pra esse modelo ainda.<br /><button className="ver-todas" onClick={() => setEstiloSel('')}>Ver todas</button></div>
+            : <p className="vazio">{filtroMenu ? 'Em breve tem capinha aqui 😊' : 'Ainda não temos capinhas pra esse modelo. Chama a gente no WhatsApp que a gente procura pra você 😊'}</p>}
       </div>
 
       <div className={`menu-veu ${menuAberto ? 'on' : ''}`} onClick={() => setMenuAberto(false)} />
