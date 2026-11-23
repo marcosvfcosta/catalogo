@@ -95,7 +95,7 @@
 .bk .card .preco { font-size: 15px; font-weight: 800; margin-top: 2px; }
 .bk .card .parc { font-size: 11px; color: #9A938A; margin-top: 1px; }
 .bk .vazio { text-align: center; color: var(--cinza); font-size: 13px; padding: 10px 24px 4px; }
-.bk .videos { margin-top: 48px; background: #000; padding: 30px 0 34px; color: #fff; }
+.bk .videos { margin-top: 0; background: #000; padding: 30px 0 34px; color: #fff; }
 .bk .videos h2 { text-align: center; font-size: 21px; font-weight: 800; margin-bottom: 4px; padding: 0 16px; color: #fff; }
 .bk .videos p { text-align: center; font-size: 13px; color: #9a9a9a; margin-bottom: 18px; }
 .bk .trilho-video { display: flex; align-items: center; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 0 19vw; }
@@ -337,3 +337,19 @@
 .bk .tarja-black::before { content: ""; position: absolute; inset: -40%; background: radial-gradient(circle at 50% 40%, rgba(238,111,45,.18), transparent 45%); animation: bk-brasa 5s ease-in-out infinite alternate; }
 .bk .tarja-black .esquenta { position: relative; font-size: clamp(40px, 12vw, 72px); }
 .bk .tarja-black .tarja-frase { position: relative; margin-top: 8px; font-size: 13px; letter-spacing: .3px; color: var(--laranja); opacity: .75; }
+
+/* divisória entre o topo e os vídeos */
+.bk .divisoria { height: 28px; background: var(--creme); }
+/* vitrine Black: tarja clicável + destaques + ver todas */
+.bk .vitrine-black .tarja-black { display: block; width: 100%; cursor: pointer; }
+.bk .vitrine-black .grade { margin-top: 4px; }
+.bk .ver-black { display: block; margin: 22px auto 0; height: 50px; padding: 0 26px; border-radius: 25px; background: var(--tinta); color: #fff; font-weight: 800; font-size: 15px; }
+.bk .ver-black span { color: var(--laranja); }
+.bk .tela-modelo .tarja-black { margin-bottom: 0; }
+/* tela da Black: Qual iPhone é o seu? */
+.bk .qual-iphone { padding: 16px 14px 4px; }
+.bk .qual-iphone label { display: block; text-align: center; font-size: 17px; font-weight: 800; margin-bottom: 10px; color: var(--tinta); }
+.bk .qual-iphone .sel { position: relative; }
+.bk .qual-iphone select { appearance: none; -webkit-appearance: none; width: 100%; height: 54px; border: 2px solid var(--tinta); border-radius: 14px; padding: 0 46px 0 16px; font-size: 17px; font-weight: 700; background: #fff; color: var(--tinta); }
+.bk .qual-iphone .sel::after { content: ""; position: absolute; right: 18px; top: 50%; width: 10px; height: 10px; border-right: 2.5px solid var(--tinta); border-bottom: 2.5px solid var(--tinta); transform: translateY(-70%) rotate(45deg); pointer-events: none; }
+.bk .qual-iphone p { text-align: center; font-size: 12px; color: #888; margin: 10px 0 8px; }

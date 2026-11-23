@@ -929,14 +929,14 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
 
 
   // ───────── Capas por modelo: abre todas as capinhas do modelo, marca filtro e valor de cada uma ─────────
-  type Ed = { filtros: FiltroFixo[]; black: boolean; mais: boolean; preco: string; promo: string }
+  type Ed = { filtros: FiltroFixo[]; black: boolean; destBlack: boolean; mais: boolean; preco: string; promo: string }
   const [modeloAdm, setModeloAdm] = useState('')
   const [edicoes, setEdicoes] = useState<Record<string, Ed>>({})
   const [valorTodas, setValorTodas] = useState('')
   const capasDo = (nome: string) => produtos.filter(p => p.tipo === 'capa' && (p.modelos.includes(nome) || !p.modelos.length))
   const itensDo = (nome: string) => capasDo(nome).flatMap(p => (p.fotos.length ? p.fotos : ['']).map((foto, i) => ({ p, i, foto, chave: p.id + '|' + i })))
   const edDe = (p: BlackProduto, chave: string): Ed => edicoes[chave] || {
-    filtros: filtrosFixosDe(p, filtrosOp, config.filtros).filter(x => x !== 'black'), black: ehBlack(p), mais: !!p.destaque,
+    filtros: filtrosFixosDe(p, filtrosOp, config.filtros).filter(x => x !== 'black' && x !== 'destaque-black'), black: ehBlack(p), destBlack: (p.filtros || []).includes('destaque-black'), mais: !!p.destaque,
     preco: p.preco ? paraTexto(p.preco) : '', promo: p.preco_promo ? paraTexto(p.preco_promo) : '',
   }
   function mudarEd(p: BlackProduto, chave: string, x: Partial<Ed>) {
@@ -951,7 +951,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     const preco = paraNumero(ed.preco)
     const promo = ed.black && ed.promo.trim() ? paraNumero(ed.promo) : null
     const d: Record<string, unknown> = {
-      filtros: [...new Set(ed.filtros.filter(x => x !== 'black'))].concat(ed.black ? ['black'] : []),
+      filtros: [...new Set(ed.filtros.filter(x => x !== 'black' && x !== 'destaque-black'))].concat(ed.black ? ['black'] : [], ed.black && ed.destBlack ? ['destaque-black'] : []),
       preco, preco_promo: promo && preco && promo < preco ? promo : null, destaque: ed.mais,
       modelos: p.modelos.length ? p.modelos : [modeloAdm],
     }
@@ -1132,7 +1132,8 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
                     </button>
                   </div>
                   <div className="pb-cap-checks">
-                    <label className="blk"><input type="checkbox" checked={ed.black} onChange={e => mudarEd(p, chave, { black: e.target.checked })} />Black</label>
+                    <label className="blk"><input type="checkbox" checked={ed.black} onChange={e => mudarEd(p, chave, { black: e.target.checked, ...(e.target.checked ? {} : { destBlack: false }) })} />Black</label>
+                    <label className="blk dest"><input type="checkbox" checked={ed.destBlack} onChange={e => mudarEd(p, chave, { destBlack: e.target.checked, ...(e.target.checked ? { black: true } : {}) })} />★ Destaque Black</label>
                     <label className="mais"><input type="checkbox" checked={ed.mais} onChange={e => mudarEd(p, chave, { mais: e.target.checked })} />Mais vendida</label>
                     {config.filtros.map(f => (
                       <label key={f.slug}><input type="checkbox" checked={ed.filtros.includes(f.slug)}

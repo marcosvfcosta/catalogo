@@ -134,7 +134,7 @@ export function temFiltro(p: BlackProduto, slug: FiltroFixo, antigos: BlackFiltr
 // regrava a lista de filtros só com os slugs novos
 export function filtrosFixosDe(p: BlackProduto, antigos: BlackFiltro[] = [], lista: FiltroCfg[] = BLACK_PADRAO.filtros): FiltroFixo[] {
   const r = lista.filter(x => temFiltro(p, x.slug, antigos)).map(x => x.slug)
-  return (p.filtros || []).includes('black') ? [...r, 'black'] : r // mantém a marca Black
+  return [...r, ...['black', 'destaque-black'].filter(x => (p.filtros || []).includes(x))] // mantém as marcas da Black
 }
 // "Meu Filtro Novo" -> "meu-filtro-novo"
 export const slugDe = (nome: string) => nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')

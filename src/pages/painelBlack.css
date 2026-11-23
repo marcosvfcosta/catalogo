@@ -214,3 +214,4 @@ textarea.pb-campo { height: 90px; padding: 12px 14px; resize: vertical; }
 .pb-rotulo { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 700; color: var(--pb-muted); letter-spacing: .3px; }
 .pb-rotulo i { font-style: normal; font-weight: 500; }
 .pb-rotulo .pb-campo { height: 46px; }
+.pb-cap-checks label.blk.dest { background: #2a1a10; color: var(--pb-laranja); }

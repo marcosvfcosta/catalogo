@@ -106,7 +106,8 @@ export default function Black() {
   const nomesSel = filtrosOp.filter(f => filtrosSel.includes(f.id)).map(f => f.nome)
   const limparTudo = () => { setFiltroModelo(''); setFiltroTipo('tudo'); setFiltrosSel([]) }
   const maisVendidos = base.filter(p => p.destaque)
-  const daBlack = base.filter(ehBlack)
+  const daBlackTodas = produtos.filter(ehBlack)
+  const daBlack = base.filter(p => ehBlack(p) && (p.filtros || []).includes('destaque-black')) // só os destaques escolhidos no Admin
   const listaVideos = videos.filter(v => !v.produto_id || (porId.has(v.produto_id) && base.includes(porId.get(v.produto_id) as BlackProduto)))
   const totalItens = sacola.reduce((s, i) => s + i.q, 0)
   const itensSacola = sacola.map(i => ({ ...i, p: porId.get(i.id) })).filter((i): i is ItemSacola & { p: BlackProduto } => !!i.p)
@@ -322,13 +323,15 @@ export default function Black() {
   const [estiloSel, setEstiloSel] = useState<FiltroFixo | ''>('')
   // menu ☰: Black · Couro · Brilho · Transparente
   const porFotos = (l: BlackProduto[]) => l.flatMap(p => (p.fotos.length ? p.fotos : ['']).map((_, i) => ({ p, i })))
+  const [blackModelo, setBlackModelo] = useState('')
+  const modelosComBlack = modelos.filter(m => produtos.some(p => ehBlack(p) && p.tipo === 'capa' && p.modelos.includes(m.nome)))
   const cardsModelo = filtroMenu
-    ? porFotos(produtos.filter(p => (filtroMenu === 'black' ? ehBlack(p) : temFiltro(p, filtroMenu, filtrosOp))))
+    ? porFotos(produtos.filter(p => (filtroMenu === 'black' ? ehBlack(p) && (!blackModelo || serveNo(p, blackModelo)) : temFiltro(p, filtroMenu, filtrosOp))))
     : porFotos(base.filter(p => !estiloSel || temFiltro(p, estiloSel, filtrosOp)))
   function abrirMenuFiltro(f: FiltroFixo | 'black') {
     const topo = raiz.current?.querySelector('.topo')?.getBoundingClientRect().bottom
     if (topo && telaModeloRef.current) telaModeloRef.current.style.top = Math.max(0, Math.round(topo)) + 'px'
-    setFiltroModelo(''); setEstiloSel('')
+    setFiltroModelo(''); setEstiloSel(''); setBlackModelo('')
     setFiltroMenu(f)
     setMenuAberto(false)
     window.setTimeout(() => telaModeloRef.current?.scrollTo({ top: 0 }), 30)
@@ -531,6 +534,32 @@ export default function Black() {
         )}
       </section>
 
+      <div className="divisoria" />
+      {cfg.secoes.videos.ativo && listaVideos.length > 0 && (
+        <section className="videos">
+          <h2>{cfg.secoes.videos.titulo}</h2>
+          {cfg.secoes.videos.texto && <p>{cfg.secoes.videos.texto}</p>}
+          <div className="trilho-video sem-barra" onScroll={aoRolarVideos}>
+            {listaVideos.map((v, i) => {
+              const p = v.produto_id ? porId.get(v.produto_id) : undefined
+              return (
+                <button key={v.id} className={`clipe ${i === clipeAtivo ? 'ativo' : ''}`} style={{ background: fundosClipe[i % fundosClipe.length] }} onClick={() => setStory(i)}>
+                  <video src={v.video_url} poster={v.capa_url || undefined} muted loop playsInline preload="metadata" />
+                  <span className="play"><svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M7 4l14 8-14 8z" /></svg></span>
+                  {p && (
+                    <span className="mini">
+                      <span className="ico">{p.fotos[0] && <img src={p.fotos[0]} alt="" />}</span>
+                      <span><span>{p.nome}</span><b>{valor(precoFinal(p))}</b></span>
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+
       {cfg.secoes.filtro.ativo && (
         <section className="filtro" id="filtro" ref={filtroRef}>
           <h2>{cfg.secoes.filtro.titulo}</h2>
@@ -571,29 +600,16 @@ export default function Black() {
               <button className="limpar-grande" onClick={() => { limparTudo(); filtroRef.current?.scrollIntoView({ behavior: 'smooth' }) }}>Ver todas as ofertas</button>
             </section>
           ) : <>
-          {vitrine('promo', daBlack)}
-
-          {cfg.secoes.videos.ativo && listaVideos.length > 0 && (
-            <section className="videos">
-              <h2>{cfg.secoes.videos.titulo}</h2>
-              {cfg.secoes.videos.texto && <p>{cfg.secoes.videos.texto}</p>}
-              <div className="trilho-video sem-barra" onScroll={aoRolarVideos}>
-                {listaVideos.map((v, i) => {
-                  const p = v.produto_id ? porId.get(v.produto_id) : undefined
-                  return (
-                    <button key={v.id} className={`clipe ${i === clipeAtivo ? 'ativo' : ''}`} style={{ background: fundosClipe[i % fundosClipe.length] }} onClick={() => setStory(i)}>
-                      <video src={v.video_url} poster={v.capa_url || undefined} muted loop playsInline preload="metadata" />
-                      <span className="play"><svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M7 4l14 8-14 8z" /></svg></span>
-                      {p && (
-                        <span className="mini">
-                          <span className="ico">{p.fotos[0] && <img src={p.fotos[0]} alt="" />}</span>
-                          <span><span>{p.nome}</span><b>{valor(precoFinal(p))}</b></span>
-                        </span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
+          {cfg.secoes.promo.ativo && daBlackTodas.length > 0 && (
+            <section className="vitrine vitrine-black">
+              <button className="tarja-black" onClick={() => abrirMenuFiltro('black')}>
+                <span className="esquenta">BLACK
+                  <svg className="chama" viewBox="0 0 40 56" fill="none" stroke="#EE6F2D" strokeWidth="4" strokeLinejoin="round"><path d="M20 3c2 9 12 15 12 29a12 12 0 0 1-24 0c0-7 4-11 6-15 1 5 3 7 5 8-1-8 0-15 1-22z" /><circle cx="20" cy="44" r="4.5" fill="#EE6F2D" stroke="none" /></svg>
+                </span>
+                {cfg.secoes.promo.texto && <p className="tarja-frase">{cfg.secoes.promo.texto}</p>}
+              </button>
+              {daBlack.length > 0 && <div className="grade">{daBlack.map(p => card(p))}</div>}
+              <button className="ver-black" onClick={() => abrirMenuFiltro('black')}>Ver todas da <span>Black</span> ›</button>
             </section>
           )}
 
@@ -604,11 +620,31 @@ export default function Black() {
       )}
 
       <div className={`tela-modelo ${telaAberta ? 'on' : ''}`} ref={telaModeloRef}>
-        <div className="tm-titulo">
-          {filtroMenu === 'black' ? <b>Ofertas <span>Black</span></b>
+        {filtroMenu === 'black' && (
+          <div className="tarja-black">
+            <span className="esquenta">BLACK
+              <svg className="chama" viewBox="0 0 40 56" fill="none" stroke="#EE6F2D" strokeWidth="4" strokeLinejoin="round"><path d="M20 3c2 9 12 15 12 29a12 12 0 0 1-24 0c0-7 4-11 6-15 1 5 3 7 5 8-1-8 0-15 1-22z" /><circle cx="20" cy="44" r="4.5" fill="#EE6F2D" stroke="none" /></svg>
+            </span>
+            {cfg.secoes.promo.texto && <p className="tarja-frase">{cfg.secoes.promo.texto}</p>}
+          </div>
+        )}
+        <div className="tm-titulo" style={filtroMenu === 'black' ? { display: 'none' } : undefined}>
+          {filtroMenu === 'black' ? null
             : filtroMenu ? <b>Capinhas de <span>{cfg.filtros.find(f => f.slug === filtroMenu)?.nome.toLowerCase()}</span></b>
             : <b>{filtroTipo === 'cordinha' ? 'Cordinhas' : 'Capinhas'} pro <span>{filtroModelo}</span></b>}
         </div>
+        {filtroMenu === 'black' && modelosComBlack.length > 0 && (
+          <div className="qual-iphone">
+            <label htmlFor="qual-iphone">Qual iPhone é o seu?</label>
+            <div className="sel">
+              <select id="qual-iphone" value={blackModelo} onChange={e => { setBlackModelo(e.target.value); telaModeloRef.current?.scrollTo({ top: 0, behavior: 'smooth' }) }}>
+                <option value="">Todos os modelos</option>
+                {modelosComBlack.map(m => <option key={m.id} value={m.nome}>{m.nome}</option>)}
+              </select>
+            </div>
+            <p>{cardsModelo.length} {cardsModelo.length === 1 ? 'capinha' : 'capinhas'} na Black{blackModelo ? ' pro ' + blackModelo : ''}</p>
+          </div>
+        )}
         {!filtroMenu && (
           <div className="tm-chips sem-barra">
             <button className={!estiloSel ? 'on' : ''} onClick={() => setEstiloSel('')}>Todas</button>
