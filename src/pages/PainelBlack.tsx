@@ -715,6 +715,50 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     return br.toISOString().slice(0, 16)
   })()
 
+  // ───────── Cupons de desconto (tabela black_cupons — BLACK-4-CUPONS.sql) ─────────
+  type Cupom = { id: string; codigo: string; pct: number; limite: number | null; inicio: string | null; fim: string | null; usos: number }
+  const [cupons, setCupons] = useState<Cupom[]>([])
+  const [cuponsErro, setCuponsErro] = useState('')
+  const [novoCupom, setNovoCupom] = useState({ codigo: '', pct: '', limite: '', de: '', ate: '' })
+  async function carregarCupons() {
+    const { data, error } = await supabase.from('black_cupons').select('*').order('criado_em', { ascending: false })
+    if (error) { setCuponsErro(error.message); return }
+    setCuponsErro(''); setCupons((data || []) as Cupom[])
+  }
+  useEffect(() => { if (vista === 'aparencia') carregarCupons() }, [vista])
+  async function criarCupom() {
+    const codigo = novoCupom.codigo.trim().toUpperCase().replace(/\s+/g, '')
+    const pct = paraNumero(novoCupom.pct)
+    if (!codigo) return avisar('Digite o código do cupom')
+    if (!(pct > 0 && pct <= 100)) return avisar('O desconto tem que ser de 1 a 100%')
+    if (cupons.some(c => c.codigo.toUpperCase() === codigo)) return avisar('Já existe um cupom com esse código')
+    const limite = novoCupom.limite.trim() ? Math.max(1, Math.floor(paraNumero(novoCupom.limite))) : null
+    const inicio = novoCupom.de ? novoCupom.de + 'T00:00:00-03:00' : null
+    const fim = novoCupom.ate ? novoCupom.ate + 'T23:59:59-03:00' : null
+    if (inicio && fim && fim < inicio) return avisar('A data final tem que ser depois da inicial')
+    setOcupado('Criando cupom...')
+    const { error } = await supabase.from('black_cupons').insert([{ codigo, pct, limite, inicio, fim }])
+    setOcupado('')
+    if (error) return avisar('Não criou: ' + error.message)
+    setNovoCupom({ codigo: '', pct: '', limite: '', de: '', ate: '' })
+    avisar('Cupom criado ✓')
+    carregarCupons()
+  }
+  async function apagarCupom(c: Cupom) {
+    if (!confirm(`Apagar o cupom ${c.codigo}?`)) return
+    const { error } = await supabase.from('black_cupons').delete().eq('id', c.id)
+    if (error) return avisar('Não apagou: ' + error.message)
+    avisar('Cupom apagado')
+    carregarCupons()
+  }
+  const dataBR = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '')
+  function situacaoCupom(c: Cupom) {
+    const agora = Date.now()
+    if (c.inicio && new Date(c.inicio).getTime() > agora) return { t: 'Ainda não começou', cor: '#8A6A1E' }
+    if ((c.fim && new Date(c.fim).getTime() < agora) || (c.limite != null && c.usos >= c.limite)) return { t: 'Expirado', cor: '#A3361F' }
+    return { t: 'Valendo', cor: '#1E7A43' }
+  }
+
   function telaAparencia() {
     return (
       <>
@@ -784,6 +828,50 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
             </div>
           ))}
           <button className="pb-btn pb-contorno-escuro" onClick={() => setConfig(cf => ({ ...cf, experimentar: { ...cf.experimentar, cores: [...cf.experimentar.cores, { nome: 'Nova cor', hex: '#888888' }] } }))}>+ Adicionar cor</button>
+        </div>
+
+        <div className="pb-bloco">
+          <h3 className="pb-serif">Cupons de desconto</h3>
+          <p className="pb-dica">Não aparecem no site. O cliente digita o cupom na sacola e o desconto já entra no total.</p>
+          {cuponsErro ? (
+            <p className="pb-cupom-aviso">Pra usar cupons, rode uma vez o arquivo <b>BLACK-4-CUPONS.sql</b> no Supabase (SQL Editor → New query → Run).</p>
+          ) : (
+            <>
+              {cupons.length > 0 && (
+                <div className="pb-cupons">
+                  {cupons.map(c => {
+                    const st = situacaoCupom(c)
+                    return (
+                      <div className="pb-cupom" key={c.id}>
+                        <div>
+                          <b>{c.codigo}</b> <span className="pct">{Number(c.pct)}%</span>
+                          <small>
+                            {c.limite != null ? `${c.usos} de ${c.limite} usados` : `${c.usos} ${c.usos === 1 ? 'uso' : 'usos'} · sem limite`}
+                            {(c.inicio || c.fim) && ` · ${c.inicio ? 'de ' + dataBR(c.inicio) : ''}${c.fim ? ' até ' + dataBR(c.fim) : ''}`}
+                          </small>
+                          <small style={{ color: st.cor, fontWeight: 700 }}>{st.t}</small>
+                        </div>
+                        <button aria-label={'Apagar ' + c.codigo} onClick={() => apagarCupom(c)}>×</button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              <div className="pb-cupom-form">
+                <label className="pb-rotulo">Código<input className="pb-campo" placeholder="EX.: BLACK10" value={novoCupom.codigo} onChange={e => setNovoCupom(n => ({ ...n, codigo: e.target.value.toUpperCase() }))} /></label>
+                <div className="pb-cupom-par">
+                  <label className="pb-rotulo">Desconto (%)<input className="pb-campo" inputMode="decimal" placeholder="10" value={novoCupom.pct} onChange={e => setNovoCupom(n => ({ ...n, pct: e.target.value }))} /></label>
+                  <label className="pb-rotulo">Limite de usos<input className="pb-campo" inputMode="numeric" placeholder="sem limite" value={novoCupom.limite} onChange={e => setNovoCupom(n => ({ ...n, limite: e.target.value }))} /></label>
+                </div>
+                <div className="pb-cupom-par">
+                  <label className="pb-rotulo">Vale de<input className="pb-campo" type="date" value={novoCupom.de} onChange={e => setNovoCupom(n => ({ ...n, de: e.target.value }))} /></label>
+                  <label className="pb-rotulo">Até<input className="pb-campo" type="date" value={novoCupom.ate} onChange={e => setNovoCupom(n => ({ ...n, ate: e.target.value }))} /></label>
+                </div>
+                <p className="pb-dica" style={{ margin: 0 }}>Limite e datas são opcionais — vazio = sem limite / sem data.</p>
+                <button className="pb-btn pb-contorno-escuro" onClick={criarCupom} disabled={!!ocupado}>+ Criar cupom</button>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="pb-bloco">

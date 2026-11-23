@@ -200,3 +200,17 @@ textarea.pb-campo { height: 90px; padding: 12px 14px; resize: vertical; }
 .pb-cap-apagar { position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; border-radius: 50%; background: #fff !important; box-shadow: 0 2px 6px rgba(0,0,0,.15); display: flex; align-items: center; justify-content: center; }
 .pb-cap-checks label.mais { background: #FFE9DA; color: #B4501A; }
 .pb-cap-campo small { white-space: nowrap; }
+
+/* cupons */
+.pb-cupom-aviso { background: #FFF7EF; border: 1px solid #F6D7BF; color: #8A4A1E; font-size: 13px; line-height: 1.45; padding: 10px 12px; }
+.pb-cupons { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.pb-cupom { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1.5px dashed #CFC8BE; background: #FCFAF7; padding: 10px 12px; }
+.pb-cupom b { font-size: 16px; letter-spacing: 1px; }
+.pb-cupom .pct { background: var(--pb-laranja); color: #fff; font-weight: 800; font-size: 12px; padding: 2px 7px; margin-left: 4px; }
+.pb-cupom small { display: block; font-size: 12px; color: var(--pb-muted); margin-top: 3px; }
+.pb-cupom > button { width: 34px; height: 34px; flex-shrink: 0; border: 1px solid var(--pb-line) !important; background: #fff !important; color: #A3361F !important; font-size: 18px !important; }
+.pb-cupom-form { display: flex; flex-direction: column; gap: 10px; }
+.pb-cupom-par { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.pb-rotulo { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 700; color: var(--pb-muted); letter-spacing: .3px; }
+.pb-rotulo i { font-style: normal; font-weight: 500; }
+.pb-rotulo .pb-campo { height: 46px; }

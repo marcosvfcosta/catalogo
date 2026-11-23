@@ -111,6 +111,26 @@ export default function Black() {
   const totalItens = sacola.reduce((s, i) => s + i.q, 0)
   const itensSacola = sacola.map(i => ({ ...i, p: porId.get(i.id) })).filter((i): i is ItemSacola & { p: BlackProduto } => !!i.p)
   const totalSacola = itensSacola.reduce((s, i) => s + precoFinal(i.p) * i.q, 0)
+  // ── cupom de desconto (vale sobre o total da sacola) ──
+  const [cupomTexto, setCupomTexto] = useState('')
+  const [cupom, setCupom] = useState<{ codigo: string; pct: number } | null>(null)
+  const [cupomMsg, setCupomMsg] = useState('')
+  const [cupomOcupado, setCupomOcupado] = useState(false)
+  const descontoCupom = cupom ? Math.round(totalSacola * cupom.pct) / 100 : 0
+  const totalComCupom = totalSacola - descontoCupom
+  const motivoCupom = (m: string) => (m === 'expirado' ? 'Cupom expirado' : m === 'ainda_nao' ? 'Esse cupom ainda não está valendo' : 'Cupom inválido')
+  async function aplicarCupom() {
+    const codigo = cupomTexto.trim()
+    if (!codigo) return
+    setCupomOcupado(true); setCupomMsg('')
+    const { data, error } = await supabase.rpc('black_cupom', { p_codigo: codigo, p_usar: false })
+    setCupomOcupado(false)
+    const r = data as { ok: boolean; motivo?: string; codigo?: string; pct?: number } | null
+    if (error || !r) { setCupom(null); return setCupomMsg('Não deu pra conferir o cupom agora. Tenta de novo.') }
+    if (!r.ok) { setCupom(null); return setCupomMsg(motivoCupom(r.motivo || '')) }
+    setCupom({ codigo: r.codigo || codigo.toUpperCase(), pct: Number(r.pct) })
+    setCupomMsg('')
+  }
   const zap = (msg: string) => window.open('https://wa.me/' + soNumeros(cfg.whatsapp) + '?text=' + encodeURIComponent(msg), '_blank')
 
   // ── experimentar no meu celular ──
@@ -262,9 +282,20 @@ export default function Black() {
   function mudarQtd(i: number, d: number) {
     setSacola(s => s.map((x, k) => (k === i ? { ...x, q: x.q + d } : x)).filter(x => x.q > 0))
   }
-  function finalizar() {
+  async function finalizar() {
+    let usado = cupom
+    if (cupom) {
+      // gasta 1 uso do cupom agora; se acabou no meio do caminho, avisa e não manda
+      const { data } = await supabase.rpc('black_cupom', { p_codigo: cupom.codigo, p_usar: true })
+      const r = data as { ok: boolean; motivo?: string } | null
+      if (!r?.ok) { setCupom(null); setCupomMsg(motivoCupom(r?.motivo || 'expirado')); return }
+      usado = cupom
+    }
     const linhas = itensSacola.map(i => `• ${i.q}x ${i.p.nome}${i.modelo ? ' (' + i.modelo + ')' : ''} — ${precoFinal(i.p) > 0 ? reais(precoFinal(i.p) * i.q) : 'valor a consultar'}${i.foto ? '\n  ' + i.foto : ''}`).join('\n')
-    zap(`Olá! Meu pedido da Black 🔥\n${linhas}\nTotal: ${reais(totalSacola)}`)
+    const fim = usado
+      ? `Subtotal: ${reais(totalSacola)}\nCupom ${usado.codigo} (-${usado.pct}%): -${reais(descontoCupom)}\nTotal: ${reais(totalComCupom)}`
+      : `Total: ${reais(totalSacola)}`
+    zap(`Olá! Meu pedido da Black 🔥\n${linhas}\n${fim}`)
   }
 
   // escolheu modelo ou tipo: desce até a grade com todas as opções
@@ -661,7 +692,28 @@ export default function Black() {
                 </div>
               ))}
             </div>
-            <div className="sacola-total"><span>Total</span><div><b>{reais(totalSacola)}</b><small>ou em até 18x no cartão</small></div></div>
+            <div className="sacola-cupom">
+              {cupom ? (
+                <div className="cupom-ok">
+                  <span>🎟️ <b>{cupom.codigo}</b> · {cupom.pct}% de desconto</span>
+                  <button onClick={() => { setCupom(null); setCupomTexto('') }}>tirar</button>
+                </div>
+              ) : (
+                <div className="cupom-linha">
+                  <input placeholder="Use seu cupom" value={cupomTexto} autoCapitalize="characters"
+                    onChange={e => { setCupomTexto(e.target.value); setCupomMsg('') }} onKeyDown={e => { if (e.key === 'Enter') aplicarCupom() }} />
+                  <button onClick={aplicarCupom} disabled={cupomOcupado || !cupomTexto.trim()}>{cupomOcupado ? '...' : 'Aplicar'}</button>
+                </div>
+              )}
+              {cupomMsg && <p className="cupom-erro">{cupomMsg}</p>}
+            </div>
+            {cupom && totalSacola > 0 && (
+              <div className="sacola-sub">
+                <div><span>Subtotal</span><span>{reais(totalSacola)}</span></div>
+                <div className="desc"><span>Cupom -{cupom.pct}%</span><span>-{reais(descontoCupom)}</span></div>
+              </div>
+            )}
+            <div className="sacola-total"><span>Total</span><div><b>{reais(cupom ? totalComCupom : totalSacola)}</b><small>ou em até 18x no cartão</small></div></div>
             <div style={{ padding: 18 }}>
               <button className="btn-laranja" style={{ width: '100%', fontSize: 18, padding: 16 }} onClick={finalizar}>Finalizar pedido</button>
               <button style={{ width: '100%', marginTop: 12, fontSize: 14, textDecoration: 'underline', color: '#777' }} onClick={fechar}>Continuar comprando</button>

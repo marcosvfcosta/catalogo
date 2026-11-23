@@ -316,3 +316,18 @@
 .bk .menu-item.black { width: auto; background: #000; color: #fff; margin: 6px 14px 10px; border-radius: 14px; border: 0; }
 .bk .menu-item.black b { color: var(--laranja); font-weight: 800; }
 .bk .menu-item.black small { color: #bbb; }
+
+/* cupom na sacola */
+.bk .sacola-cupom { padding: 14px 18px 0; }
+.bk .cupom-linha { display: flex; gap: 8px; }
+.bk .cupom-linha input { flex: 1; min-width: 0; height: 46px; border: 1.5px dashed #ccc; border-radius: 12px; padding: 0 14px; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; outline: none; background: #fafafa; }
+.bk .cupom-linha input::placeholder { text-transform: none; font-weight: 500; letter-spacing: 0; color: #999; }
+.bk .cupom-linha input:focus { border-color: var(--laranja); background: #fff; }
+.bk .cupom-linha button { height: 46px; padding: 0 18px; border-radius: 12px; background: var(--tinta); color: #fff; font-weight: 800; font-size: 14px; }
+.bk .cupom-linha button:disabled { opacity: .4; }
+.bk .cupom-ok { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #EFFAF3; border: 1.5px solid #25D366; border-radius: 12px; padding: 11px 14px; font-size: 14px; color: #146c37; }
+.bk .cupom-ok button { font-size: 13px; color: #777; text-decoration: underline; }
+.bk .cupom-erro { color: #d33; font-size: 13px; font-weight: 700; margin-top: 7px; }
+.bk .sacola-sub { padding: 12px 18px 0; font-size: 14px; color: #555; display: flex; flex-direction: column; gap: 4px; }
+.bk .sacola-sub > div { display: flex; justify-content: space-between; }
+.bk .sacola-sub .desc { color: #1a9e4b; font-weight: 700; }
