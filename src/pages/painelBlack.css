@@ -243,3 +243,12 @@ textarea.pb-campo { height: 90px; padding: 12px 14px; resize: vertical; }
 .pb-cap-status { font-size: 10px; }
 .pb-cap-checks { scrollbar-width: none; }
 .pb-cap-checks::-webkit-scrollbar { display: none; }
+
+/* Lista: tipo de case */
+.pb-novo-tipo { display: flex; gap: 8px; margin-top: 8px; }
+.pb-novo-tipo input { flex: 1; min-width: 0; height: 44px; border: 1.5px dashed #CFC8BE; background: #fff; padding: 0 12px; outline: none; font-size: 14px; }
+.pb-novo-tipo button { height: 44px; padding: 0 14px; background: var(--pb-laranja) !important; color: #fff !important; font-weight: 700; white-space: nowrap; }
+.pb-chips-tipo { margin-top: 10px; }
+.pb-sel-tipo { position: relative; margin-top: 8px; }
+.pb-sel-tipo select { appearance: none; -webkit-appearance: none; width: 100%; height: 40px; border: 1.5px solid var(--pb-ink); background: #fff; padding: 0 34px 0 10px; font-size: 13.5px; font-weight: 700; color: var(--pb-ink); border-radius: 0; }
+.pb-sel-tipo::after { content: ""; position: absolute; right: 13px; top: 50%; width: 7px; height: 7px; border-right: 2px solid var(--pb-ink); border-bottom: 2px solid var(--pb-ink); transform: translateY(-70%) rotate(45deg); pointer-events: none; }

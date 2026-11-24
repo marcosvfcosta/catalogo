@@ -60,6 +60,7 @@ function Chave({ ligado, onClick, rotulo }: { ligado: boolean; onClick: () => vo
 
 export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props) {
   const [vista, setVista] = useState<Vista>('capas')
+  const [tipoLista, setTipoLista] = useState('')
   const [produtos, setProdutos] = useState<BlackProduto[]>([])
   const [modelos, setModelos] = useState<BlackModelo[]>([])
   const [videos, setVideos] = useState<BlackVideo[]>([])
@@ -105,7 +106,16 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
       setProdutos((p.data || []) as BlackProduto[])
       setModelos((m.data || []) as BlackModelo[])
       setVideos((v.data || []) as BlackVideo[])
-      setConfig(lerConfig(c.data?.dados))
+      const cfg = lerConfig(c.data?.dados)
+      // uma vez só: garante os 5 tipos de case (Couro, Brilho, Transparente, Borda Colorida, Fosca)
+      const dados = (c.data?.dados || {}) as Record<string, unknown>
+      if (!dados.tipos_v1) {
+        const base = [{ slug: 'couro', nome: 'Couro' }, { slug: 'brilho', nome: 'Brilho' }, { slug: 'transparente', nome: 'Transparente' }, { slug: 'borda-colorida', nome: 'Borda Colorida' }, { slug: 'fosca', nome: 'Fosca' }]
+        const filtros = [...cfg.filtros, ...base.filter(b => !cfg.filtros.some(f => f.slug === b.slug || f.nome.toLowerCase() === b.nome.toLowerCase()))]
+        const novo = { ...cfg, filtros, tipos_v1: true }
+        supabase.from('black_config').upsert({ id: 1, dados: novo }).then(() => {})
+        setConfig(novo)
+      } else setConfig(cfg)
     }
     setCarregando(false)
   }
@@ -136,8 +146,19 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
   const lista = produtos.filter(p => {
     const ok = filtro === 'todos' || (filtro === 'site' && p.no_site) || (filtro === 'pausados' && !p.no_site && !p.rascunho) || (filtro === 'rascunhos' && !!p.rascunho)
       || (filtro === 'capa' && p.tipo === 'capa') || (filtro === 'cordinha' && p.tipo === 'cordinha') || (filtro === 'promo' && emPromocao(p))
-    return ok && p.nome.toLowerCase().includes(busca.trim().toLowerCase())
+    return ok && (!tipoLista || temFiltro(p, tipoLista, filtrosOp)) && p.nome.toLowerCase().includes(busca.trim().toLowerCase())
   })
+  // tipo de case (Couro, Brilho...) = filtro do site. Escolher no menu já salva e vira o nome.
+  async function mudarTipo(p: BlackProduto, slug: string) {
+    const f = config.filtros.find(x => x.slug === slug)
+    const outros = (p.filtros || []).filter(x => !config.filtros.some(c => c.slug === x) && !filtrosOp.some(a => a.id === x))
+    const filtros = f ? [...outros, f.slug] : outros
+    const nome = f ? 'Case ' + f.nome : p.nome
+    setProdutos(l => l.map(x => (x.id === p.id ? { ...x, filtros, nome } : x)))
+    const { error } = await supabase.from('black_produtos').update({ filtros, nome }).eq('id', p.id)
+    if (error) { avisar('Não salvou: ' + error.message); carregar(); return }
+    avisar(f ? 'Agora é ' + nome : 'Tipo tirado')
+  }
 
   async function alternar(p: BlackProduto, campo: 'no_site' | 'destaque') {
     const valor = !p[campo]
@@ -459,6 +480,16 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
           <button className={`pb-btn-pequeno ${selecionando ? 'pb-escuro' : ''}`} onClick={() => { setSelecionando(x => !x); setSel([]) }}>{selecionando ? 'Cancelar seleção' : 'Selecionar'}</button>
         </div>
         <div className="pb-busca"><IcBusca /><input placeholder="Buscar produto" value={busca} onChange={e => setBusca(e.target.value)} /></div>
+        <div className="pb-novo-tipo">
+          <input placeholder="Novo tipo de case (ex.: Silicone)" value={novoFiltroCfg} onChange={e => setNovoFiltroCfg(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') criarFiltroCfg() }} />
+          <button onClick={criarFiltroCfg}>+ Criar</button>
+        </div>
+        <div className="pb-chips pb-sem-barra pb-chips-tipo">
+          <button className={`pb-chip ${!tipoLista ? 'on' : ''}`} onClick={() => setTipoLista('')}>Todos os tipos</button>
+          {config.filtros.map(f => (
+            <button key={f.slug} className={`pb-chip ${tipoLista === f.slug ? 'on' : ''}`} onClick={() => setTipoLista(tipoLista === f.slug ? '' : f.slug)}>{f.nome}<span>{produtos.filter(p => temFiltro(p, f.slug, filtrosOp)).length}</span></button>
+          ))}
+        </div>
         <div className="pb-chips pb-sem-barra">
           {chips.map(([k, l, q]) => (
             <button key={k} className={`pb-chip ${filtro === k ? 'on' : ''}`} onClick={() => setFiltro(k)}>{l}<span>{q}</span></button>
@@ -483,8 +514,15 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
                     <div className="pb-info">
                       <div className="pb-nome pb-serif">{p.nome}</div>
                       <div className="pb-preco pb-serif">{reais(precoFinal(p))}{emPromocao(p) && <s>{reais(p.preco)}</s>}</div>
-                      <div className="pb-meta">{p.rascunho ? <span className="pb-tag-rascunho">Rascunho · falta preencher</span> : p.tipo === 'capa' ? `Capinha · ${p.modelos.length} ${p.modelos.length === 1 ? 'modelo' : 'modelos'}` : 'Cordinha · serve em todos'}</div>
-                      {config.filtros.some(f => temFiltro(p, f.slug, filtrosOp)) && <div className="pb-meta pb-meta-filtros">{config.filtros.filter(f => temFiltro(p, f.slug, filtrosOp)).map(f => f.nome).join(' · ')}</div>}
+                      {p.tipo === 'capa' && !selecionando && (
+                        <div className="pb-sel-tipo" onClick={e => e.stopPropagation()}>
+                          <select value={config.filtros.find(f => temFiltro(p, f.slug, filtrosOp))?.slug || ''} onChange={e => mudarTipo(p, e.target.value)}>
+                            <option value="">Escolha o tipo de case…</option>
+                            {config.filtros.map(f => <option key={f.slug} value={f.slug}>Case {f.nome}</option>)}
+                          </select>
+                        </div>
+                      )}
+                      <div className="pb-meta">{p.rascunho ? <span className="pb-tag-rascunho">Rascunho · falta preencher</span> : p.tipo === 'capa' ? `${p.modelos.length} ${p.modelos.length === 1 ? 'modelo' : 'modelos'}` : 'Cordinha · serve em todos'}</div>
                     </div>
                     {!selecionando && <IcSeta />}
                   </div>
@@ -1019,7 +1057,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     return !error
   }
   async function criarFiltroCfg() {
-    const nome = novoFiltroCfg.trim()
+    const nome = novoFiltroCfg.trim().replace(/^case\s+/i, '')
     const slug = slugDe(nome)
     if (!slug) return avisar('Digite o nome do filtro')
     if (slug === 'black' || config.filtros.some(f => f.slug === slug)) return avisar('Esse filtro já existe')
