@@ -713,7 +713,8 @@ export default function Black() {
             </div>
             <div className="corpo">
               <h3>{aberto.nome}</h3>
-              <div className="p">{valor(precoFinal(aberto))}{emPromocao(aberto) && <s>{reais(aberto.preco)}</s>}</div>
+              {emPromocao(aberto) && <s className="de">{reais(aberto.preco)}</s>}
+              <div className="p">{valor(precoFinal(aberto))}</div>
               {cfg.parcelas && <div className="parc2">{cfg.parcelas}</div>}
               {aberto.descricao && <p className="desc">{aberto.descricao}</p>}
               {aberto.tipo === 'cordinha' ? (
