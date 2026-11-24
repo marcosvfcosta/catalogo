@@ -1141,7 +1141,6 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
           <div className="pb-cap-grade">
             {itens.map(({ p, i, foto, chave }) => {
               const ed = edDe(p, chave)
-              const pr = paraNumero(ed.preco), pm = paraNumero(ed.promo)
               return (
                 <div key={chave} className={`pb-cap ${ed.black ? 'preto' : ''} ${edicoes[chave] ? 'sujo' : ''} ${p.no_site || p.rascunho ? '' : 'escondida'}`}>
                   <div className="pb-cap-foto">
@@ -1155,25 +1154,28 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A3361F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>
                     </button>
                   </div>
-                  <div className="pb-cap-checks">
+                  <div className="pb-cap-lado">
+                  <div className="pb-cap-checks sem-barra">
                     <label className="blk"><input type="checkbox" checked={ed.black} onChange={e => mudarEd(p, chave, { black: e.target.checked, ...(e.target.checked ? {} : { destBlack: false }) })} />Black</label>
-                    <label className="blk dest"><input type="checkbox" checked={ed.destBlack} onChange={e => mudarEd(p, chave, { destBlack: e.target.checked, ...(e.target.checked ? { black: true } : {}) })} />★ Destaque Black</label>
+                    <label className="blk dest"><input type="checkbox" checked={ed.destBlack} onChange={e => mudarEd(p, chave, { destBlack: e.target.checked, ...(e.target.checked ? { black: true } : {}) })} />★ Destaque</label>
                     <label className="mais"><input type="checkbox" checked={ed.mais} onChange={e => mudarEd(p, chave, { mais: e.target.checked })} />Mais vendida</label>
                     {config.filtros.map(f => (
                       <label key={f.slug}><input type="checkbox" checked={ed.filtros.includes(f.slug)}
                         onChange={() => mudarEd(p, chave, { filtros: ed.filtros.includes(f.slug) ? ed.filtros.filter(x => x !== f.slug) : [...ed.filtros, f.slug] })} />{f.nome}</label>
                     ))}
                   </div>
+                  <div className="pb-cap-precos">
                   <div className="pb-cap-campo"><small>{ed.black ? 'ATUAL' : 'VALOR'}</small>
                     <input inputMode="decimal" placeholder="0,00" value={ed.preco} onChange={e => mudarEd(p, chave, { preco: e.target.value, ...(ed.black && ed.pct ? { promo: comPct(e.target.value, ed.pct) } : {}) })} /></div>
                   {ed.black && <>
-                    <div className="pb-cap-campo pct"><small>DESCONTO</small>
+                    <div className="pb-cap-campo pct">
                       <input inputMode="decimal" placeholder="30" value={ed.pct} onChange={e => mudarEd(p, chave, { pct: e.target.value, promo: comPct(ed.preco, e.target.value) || ed.promo })} /><b>%</b></div>
                     <div className="pb-cap-campo desc"><small>BLACK</small>
                       <input inputMode="decimal" placeholder="0,00" value={ed.promo} onChange={e => mudarEd(p, chave, { promo: e.target.value, pct: '' })} /></div>
-                    {pr > 0 && pm > 0 && pm < pr && <div className="pb-cap-pct">-{Math.round((1 - pm / pr) * 100)}% na Black</div>}
                   </>}
+                  </div>
                   {!p.no_site && <div className="pb-cap-status">{p.rascunho ? 'Ainda não está no site — toque em Salvar tudo' : '👁️ Escondida — não aparece no site'}</div>}
+                  </div>
                 </div>
               )
             })}

@@ -221,3 +221,25 @@ textarea.pb-campo { height: 90px; padding: 12px 14px; resize: vertical; }
 .pb-cap-campo.pct { border-color: var(--pb-laranja); background: #FFF7EF; }
 .pb-cap-campo.pct small { color: var(--pb-laranja); }
 .pb-cap-campo.pct b { font-size: 16px; font-weight: 800; color: var(--pb-laranja); }
+
+/* Capas por modelo — compacto: 1 capinha por linha, foto à esquerda (~5 por tela) */
+.pb-cap-grade { grid-template-columns: minmax(0, 1fr) !important; gap: 6px; }
+.pb-cap { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 9px; align-items: center; padding: 7px; }
+.pb-cap-foto { width: 62px; height: 84px; aspect-ratio: auto; overflow: visible; }
+.pb-cap-olho, .pb-cap-apagar { width: 24px !important; height: 24px !important; left: -5px !important; right: auto !important; }
+.pb-cap-olho { top: -5px !important; }
+.pb-cap-apagar { top: auto !important; bottom: -5px; }
+.pb-cap-olho svg, .pb-cap-apagar svg { width: 13px; height: 13px; }
+.pb-cap-lado { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pb-cap-checks { flex-wrap: nowrap !important; overflow-x: auto; padding-bottom: 1px; }
+.pb-cap-checks label { flex-shrink: 0; font-size: 10.5px; padding: 5px 6px; gap: 3px; }
+.pb-cap-checks input { width: 12px; height: 12px; }
+.pb-cap-precos { display: flex; gap: 5px; }
+.pb-cap-precos .pb-cap-campo { flex: 1; height: 32px; padding: 0 6px; min-width: 0; }
+.pb-cap-precos .pb-cap-campo small { font-size: 8.5px; margin-right: 4px; }
+.pb-cap-precos .pb-cap-campo input { font-size: 13px; }
+.pb-cap-precos .pb-cap-campo.pct { flex: .62; }
+.pb-cap-precos .pb-cap-campo.pct b { font-size: 12px; }
+.pb-cap-status { font-size: 10px; }
+.pb-cap-checks { scrollbar-width: none; }
+.pb-cap-checks::-webkit-scrollbar { display: none; }
