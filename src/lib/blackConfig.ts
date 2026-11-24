@@ -84,7 +84,7 @@ export const BLACK_PADRAO: BlackConfig = {
   instagram: '@marcosmagazinee',
   endereco: 'Av. Goiás · Centro · Bom Jesus',
   horario: 'Seg a Sáb · 8h às 18h',
-  parcelas: 'ou em até 18x no cartão',
+  parcelas: '',
   filtros: [{ slug: 'couro', nome: 'Couro' }, { slug: 'brilho', nome: 'Brilho' }, { slug: 'transparente', nome: 'Transparente' }],
 }
 

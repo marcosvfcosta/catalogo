@@ -473,14 +473,11 @@ export default function Black() {
         <div className="foto">
           {p.fotos[foto] ? <img src={p.fotos[foto]} alt={p.nome} loading="lazy" onLoad={pintarFundo} /> : <span className="semfoto">sem foto</span>}
           {promo ? <span className="badge">BLACK -{Math.round((1 - (p.preco_promo as number) / p.preco) * 100)}%</span> : ehBlack(p) ? <span className="badge">BLACK</span> : null}
-          <button className="add" aria-label="Adicionar" onClick={e => { e.stopPropagation(); abrirProduto(p, foto) }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" stroke="#111" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-          </button>
         </div>
-        <span className="nome">{p.nome}</span>
+        <span className="nome">{p.nome}{p.tipo === 'capa' && filtroModelo ? ' - ' + filtroModelo : ''}</span>
         {promo && <s>{reais(p.preco)}</s>}
         <span className="preco">{valor(precoFinal(p))}</span>
-        {(precoFinal(p) <= 0 || cfg.parcelas) && <span className="parc">{precoFinal(p) > 0 ? cfg.parcelas : 'o valor no WhatsApp'}</span>}
+        <button className="comprar" onClick={e => { e.stopPropagation(); abrirProduto(p, foto) }}>Comprar</button>
       </article>
     )
   }
