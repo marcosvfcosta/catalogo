@@ -1,6 +1,6 @@
 /* Site da Black (capinhas e cordinhas). Tudo com prefixo .bk pra não mexer no catálogo */
 
-.bk {
+.bk { color-scheme: only light;
     --laranja: #EE6F2D;
     --laranja2: #FF8A45;
     --tinta: #111111;

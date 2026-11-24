@@ -22,7 +22,10 @@
           '<meta name="apple-mobile-web-app-title" content="' + nome + '" />' +
           // Catálogo abre já com fundo branco (sem piscar a tela escura)
           (caminho === '/' ?
-            '<meta name="theme-color" content="#ffffff" /><style>html,body{background:#fff!important;margin:0}</style>' : '')
+            '<meta name="theme-color" content="#ffffff" /><style>html,body{background:#fff!important;margin:0}</style>' : '') +
+          // Catálogo da Black: pede pro celular NÃO escurecer a página (modo escuro do Android invertia as cores)
+          (caminho.indexOf('/black') === 0 ?
+            '<meta name="color-scheme" content="only light" /><style>:root{color-scheme:only light}html,body{background:#fff}</style>' : '')
         )
       })()
     </script>
