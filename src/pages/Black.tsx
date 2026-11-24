@@ -79,7 +79,7 @@ export default function Black() {
       ])
       setFiltrosOp(fi.error ? [] : ((fi.data || []) as BlackFiltro[]))
       setVestidas(ve.error ? [] : ((ve.data || []) as BlackVestida[]))
-      setProdutos(((p.data || []) as BlackProduto[]).map(x => (x.nome === 'Rascunho' ? { ...x, nome: 'Capinha' } : x)))
+      setProdutos(((p.data || []) as BlackProduto[]).map(x => (x.nome === 'Rascunho' || x.nome === 'Capinha' ? { ...x, nome: 'Case' } : x)))
       setModelos((m.data || []) as BlackModelo[])
       setVideos((v.data || []) as BlackVideo[])
       setCfg(lerConfig(c.data?.dados))
@@ -732,7 +732,7 @@ export default function Black() {
                   Experimentar no meu celular
                 </button>
               )}
-              <div className="acoes"><button className="btn-preto" onClick={porNaSacola}>Pôr na sacola</button></div>
+              <div className="acoes"><button className="btn-preto" onClick={porNaSacola}>Adicionar na sacola</button></div>
             </div>
           </>
         )}
@@ -825,7 +825,7 @@ export default function Black() {
                   {coresExp.map(c => <button key={c} style={{ background: corHex(c) }} className={c === exp.cor ? 'on' : ''} aria-label={c} onClick={() => trocarExp(exp.modelo, c)} />)}
                 </div>
                 <p className="cor-nome">{exp.modelo} · {exp.cor}</p>
-                <button className="btn-preto" style={{ width: '100%', height: 52, borderRadius: 14, fontWeight: 900 }} onClick={expParaSacola}>Pôr na sacola</button>
+                <button className="btn-preto" style={{ width: '100%', height: 52, borderRadius: 14, fontWeight: 900 }} onClick={expParaSacola}>Adicionar na sacola</button>
               </div>
             </>
           )

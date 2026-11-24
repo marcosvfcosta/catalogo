@@ -90,9 +90,9 @@
 .bk .badge { position: absolute; left: 8px; top: 8px; background: #000; color: #fff; font-size: 10px; font-weight: 800; letter-spacing: .6px; padding: 4px 7px; border-radius: 2px; }
 .bk .badge.novo { background: var(--laranja); }
 .bk .add { position: absolute; right: 8px; bottom: 8px; width: 36px; height: 36px; border-radius: 18px; background: #fff; box-shadow: 0 3px 10px rgba(0,0,0,.12); display: flex; align-items: center; justify-content: center; }
-.bk .card .nome { margin-top: 10px; font-size: 12.5px; text-transform: uppercase; letter-spacing: .3px; line-height: 1.3; padding: 0 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 32px; }
+.bk .card .nome { margin-top: 8px; font-size: 12.5px; text-transform: uppercase; letter-spacing: .3px; line-height: 1.3; padding: 0 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .bk .card s { font-size: 11px; color: #9A938A; margin-top: 2px; }
-.bk .card .preco { font-size: 15px; font-weight: 800; margin-top: 2px; }
+.bk .card .preco { font-size: 18px; font-weight: 800; margin-top: 1px; }
 .bk .card .parc { font-size: 11px; color: #9A938A; margin-top: 1px; }
 .bk .vazio { text-align: center; color: var(--cinza); font-size: 13px; padding: 10px 24px 4px; }
 .bk .videos { margin-top: 0; background: #000; padding: 30px 0 34px; color: #fff; }
@@ -247,10 +247,10 @@
 .bk .resultado-topo h2 b { font-weight: 800; color: var(--laranja); }
 .bk .resultado-topo p { font-size: 13px; color: var(--cinza); margin-top: 4px; }
 .bk .grade { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px 8px; padding: 0 10px; }
-.bk .grade .card .nome { font-size: 10.5px; min-height: 27px; margin-top: 6px; }
-.bk .grade .card .preco { font-size: 13px; }
-.bk .grade .card .parc { font-size: 9.5px; }
-.bk .grade .card s { font-size: 9.5px; }
+.bk .grade .card .nome { font-size: 11px; min-height: 0; margin-top: 6px; }
+.bk .grade .card .preco { font-size: 16.5px; margin-top: 1px; letter-spacing: -.2px; }
+.bk .grade .card .parc { font-size: 10px; margin-top: 0; }
+.bk .grade .card s { font-size: 10.5px; margin-top: 1px; }
 .bk .grade .badge { font-size: 8px; padding: 2px 4px; left: 2px; top: 2px; }
 .bk .grade .add { width: 28px; height: 28px; right: 2px; bottom: 2px; }
 .bk .grade .add svg { width: 14px; height: 14px; }

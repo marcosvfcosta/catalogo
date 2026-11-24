@@ -967,7 +967,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
       modelos: p.modelos.length ? p.modelos : [modeloAdm],
     }
     d.rascunho = false; d.no_site = p.no_site || !!p.rascunho // salvar publica; a que você escondeu no 👁️ continua escondida // salvou = vai pro site (sem preço aparece "Consulte")
-    if (p.nome === 'Rascunho') d.nome = 'Capinha'
+    if (p.nome === 'Rascunho') d.nome = 'Case'
     return d
   }
   async function salvarCapas() {
@@ -1062,7 +1062,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
       try {
         const url = await enviarFoto(fs[i])
         const { error } = await supabase.from('black_produtos').insert([{
-          nome: 'Capinha', tipo: 'capa', preco: 0, fotos: [url], modelos: [modeloAdm], filtros: [],
+          nome: 'Case', tipo: 'capa', preco: 0, fotos: [url], modelos: [modeloAdm], filtros: [],
           no_site: false, rascunho: true, lancamento: false, ordem: produtos.length + i,
         }])
         if (error) throw error
