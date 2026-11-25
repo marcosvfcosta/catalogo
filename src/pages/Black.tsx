@@ -282,6 +282,30 @@ export default function Black() {
     window.setTimeout(() => setAberto(null), 120)
   }
 
+  // "+" do card: põe direto na sacola (se precisar escolher o modelo, abre a capinha)
+  function addDireto(p: BlackProduto, foto: number, el: HTMLElement) {
+    const validos = p.modelos.filter(m => !modelos.length || modelos.some(x => x.nome === m))
+    let modelo = ''
+    if (p.tipo === 'capa') {
+      if (filtroModelo && serveNo(p, filtroModelo)) modelo = filtroModelo
+      else if (validos.length === 1) modelo = validos[0]
+      else return abrirProduto(p, foto)
+    }
+    const img = el.closest('.card')?.querySelector('.foto img') as HTMLElement | null
+    const origem = (img || el).getBoundingClientRect()
+    const f = p.fotos[foto] || p.fotos[0] || ''
+    voarParaSacola(origem, f, () => {
+      setSacola(s => {
+        const igual = s.find(i => i.id === p.id && i.modelo === modelo && (i.foto || '') === f)
+        const nova = igual ? s.map(i => (i === igual ? { ...i, q: i.q + 1 } : i)) : [...s, { id: p.id, modelo, q: 1, foto: f }]
+        const n = nova.reduce((t, i) => t + i.q, 0)
+        toast(n === 1 ? '1 item na sacola ✓' : n + ' itens na sacola ✓')
+        return nova
+      })
+      setPulo(x => x + 1)
+    })
+  }
+
   function mudarQtd(i: number, d: number) {
     setSacola(s => s.map((x, k) => (k === i ? { ...x, q: x.q + d } : x)).filter(x => x.q > 0))
   }
@@ -473,7 +497,7 @@ export default function Black() {
         <div className="foto">
           {p.fotos[foto] ? <img src={p.fotos[foto]} alt={p.nome} loading="lazy" onLoad={pintarFundo} /> : <span className="semfoto">sem foto</span>}
           {promo ? <span className="bolinha">-{Math.round((1 - (p.preco_promo as number) / p.preco) * 100)}%</span> : ehBlack(p) ? <span className="bolinha pq">BLACK</span> : null}
-          <button className="add" aria-label="Adicionar" onClick={e => { e.stopPropagation(); abrirProduto(p, foto) }}>
+          <button className="add" aria-label="Adicionar na sacola" onClick={e => { e.stopPropagation(); addDireto(p, foto, e.currentTarget) }}>
             <svg width="18" height="18" viewBox="0 0 24 24" stroke="#111" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
           </button>
         </div>
