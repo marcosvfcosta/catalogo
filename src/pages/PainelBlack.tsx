@@ -160,6 +160,19 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     avisar(f ? 'Agora é ' + nome : 'Tipo tirado')
   }
 
+  // muda o preço direto da lista (sem abrir a capa)
+  async function salvarPreco(p: BlackProduto, campo: 'preco' | 'preco_promo', texto: string) {
+    const t = texto.trim()
+    const valor = campo === 'preco_promo' && !t ? null : paraNumero(t || '0')
+    if (valor !== null && (!isFinite(valor) || valor < 0)) { avisar('Valor inválido'); return }
+    if ((p[campo] ?? null) === valor) return
+    if (campo === 'preco' && !valor) { avisar('Coloque o preço'); return }
+    setProdutos(l => l.map(x => (x.id === p.id ? { ...x, [campo]: valor } : x)))
+    const { error } = await supabase.from('black_produtos').update({ [campo]: valor }).eq('id', p.id)
+    if (error) { avisar('Não salvou: ' + error.message); carregar(); return }
+    avisar(campo === 'preco' ? 'Preço salvo' : valor === null ? 'Preço Black tirado' : 'Preço Black salvo')
+  }
+
   async function alternar(p: BlackProduto, campo: 'no_site' | 'destaque') {
     const valor = !p[campo]
     setProdutos(l => l.map(x => (x.id === p.id ? { ...x, [campo]: valor } : x)))
@@ -586,7 +599,12 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
                     </div>
                     <div className="pb-info">
                       <div className="pb-nome pb-serif">{p.nome}</div>
-                      <div className="pb-preco pb-serif">{reais(precoFinal(p))}{emPromocao(p) && <s>{reais(p.preco)}</s>}</div>
+                      {selecionando
+                        ? <div className="pb-preco pb-serif">{reais(precoFinal(p))}{emPromocao(p) && <s>{reais(p.preco)}</s>}</div>
+                        : <div className="pb-precos-rapido" onClick={e => e.stopPropagation()}>
+                            <label>Preço<input key={'p' + p.preco} inputMode="decimal" placeholder="0,00" defaultValue={p.preco ? paraTexto(p.preco) : ''} onBlur={e => salvarPreco(p, 'preco', e.target.value)} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} /></label>
+                            <label className="pb-pr-black">Black<input key={'b' + p.preco_promo} inputMode="decimal" placeholder="sem" defaultValue={p.preco_promo ? paraTexto(p.preco_promo) : ''} onBlur={e => salvarPreco(p, 'preco_promo', e.target.value)} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} /></label>
+                          </div>}
                       {p.tipo === 'capa' && !selecionando && (
                         <div className="pb-sel-tipo" onClick={e => e.stopPropagation()}>
                           <select value={config.filtros.find(f => temFiltro(p, f.slug, filtrosOp))?.slug || ''} onChange={e => mudarTipo(p, e.target.value)}>
