@@ -385,3 +385,7 @@
 .bk .card .nome + .preco { margin-top: 8px; }
 .bk .card .comprar { margin-top: 10px; width: 88%; height: 40px; border-radius: 20px; background: #111; color: #fff; font-weight: 700; font-size: 15px; }
 .bk .card .comprar:active { transform: scale(.97); }
+
+/* capinhas sem recorte: foto inteira como foi enviada, em cima do mesmo branco */
+.bk .card .foto, .bk .gaveta .img { background: #fff !important; }
+.bk .card .foto img, .bk .gaveta .img img { mix-blend-mode: multiply; }
