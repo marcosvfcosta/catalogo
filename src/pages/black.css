@@ -376,7 +376,7 @@
 /* cards no estilo Deco: 2 por linha, foto em quadrado cinza, nome normal, preço médio, botão Comprar */
 .bk .grade { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 24px 12px; padding: 0 12px; }
 @media (min-width: 720px) { .bk .grade { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; } }
-.bk .card .foto { aspect-ratio: 1 / 1; background: #EEEDEB !important; border-radius: 4px; }
+.bk .card .foto { aspect-ratio: 1 / 1; background: transparent !important; border-radius: 4px; } /* fundo branco como antes: o cinza mostrava borda nas fotos */
 .bk .card .foto img { padding: 10% 14% !important; }
 .bk .card .badge { left: 8px !important; top: 8px !important; font-size: 10px !important; padding: 3px 7px !important; }
 .bk .card .nome, .bk .grade .card .nome { text-transform: none; font-size: 15px; font-weight: 600; letter-spacing: 0; line-height: 1.25; margin-top: 12px; padding: 0 4px; -webkit-line-clamp: 3; color: #1d1d1f; }
