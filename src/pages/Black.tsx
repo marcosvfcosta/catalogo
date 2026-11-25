@@ -539,6 +539,7 @@ export default function Black() {
   const fundosClipe = ['linear-gradient(160deg,#2b2b2b,#0b0b0b)', 'linear-gradient(160deg,#3a1d10,#0b0b0b)', 'linear-gradient(160deg,#1c2533,#0b0b0b)', 'linear-gradient(160deg,#2e1630,#0b0b0b)']
   const storyAtual = story !== null ? listaVideos[story] : null
   const produtoStory = storyAtual?.produto_id ? porId.get(storyAtual.produto_id) : undefined
+  const tipoDe = (videoId: string) => cfg.filtros.find(f => f.slug === cfg.video_tipos?.[videoId])
   // vídeo ligado a um tipo de capa (ex.: Case Laço): mostra "Ver todas" e abre todas desse tipo, de todos os modelos
   const tipoStory = storyAtual ? cfg.filtros.find(f => f.slug === cfg.video_tipos?.[storyAtual.id]) : undefined
   const qtdTipoStory = tipoStory ? produtos.filter(p => temFiltro(p, tipoStory.slug, filtrosOp)).reduce((t, p) => t + Math.max(1, p.fotos.length), 0) : 0
@@ -598,7 +599,16 @@ export default function Black() {
                 <button key={v.id} className={`clipe ${i === clipeAtivo ? 'ativo' : ''}`} style={{ background: fundosClipe[i % fundosClipe.length] }} onClick={() => setStory(i)}>
                   <video ref={mutarVideo} src={v.video_url + '#t=0.1'} poster={v.capa_url || undefined} muted loop playsInline preload="auto" />
                   <span className="play"><svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M7 4l14 8-14 8z" /></svg></span>
-                  {p && (
+                  {tipoDe(v.id) ? (() => {
+                    const t = tipoDe(v.id)!
+                    const lista = produtos.filter(x => temFiltro(x, t.slug, filtrosOp))
+                    return (
+                      <span className="mini">
+                        <span className="ico">{lista[0]?.fotos[0] && <img src={lista[0].fotos[0]} alt="" />}</span>
+                        <span><span>Case {t.nome}</span><b>Ver todas ›</b></span>
+                      </span>
+                    )
+                  })() : p && (
                     <span className="mini">
                       <span className="ico">{p.fotos[0] && <img src={p.fotos[0]} alt="" />}</span>
                       <span><span>{p.nome}</span><b>{valor(precoFinal(p))}</b></span>
