@@ -148,7 +148,7 @@
 .bk .btn-preto { background: var(--tinta); color: #fff; }
 .bk .sacola-lista { padding: 6px 18px 0; }
 .bk .sacola-item { display: flex; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
-.bk .sacola-item .mini-foto { width: 58px; aspect-ratio: 3/4; background: #F5F5F7; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.bk .sacola-item .mini-foto { width: 58px; aspect-ratio: 3/4; background: #fff; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .bk .sacola-item .mini-foto svg { width: 70%; height: 84%; }
 .bk .sacola-item .t { flex: 1; min-width: 0; }
 .bk .sacola-item .t b { display: block; font-size: 13px; text-transform: uppercase; line-height: 1.25; }
@@ -388,3 +388,8 @@
 .bk .gaveta { background: #fff; transition: background .25s; }
 .bk .gaveta .img, .bk .gaveta .galeria { background: transparent !important; }
 .bk .card .foto { transition: background .25s; }
+
+/* TUDO BRANCO: fundo da tela da capinha, do card e da foto no mesmo branco das fotos (sem quadrado, sem divisão de cor) */
+.bk .gaveta, .bk .gaveta .corpo, .bk .gaveta .img, .bk .gaveta .galeria { background: #fff !important; }
+.bk .card .foto { background: #fff !important; }
+.bk .card .foto img, .bk .gaveta .img img { mix-blend-mode: multiply; }
