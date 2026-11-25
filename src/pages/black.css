@@ -410,5 +410,10 @@
 .bk .card .foto::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 9%; background: linear-gradient(to bottom, rgba(255,255,255,0), #fff 60%); pointer-events: none; z-index: 1; }
 .bk .card .foto .add { z-index: 2; }
 /* desconto numa bolinha */
-.bk .card .bolinha { position: absolute; left: 4px; top: 4px; z-index: 2; width: 26px; height: 26px; border-radius: 50%; background: #111; color: #fff; font-size: 8px; font-weight: 900; letter-spacing: -.3px; display: flex; align-items: center; justify-content: center; }
+.bk .card .bolinha { position: absolute; left: 4px; top: 4px; z-index: 2; width: 29px; height: 29px; border-radius: 50%; background: #111; color: #fff; font-size: 9px; font-weight: 900; letter-spacing: -.3px; display: flex; align-items: center; justify-content: center; }
 .bk .card .bolinha.pq { font-size: 5.5px; letter-spacing: .2px; }
+
+/* bolinha também na tela da capinha */
+.bk .gaveta .img { position: relative; }
+.bk .gaveta .img .bolinha { position: absolute; left: 12px; top: 12px; z-index: 2; width: 46px; height: 46px; border-radius: 50%; background: #111; color: #fff; font-size: 14px; font-weight: 900; letter-spacing: -.3px; display: flex; align-items: center; justify-content: center; box-shadow: none; }
+.bk .gaveta .img .bolinha.pq { font-size: 9px; letter-spacing: .2px; }

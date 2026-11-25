@@ -708,7 +708,7 @@ export default function Black() {
           <>
             <div className="pega" />
             <div className="galeria sem-barra">
-              <div className="img">{aberto.fotos[fotoAtual] && <img key={aberto.fotos[fotoAtual]} src={aberto.fotos[fotoAtual]} alt={aberto.nome} data-lado="1100" onLoad={branquear} />}</div>
+              <div className="img">{emPromocao(aberto) ? <span className="bolinha">-{Math.round((1 - (aberto.preco_promo as number) / aberto.preco) * 100)}%</span> : ehBlack(aberto) ? <span className="bolinha pq">BLACK</span> : null}{aberto.fotos[fotoAtual] && <img key={aberto.fotos[fotoAtual]} src={aberto.fotos[fotoAtual]} alt={aberto.nome} data-lado="1100" onLoad={branquear} />}</div>
             </div>
             <div className="corpo">
               <h3>{aberto.nome}</h3>
