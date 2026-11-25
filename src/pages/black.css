@@ -12,7 +12,7 @@
 .bk { scroll-behavior: smooth; }
 .bk {
     font-family: "Nunito", "Avenir Next", "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    color: var(--tinta); background: #fff; overflow-x: hidden;
+    color: var(--tinta); background: #fff; overflow-x: clip;
   }
 .bk button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 .bk .sem-barra { scrollbar-width: none; }
@@ -445,3 +445,12 @@
 .bk .trilho-mais .card { flex-shrink: 0; width: 40%; max-width: 220px; scroll-snap-align: start; }
 .bk .trilho-mais .card .nome { font-size: 13px; }
 .bk .trilho-mais .card .preco { font-size: 17px; }
+
+/* topo fixo: faixa + logo/sacola ficam presas em cima, até com a capinha ou a sacola aberta */
+.bk .aviso { position: sticky; top: 0; z-index: 57; }
+.bk .topo { position: sticky; top: 38px; z-index: 56; }
+.bk .fundo-escuro { top: 104px; }
+.bk .gaveta { max-height: calc(100vh - 116px); max-height: calc(100dvh - 116px); }
+.bk .menu-veu { z-index: 58; }
+.bk .menu-lado { z-index: 59; }
+.bk .filtro { scroll-margin-top: 110px; }

@@ -589,7 +589,7 @@ export default function Black() {
           <button className="icone" aria-label="Buscar" onClick={() => filtroRef.current?.scrollIntoView({ behavior: 'smooth' })}>
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2.4" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
           </button>
-          <button className="icone" id="btnSacola" ref={btnSacola} aria-label="Sacola" onClick={() => setSacolaAberta(true)}>
+          <button className="icone" id="btnSacola" ref={btnSacola} aria-label="Sacola" onClick={() => { setAberto(null); setSacolaAberta(true) }}>
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2.3" strokeLinejoin="round" style={{ overflow: 'visible' }}><path d="M5 8h14l-1.2 12.2a1 1 0 0 1-1 .8H7.2a1 1 0 0 1-1-.8z" /><g className="boca"><path d="M9 8V6a3 3 0 0 1 6 0v2" /></g></svg>
             <span className={`contador ${totalItens ? 'on' : ''}`} key={pulo}>{totalItens}</span>
           </button>
