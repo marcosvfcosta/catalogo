@@ -393,3 +393,6 @@
 .bk .gaveta, .bk .gaveta .corpo, .bk .gaveta .img, .bk .gaveta .galeria { background: #fff !important; }
 .bk .card .foto { background: #fff !important; }
 .bk .card .foto img, .bk .gaveta .img img { mix-blend-mode: multiply; }
+/* foto da capinha ocupando o quadro todo (sem sobra branca em volta) */
+.bk .card .foto { aspect-ratio: 4 / 5 !important; }
+.bk .card .foto img { padding: 0 !important; object-fit: contain; }
