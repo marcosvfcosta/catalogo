@@ -301,9 +301,17 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     setOcupado('')
     carregar()
   }
-  async function ligarVideo(v: BlackVideo, produtoId: string) {
+  async function ligarVideo(v: BlackVideo, valor: string) {
+    const tipo = valor.startsWith('tipo:') ? valor.slice(5) : ''
+    const produtoId = tipo ? '' : valor
+    const vt = { ...(config.video_tipos || {}) }
+    if (tipo) vt[v.id] = tipo; else delete vt[v.id]
+    const novo = { ...config, video_tipos: vt }
+    setConfig(novo)
+    await supabase.from('black_config').upsert({ id: 1, dados: novo })
     setVideos(l => l.map(x => (x.id === v.id ? { ...x, produto_id: produtoId || null } : x)))
     await supabase.from('black_videos').update({ produto_id: produtoId || null }).eq('id', v.id)
+    if (tipo) avisar('Vídeo ligado a todas as ' + (config.filtros.find(f => f.slug === tipo)?.nome || '') + ' ✓')
   }
   async function apagarVideo(v: BlackVideo) {
     if (!confirm('Apagar este vídeo?')) return
@@ -834,9 +842,14 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
                 <div className="pb-v" key={v.id}>
                   <video src={v.video_url + '#t=0.5'} muted playsInline preload="metadata" />
                   <button className="pb-x" aria-label="Apagar vídeo" onClick={() => apagarVideo(v)}>×</button>
-                  <select value={v.produto_id || ''} onChange={e => ligarVideo(v, e.target.value)} aria-label="Produto do vídeo">
+                  <select value={config.video_tipos?.[v.id] ? 'tipo:' + config.video_tipos[v.id] : v.produto_id || ''} onChange={e => ligarVideo(v, e.target.value)} aria-label="Produto do vídeo">
                     <option value="">Sem produto (opcional)</option>
-                    {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                    <optgroup label="Tipo de capa (puxa todos os modelos)">
+                      {config.filtros.map(f => <option key={f.slug} value={'tipo:' + f.slug}>Tipo: Case {f.nome} ({produtos.filter(p => temFiltro(p, f.slug, filtrosOp)).length})</option>)}
+                    </optgroup>
+                    <optgroup label="Um produto">
+                      {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                    </optgroup>
                   </select>
                 </div>
               ))}

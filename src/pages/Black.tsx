@@ -502,6 +502,7 @@ export default function Black() {
           </button>
         </div>
         <span className="nome">{p.nome}{p.tipo === 'capa' && filtroModelo ? ' - ' + filtroModelo : ''}</span>
+        {p.tipo === 'capa' && !filtroModelo && filtroMenu && filtroMenu !== 'black' && p.modelos.length > 0 && <span className="mod-tag">{p.modelos.filter(m => !modelos.length || modelos.some(x => x.nome === m)).join(' · ')}</span>}
         {promo && <s>{reais(p.preco)}</s>}
         <span className="preco">{valor(precoFinal(p))}</span>
       </article>
@@ -538,6 +539,9 @@ export default function Black() {
   const fundosClipe = ['linear-gradient(160deg,#2b2b2b,#0b0b0b)', 'linear-gradient(160deg,#3a1d10,#0b0b0b)', 'linear-gradient(160deg,#1c2533,#0b0b0b)', 'linear-gradient(160deg,#2e1630,#0b0b0b)']
   const storyAtual = story !== null ? listaVideos[story] : null
   const produtoStory = storyAtual?.produto_id ? porId.get(storyAtual.produto_id) : undefined
+  // vídeo ligado a um tipo de capa (ex.: Case Laço): mostra "Ver todas" e abre todas desse tipo, de todos os modelos
+  const tipoStory = storyAtual ? cfg.filtros.find(f => f.slug === cfg.video_tipos?.[storyAtual.id]) : undefined
+  const qtdTipoStory = tipoStory ? produtos.filter(p => temFiltro(p, tipoStory.slug, filtrosOp)).reduce((t, p) => t + Math.max(1, p.fotos.length), 0) : 0
 
   return (
     <div className="bk" ref={raiz} onTouchStart={inicioToque} onTouchEnd={fimToque}>
@@ -879,7 +883,13 @@ export default function Black() {
             <button className="lado" style={{ left: 0 }} onClick={() => setStory(s => (s ? s - 1 : 0))} aria-label="Anterior" />
             <button className="lado" style={{ right: 0 }} onClick={() => setStory(s => (s !== null && s + 1 < listaVideos.length ? s + 1 : null))} aria-label="Próximo" />
           </div>
-          {produtoStory && (
+          {tipoStory && (
+            <div className="comprar">
+              <div className="t"><b>Case {tipoStory.nome}</b><small>{qtdTipoStory} {qtdTipoStory === 1 ? 'opção' : 'opções'} · todos os modelos</small></div>
+              <button className="btn-laranja" style={{ fontSize: 15, padding: '11px 16px' }} onClick={() => { const t = tipoStory.slug; setStory(null); window.setTimeout(() => abrirMenuFiltro(t), 60) }}>Ver todas</button>
+            </div>
+          )}
+          {!tipoStory && produtoStory && (
             <div className="comprar">
               <div className="t"><b>{produtoStory.nome}</b><small>{valor(precoFinal(produtoStory))}{cfg.parcelas ? ' · ' + cfg.parcelas : ''}</small></div>
               <button className="btn-laranja" style={{ fontSize: 15, padding: '11px 16px' }} onClick={() => { setStory(null); abrirProduto(produtoStory) }}>Comprar</button>
