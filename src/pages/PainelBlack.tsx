@@ -379,10 +379,12 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
                       <span className="ck">✓</span>
                       {x.f ? <img src={x.f} alt="" loading="lazy" /> : <IcCamera />}
                       <small>{x.p.modelos.join(', ') || x.p.nome}</small>
+                      {(!x.p.no_site || x.p.rascunho) && <em className="pb-edv-esc">{x.p.rascunho ? 'Sem preço' : 'Escondida'}</em>}
                     </button>
                   ))}
                 </div>
               )}
+              {its.some(x => edSel.includes(x.chave) && (!x.p.no_site || x.p.rascunho)) && <p className="pb-edv-aviso">As marcadas com <b>Escondida</b> ou <b>Sem preço</b> não aparecem no site. Mostre no 👁️ (e ponha o valor) lá em Capas.</p>}
               <p className="pb-dica" style={{ marginTop: 10 }}>Sem nenhuma marcada, o vídeo mostra todas desse tipo.</p>
             </>
           )}

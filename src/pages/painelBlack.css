@@ -284,3 +284,6 @@ textarea.pb-campo { height: 90px; padding: 12px 14px; resize: vertical; }
 .pb-precos-rapido input:focus { outline: none; border-color: var(--pb-ink); }
 .pb-precos-rapido .pb-pr-black { color: var(--pb-laranja); }
 .pb-precos-rapido .pb-pr-black input { border-color: var(--pb-laranja); }
+
+.pb-edv-esc { position: absolute; left: 4px; right: 4px; top: 40%; background: #A3361F; color: #fff; font-style: normal; font-size: 10px; font-weight: 800; padding: 3px 0; border-radius: 4px; }
+.pb-edv-aviso { margin-top: 10px; background: #FDECEA; color: #A3361F; border-radius: 8px; padding: 8px 10px; font-size: 12.5px; }

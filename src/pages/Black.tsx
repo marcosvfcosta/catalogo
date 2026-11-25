@@ -372,8 +372,9 @@ export default function Black() {
     const sel = cfg.video_sel?.[videoId] || []
     const todos = porFotos(produtos.filter(x => temFiltro(x, t.slug, filtrosOp)))
     if (!sel.length) return todos
-    return sel.map(k => { const [id, i] = k.split('|'); const p = porId.get(id); return p ? { p, i: p.fotos[Number(i)] ? Number(i) : 0 } : null })
+    const marcadas = sel.map(k => { const [id, i] = k.split('|'); const p = porId.get(id); return p ? { p, i: p.fotos[Number(i)] ? Number(i) : 0 } : null })
       .filter((x): x is { p: BlackProduto; i: number } => !!x)
+    return marcadas.length ? marcadas : todos // marcadas sumiram do site: mostra as do tipo que estão no site
   }
   const [videoAberto, setVideoAberto] = useState('')
   function verDoVideo(videoId: string) { setVideoAberto(videoId); abrirMenuFiltro('__video') }
