@@ -122,35 +122,12 @@ export function fundoBranco(url: string, lado = 700): Promise<string | null> {
         let [r, g, b] = claros[0] || [255, 255, 255]
         r *= 0.985; g *= 0.985; b *= 0.985 // folguinha pra não sobrar nada cinza
         if (Math.min(r, g, b) < 170) return null // fundo escuro/colorido: deixa como está
+        if (Math.min(r, g, b) >= 253) return null // já é branco
         const fr = 255 / r, fg = 255 / g, fb = 255 / b
         for (let i = 0; i < px.length; i += 4) {
           let R = px[i] * fr, G = px[i + 1] * fg, B = px[i + 2] * fb
           if (R > 246 && G > 246 && B > 246) { R = 255; G = 255; B = 255 } // quase branco vira branco
           px[i] = Math.min(255, R); px[i + 1] = Math.min(255, G); px[i + 2] = Math.min(255, B)
-        }
-        // tira a SOMBRA: a partir da borda, tudo que é cinza claro e sem cor (fundo + sombra) vira branco.
-        // Para na capinha (borda mais escura ou colorida), então a capinha não é mexida.
-        const neutro = (i: number) => {
-          const R = px[i], G = px[i + 1], B = px[i + 2]
-          const mx = Math.max(R, G, B), mn = Math.min(R, G, B)
-          return mn > 175 && mx - mn < 16
-        }
-        const visto = new Uint8Array(w * h)
-        const fila: number[] = []
-        for (let x = 0; x < w; x++) fila.push(x, (h - 1) * w + x)
-        for (let y = 0; y < h; y++) fila.push(y * w, y * w + w - 1)
-        while (fila.length) {
-          const k = fila.pop()!
-          if (visto[k]) continue
-          visto[k] = 1
-          const i = k * 4
-          if (!neutro(i)) continue
-          px[i] = 255; px[i + 1] = 255; px[i + 2] = 255
-          const x = k % w, y = (k / w) | 0
-          if (x > 0) fila.push(k - 1)
-          if (x < w - 1) fila.push(k + 1)
-          if (y > 0) fila.push(k - w)
-          if (y < h - 1) fila.push(k + w)
         }
         ctx.putImageData(dados, 0, 0)
         return c.toDataURL('image/jpeg', 0.92)
