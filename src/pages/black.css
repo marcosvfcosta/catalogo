@@ -194,12 +194,12 @@
 
 /* ── fotos e vídeos de verdade ── */
 .bk { min-height: 100vh; }
-.bk .card .foto img { width: 100%; height: 100%; object-fit: contain; padding: 4% 6%; filter: drop-shadow(0 4px 6px rgba(0,0,0,.16)); opacity: 0; transition: transform .6s, opacity .3s; }
+.bk .card .foto img { width: 100%; height: 100%; object-fit: contain; padding: 4% 6%; opacity: 0; transition: transform .6s, opacity .3s; }
 .bk .card .foto img.pronto { opacity: 1; }
 .bk .card:active .foto img { transform: scale(1.04); }
 .bk .gaveta .img { overflow: hidden; }
 .bk .gaveta .img { background: #fff; }
-.bk .gaveta .img img { width: 100%; height: 100%; object-fit: contain; padding: 12px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.16)); opacity: 0; transition: opacity .25s; }
+.bk .gaveta .img img { width: 100%; height: 100%; object-fit: contain; padding: 12px; opacity: 0; transition: opacity .25s; }
 .bk .gaveta .img img.pronto { opacity: 1; }
 .bk .galeria { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; margin: 12px 16px 0; border-radius: 16px; }
 .bk .galeria .img { flex-shrink: 0; width: 100%; margin: 0; scroll-snap-align: center; border-radius: 0; }
@@ -385,3 +385,4 @@
 .bk .card .nome + .preco { margin-top: 8px; }
 .bk .card .comprar { margin-top: 10px; width: 88%; height: 40px; border-radius: 20px; background: #111; color: #fff; font-weight: 700; font-size: 15px; }
 .bk .card .comprar:active { transform: scale(.97); }
+.bk .gaveta, .bk .gaveta .img, .bk .gaveta .galeria { background: #fff; }
