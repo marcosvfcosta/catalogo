@@ -692,7 +692,7 @@ export default function Black() {
                 {cfg.secoes.promo.texto && <p className="tarja-frase">{cfg.secoes.promo.texto}</p>}
               </button>
               <button className="ver-black" onClick={() => abrirMenuFiltro('black')}>Ver todas da <span>Black</span> ›</button>
-              {daBlack.length > 0 && <div className="grade">{porFotos(daBlack).map(({ p, i }) => card(p, i))}</div>}
+              {daBlack.length > 0 && <div className="grade">{porFotos(daBlack).slice(0, 9).map(({ p, i }) => card(p, i))}</div>}
             </section>
           )}
 
