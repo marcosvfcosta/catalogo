@@ -86,3 +86,48 @@ export function pintarFundo(e: { currentTarget: HTMLImageElement }) {
     el.classList.add('pronto')
   })
 }
+
+// ── capinhas: deixa o FUNDO da foto branco puro sem recortar nada.
+// Lê a cor do fundo (cantos) e clareia a foto inteira na mesma proporção: o fundo vira #fff,
+// a capinha e a sombra continuam inteiras e suaves (sem quadrado, sem borda cortada).
+const cacheBranco = new Map<string, Promise<string | null>>()
+export function fundoBranco(url: string, lado = 700): Promise<string | null> {
+  const chave = url + '#' + lado
+  if (!cacheBranco.has(chave)) {
+    cacheBranco.set(chave, carregar(url).then(img => {
+      if (!img) return null
+      try {
+        const esc = Math.min(1, lado / Math.max(img.naturalWidth, img.naturalHeight))
+        const w = Math.max(1, Math.round(img.naturalWidth * esc)), h = Math.max(1, Math.round(img.naturalHeight * esc))
+        const c = document.createElement('canvas'); c.width = w; c.height = h
+        const ctx = c.getContext('2d'); if (!ctx) return null
+        ctx.drawImage(img, 0, 0, w, h)
+        const dados = ctx.getImageData(0, 0, w, h), px = dados.data
+        // cor do fundo = média de faixinhas nos 4 cantos
+        let r = 0, g = 0, b = 0, n = 0
+        const m = Math.max(2, Math.round(Math.min(w, h) * 0.03))
+        for (const [x0, y0] of [[0, 0], [w - m, 0], [0, h - m], [w - m, h - m]]) {
+          for (let y = y0; y < y0 + m; y++) for (let x = x0; x < x0 + m; x++) { const i = (y * w + x) * 4; r += px[i]; g += px[i + 1]; b += px[i + 2]; n++ }
+        }
+        r /= n; g /= n; b /= n
+        if (Math.min(r, g, b) < 170) return null // fundo escuro/colorido: deixa como está
+        if (Math.min(r, g, b) >= 253) return null // já é branco
+        const fr = 255 / r, fg = 255 / g, fb = 255 / b
+        for (let i = 0; i < px.length; i += 4) {
+          px[i] = Math.min(255, px[i] * fr); px[i + 1] = Math.min(255, px[i + 1] * fg); px[i + 2] = Math.min(255, px[i + 2] * fb)
+        }
+        ctx.putImageData(dados, 0, 0)
+        return c.toDataURL('image/jpeg', 0.92)
+      } catch { return null }
+    }))
+  }
+  return cacheBranco.get(chave)!
+}
+export function branquear(e: { currentTarget: HTMLImageElement }) {
+  const el = e.currentTarget
+  if (el.src.startsWith('data:')) { el.classList.add('pronto'); return } // já é a versão clareada
+  fundoBranco(el.src, Number(el.dataset.lado) || 700).then(nova => {
+    if (nova) el.src = nova
+    el.classList.add('pronto')
+  })
+}

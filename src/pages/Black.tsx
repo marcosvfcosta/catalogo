@@ -1,5 +1,5 @@
 // Site da Black — catálogo só de capinhas e cordinhas (Esquenta Black).
-import { pintarFundo } from '../lib/corDoFundo'
+import { branquear, pintarFundo } from '../lib/corDoFundo'
 // Lê tudo do painel (Admin → Capas). Separado do catálogo e da Negociação.
 import { useEffect, useMemo, useRef, useState, type TouchEvent as ToqueEvento, type UIEvent } from 'react'
 import { supabase } from '../supabase'
@@ -471,7 +471,7 @@ export default function Black() {
     return (
       <article className="card" key={p.id + '-' + foto} onClick={() => abrirProduto(p, foto)}>
         <div className="foto">
-          {p.fotos[foto] ? <img src={p.fotos[foto]} alt={p.nome} loading="lazy" onLoad={e => e.currentTarget.classList.add('pronto')} /> : <span className="semfoto">sem foto</span>}
+          {p.fotos[foto] ? <img src={p.fotos[foto]} alt={p.nome} loading="lazy" onLoad={branquear} /> : <span className="semfoto">sem foto</span>}
           {promo ? <span className="badge">BLACK -{Math.round((1 - (p.preco_promo as number) / p.preco) * 100)}%</span> : ehBlack(p) ? <span className="badge">BLACK</span> : null}
         </div>
         <span className="nome">{p.nome}{p.tipo === 'capa' && filtroModelo ? ' - ' + filtroModelo : ''}</span>
@@ -706,7 +706,7 @@ export default function Black() {
           <>
             <div className="pega" />
             <div className="galeria sem-barra">
-              <div className="img">{aberto.fotos[fotoAtual] && <img key={aberto.fotos[fotoAtual]} src={aberto.fotos[fotoAtual]} alt={aberto.nome} onLoad={e => e.currentTarget.classList.add('pronto')} />}</div>
+              <div className="img">{aberto.fotos[fotoAtual] && <img key={aberto.fotos[fotoAtual]} src={aberto.fotos[fotoAtual]} alt={aberto.nome} data-lado="1100" onLoad={branquear} />}</div>
             </div>
             <div className="corpo">
               <h3>{aberto.nome}</h3>
