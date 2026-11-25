@@ -439,3 +439,9 @@
 .bk .vitrine .tarja-black + .grade { margin-top: 14px; }
 .bk .card .mod-tag { display: inline-block; margin-top: 3px; font-size: 10px; font-weight: 800; background: #f3f1ec; border-radius: 8px; padding: 2px 6px; }
 .bk .clipe .mini .mini-preco { display: block; font-style: normal; font-size: 13px; font-weight: 800; color: #111; }
+
+/* Mais vendidas: fileira pra arrastar (2 inteiras + a 3ª cortada) */
+.bk .trilho-mais { display: flex; gap: 10px; overflow-x: auto; padding: 16px 12px 6px; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
+.bk .trilho-mais .card { flex-shrink: 0; width: 40%; max-width: 220px; scroll-snap-align: start; }
+.bk .trilho-mais .card .nome { font-size: 13px; }
+.bk .trilho-mais .card .preco { font-size: 17px; }

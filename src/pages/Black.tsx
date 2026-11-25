@@ -543,7 +543,7 @@ export default function Black() {
           </div>
         ) : <div className="vitrine-topo"><h2>{antes}{depois && <span className="fogo">{depois}</span>}</h2></div>}
         {s.texto && chave === 'lancamentos' && <p className="vitrine-desc">{s.texto}</p>}
-        {lista.length ? (chave === 'mais' ? <div className="grade">{lista.map(p => card(p))}</div> : <div className="trilho sem-barra">{lista.map(p => card(p))}</div>)
+        {lista.length ? (chave === 'mais' ? <div className="trilho-mais sem-barra">{lista.map(p => card(p))}</div> : <div className="trilho sem-barra">{lista.map(p => card(p))}</div>)
           : <p className="vazio">Nada nessa vitrine pro filtro escolhido. Toque em "Limpar filtro".</p>}
       </section>
     )
