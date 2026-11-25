@@ -103,18 +103,31 @@ export function fundoBranco(url: string, lado = 700): Promise<string | null> {
         const ctx = c.getContext('2d'); if (!ctx) return null
         ctx.drawImage(img, 0, 0, w, h)
         const dados = ctx.getImageData(0, 0, w, h), px = dados.data
-        // cor do fundo = média de faixinhas nos 4 cantos
-        let r = 0, g = 0, b = 0, n = 0
-        const m = Math.max(2, Math.round(Math.min(w, h) * 0.03))
-        for (const [x0, y0] of [[0, 0], [w - m, 0], [0, h - m], [w - m, h - m]]) {
-          for (let y = y0; y < y0 + m; y++) for (let x = x0; x < x0 + m; x++) { const i = (y * w + x) * 4; r += px[i]; g += px[i + 1]; b += px[i + 2]; n++ }
+        // cor do fundo: olha a borda inteira da foto e pega o tom MAIS ESCURO dela
+        // (o fundo da foto costuma ter degradê; assim a borda toda vira branca)
+        const m = Math.max(2, Math.round(Math.min(w, h) * 0.04))
+        const faixas: number[][] = []
+        const passo = Math.max(1, Math.round(Math.max(w, h) / 40))
+        const media = (x0: number, y0: number) => {
+          let r = 0, g = 0, b = 0, n = 0
+          for (let y = y0; y < Math.min(h, y0 + m); y++) for (let x = x0; x < Math.min(w, x0 + m); x++) { const i = (y * w + x) * 4; r += px[i]; g += px[i + 1]; b += px[i + 2]; n++ }
+          return [r / n, g / n, b / n]
         }
-        r /= n; g /= n; b /= n
+        for (let x = 0; x < w - m; x += passo) { faixas.push(media(x, 0), media(x, h - m)) }
+        for (let y = 0; y < h - m; y += passo) { faixas.push(media(0, y), media(w - m, y)) }
+        // ignora pedaços da capinha que encostam na borda (bem mais escuros), e pega o mais escuro do resto
+        const lum = (c: number[]) => c[0] + c[1] + c[2]
+        faixas.sort((a, c) => lum(a) - lum(c))
+        const claros = faixas.slice(Math.floor(faixas.length * 0.15))
+        let [r, g, b] = claros[0] || [255, 255, 255]
+        r *= 0.985; g *= 0.985; b *= 0.985 // folguinha pra não sobrar nada cinza
         if (Math.min(r, g, b) < 170) return null // fundo escuro/colorido: deixa como está
         if (Math.min(r, g, b) >= 253) return null // já é branco
         const fr = 255 / r, fg = 255 / g, fb = 255 / b
         for (let i = 0; i < px.length; i += 4) {
-          px[i] = Math.min(255, px[i] * fr); px[i + 1] = Math.min(255, px[i + 1] * fg); px[i + 2] = Math.min(255, px[i + 2] * fb)
+          let R = px[i] * fr, G = px[i + 1] * fg, B = px[i + 2] * fb
+          if (R > 246 && G > 246 && B > 246) { R = 255; G = 255; B = 255 } // quase branco vira branco
+          px[i] = Math.min(255, R); px[i + 1] = Math.min(255, G); px[i + 2] = Math.min(255, B)
         }
         ctx.putImageData(dados, 0, 0)
         return c.toDataURL('image/jpeg', 0.92)

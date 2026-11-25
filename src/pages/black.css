@@ -389,3 +389,5 @@
 /* capinhas sem recorte: foto inteira como foi enviada, em cima do mesmo branco */
 .bk .card .foto, .bk .gaveta .img { background: #fff !important; }
 .bk .card .foto img, .bk .gaveta .img img { mix-blend-mode: multiply; }
+/* se ainda sobrar um tiquinho do quadrado, os cantos arredondados disfarçam */
+.bk .card .foto img, .bk .gaveta .img img { border-radius: 18px; }
