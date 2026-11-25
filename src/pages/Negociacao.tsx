@@ -1219,8 +1219,7 @@ export default function Negociacao() {
     if (!form.modelo.trim() || !valorAparelho) { alert('Escolha o celular primeiro'); return }
     const texto = textoProposta()
     if (!fotoProposta) { alert('A foto desse celular ainda não carregou. Espera um segundinho e tenta de novo.'); return }
-    if (!navigator.canShare?.({ files: [fotoProposta] })) { alert('Esse navegador não deixa enviar foto direto. Use o botão verde e cole a foto.'); return }
-    try { await navigator.clipboard?.writeText(texto) } catch { /* sem copiar */ }
+        try { await navigator.clipboard?.writeText(texto) } catch { /* sem copiar */ }
     try { await navigator.share({ files: [fotoProposta], text: texto }) } catch { /* fechou */ }
   }
 
@@ -1775,19 +1774,13 @@ export default function Negociacao() {
               </div>
               {(!form.modelo || valorAparelho <= 0) && <p style={{ color: '#ffc800', fontSize: 13, margin: '0 0 10px', textAlign: 'center' }}>Escolha o celular e o valor pra enviar</p>}
               <div>
-                <button type="button" onClick={enviarProposta}
+                <button type="button" onClick={() => { if (fotoProposta && navigator.canShare?.({ files: [fotoProposta] })) enviarComFotoAnexada(); else enviarProposta() }}
                   style={{ width: '100%', background: '#25D366', color: '#000', border: 'none', borderRadius: 14, padding: 15, fontSize: 17, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
                   📲 Enviar proposta no WhatsApp{fotoProposta ? ' (com foto)' : ''}
                 </button>
-                {digitosCliente.length >= 10
-                  ? <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0', textAlign: 'center' }}>Abre a conversa de {form.telefone} com o texto pronto.{fotoPropostaPng ? ' A foto fica copiada: toque e segure na caixa de mensagem e escolha Colar.' : ''}</p>
-                  : fotoProposta && <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0', textAlign: 'center' }}>Escolha o WhatsApp e o cliente. Se o texto não for junto, é só colar: ele já fica copiado.</p>}
-                {digitosCliente.length >= 10 && fotoProposta && (
-                  <button type="button" onClick={enviarComFotoAnexada}
-                    style={{ width: '100%', marginTop: 10, background: 'transparent', color: '#25D366', border: '2px solid #25D366', borderRadius: 14, padding: 13, fontSize: 15, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
-                    📷 Enviar com a foto já junto
-                  </button>
-                )}
+                {fotoProposta
+                  ? <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0', textAlign: 'center' }}>Escolha o WhatsApp e o cliente. Se o texto não for junto, é só colar: ele já fica copiado.</p>
+                  : digitosCliente.length >= 10 && <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0', textAlign: 'center' }}>Abre a conversa de {form.telefone} com o texto pronto.</p>}
               </div>
             </div>
             <div style={s.botoesRow}>
