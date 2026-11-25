@@ -86,33 +86,3 @@ export function pintarFundo(e: { currentTarget: HTMLImageElement }) {
     el.classList.add('pronto')
   })
 }
-
-// ── capinhas: NÃO recorta a foto. Lê a cor do fundo dela (média dos cantos) e pinta o que está em volta igual,
-// assim a foto fica "sem quadrado" e sem borda/sombra estranha.
-const cacheCor = new Map<string, Promise<string | null>>()
-export function corDoCanto(url: string): Promise<string | null> {
-  if (!cacheCor.has(url)) {
-    cacheCor.set(url, carregar(url).then(img => {
-      if (!img) return null
-      try {
-        const w = 60, h = Math.max(1, Math.round(60 * img.naturalHeight / img.naturalWidth))
-        const c = document.createElement('canvas'); c.width = w; c.height = h
-        const ctx = c.getContext('2d'); if (!ctx) return null
-        ctx.drawImage(img, 0, 0, w, h)
-        const pts = [[1, 1], [w - 2, 1], [1, h - 2], [w - 2, h - 2]]
-        let r = 0, g = 0, b = 0
-        for (const [x, y] of pts) { const d = ctx.getImageData(x, y, 1, 1).data; r += d[0]; g += d[1]; b += d[2] }
-        return `rgb(${Math.round(r / 4)},${Math.round(g / 4)},${Math.round(b / 4)})`
-      } catch { return null }
-    }))
-  }
-  return cacheCor.get(url)!
-}
-// pinta o elemento indicado (o quadrado do card ou a tela inteira da capinha) com a cor do fundo da foto
-export function pintarEmVolta(alvo: (img: HTMLImageElement) => HTMLElement | null) {
-  return (e: { currentTarget: HTMLImageElement }) => {
-    const el = e.currentTarget
-    el.classList.add('pronto')
-    corDoCanto(el.currentSrc || el.src).then(cor => { const a = alvo(el); if (cor && a) a.style.background = cor })
-  }
-}
