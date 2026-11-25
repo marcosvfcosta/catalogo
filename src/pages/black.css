@@ -438,3 +438,4 @@
 .bk .tarja-black .tarja-mais { font-size: clamp(30px, 9vw, 52px); }
 .bk .vitrine .tarja-black + .grade { margin-top: 14px; }
 .bk .card .mod-tag { display: inline-block; margin-top: 3px; font-size: 10px; font-weight: 800; background: #f3f1ec; border-radius: 8px; padding: 2px 6px; }
+.bk .clipe .mini .mini-preco { display: block; font-style: normal; font-size: 13px; font-weight: 800; color: #111; }

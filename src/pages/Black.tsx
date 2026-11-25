@@ -539,6 +539,13 @@ export default function Black() {
   const fundosClipe = ['linear-gradient(160deg,#2b2b2b,#0b0b0b)', 'linear-gradient(160deg,#3a1d10,#0b0b0b)', 'linear-gradient(160deg,#1c2533,#0b0b0b)', 'linear-gradient(160deg,#2e1630,#0b0b0b)']
   const storyAtual = story !== null ? listaVideos[story] : null
   const produtoStory = storyAtual?.produto_id ? porId.get(storyAtual.produto_id) : undefined
+  // preço do tipo: se todas custam igual mostra o valor, senão "a partir de" o menor
+  const precoDoTipo = (lista: BlackProduto[]) => {
+    const vs = lista.map(precoFinal).filter(v => v > 0)
+    if (!vs.length) return 'Consulte'
+    const min = Math.min(...vs)
+    return vs.every(v => v === min) ? reais(min) : 'a partir de ' + reais(min)
+  }
   const tipoDe = (videoId: string) => cfg.filtros.find(f => f.slug === cfg.video_tipos?.[videoId])
   // vídeo ligado a um tipo de capa (ex.: Case Laço): mostra "Ver todas" e abre todas desse tipo, de todos os modelos
   const tipoStory = storyAtual ? cfg.filtros.find(f => f.slug === cfg.video_tipos?.[storyAtual.id]) : undefined
@@ -605,7 +612,7 @@ export default function Black() {
                     return (
                       <span className="mini">
                         <span className="ico">{lista[0]?.fotos[0] && <img src={lista[0].fotos[0]} alt="" />}</span>
-                        <span><span>Case {t.nome}</span><b>Ver todas ›</b></span>
+                        <span><span>Case {t.nome}</span><em className="mini-preco">{precoDoTipo(lista)}</em><b>Ver todas ›</b></span>
                       </span>
                     )
                   })() : p && (
@@ -895,7 +902,7 @@ export default function Black() {
           </div>
           {tipoStory && (
             <div className="comprar">
-              <div className="t"><b>Case {tipoStory.nome}</b><small>{qtdTipoStory} {qtdTipoStory === 1 ? 'opção' : 'opções'} · todos os modelos</small></div>
+              <div className="t"><b>Case {tipoStory.nome}</b><small>{precoDoTipo(produtos.filter(p => temFiltro(p, tipoStory.slug, filtrosOp)))} · {qtdTipoStory} {qtdTipoStory === 1 ? 'opção' : 'opções'}</small></div>
               <button className="btn-laranja" style={{ fontSize: 15, padding: '11px 16px' }} onClick={() => { const t = tipoStory.slug; setStory(null); window.setTimeout(() => abrirMenuFiltro(t), 60) }}>Ver todas</button>
             </div>
           )}
