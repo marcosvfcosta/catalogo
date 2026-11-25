@@ -422,3 +422,13 @@
 .bk .gaveta .modelos { justify-content: center; }
 .bk .gaveta .img .bolinha { left: 21%; top: 7%; width: 56px; height: 56px; flex-direction: column; line-height: 1; font-size: 15px; }
 .bk .gaveta .img .bolinha small { font-size: 8px; font-weight: 800; letter-spacing: .5px; margin-bottom: 2px; }
+
+/* tela da capinha mais junta e foto ~5% maior */
+.bk .gaveta .img { margin: 6px 10px 0 !important; }
+.bk .gaveta .img img { padding: 0 !important; }
+.bk .gaveta .corpo { padding: 0 18px 22px !important; }
+.bk .gaveta h3 { margin-top: 0; }
+.bk .gaveta .modelos { margin-top: 12px; }
+.bk .gaveta .acoes { margin-top: 12px !important; }
+.bk .gaveta .btn-exp { margin-top: 12px !important; }
+.bk .gaveta .corpo { text-align: center; }

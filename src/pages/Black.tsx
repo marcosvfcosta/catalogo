@@ -720,7 +720,6 @@ export default function Black() {
                 <><label>Serve em</label><p style={{ fontSize: 14 }}>Todos os celulares</p></>
               ) : (
                 <>
-                  <label>Escolha o seu modelo</label>
                   <div className="modelos">
                     {aberto.modelos.filter(m => !modelos.length || modelos.some(x => x.nome === m)).map(m => <button key={m} className={m === modeloEsc ? 'on' : ''} onClick={() => setModeloEsc(m)}>{m}</button>)}
                   </div>
