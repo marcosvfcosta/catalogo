@@ -107,7 +107,7 @@ export default function Black() {
   const limparTudo = () => { setFiltroModelo(''); setFiltroTipo('tudo'); setFiltrosSel([]) }
   const maisVendidos = base.filter(p => p.destaque)
   const daBlackTodas = produtos.filter(ehBlack)
-  const daBlack = base.filter(p => ehBlack(p) && (p.filtros || []).includes('destaque-black')) // só os destaques escolhidos no Admin
+  const daBlack = produtos.filter(p => ehBlack(p) && (p.filtros || []).includes('destaque-black')) // só os destaques escolhidos no Admin
   const listaVideos = videos // o vídeo sempre aparece; o produto ligado é opcional (se ele estiver fora do site, o vídeo aparece sem o produto)
   const totalItens = sacola.reduce((s, i) => s + i.q, 0)
   const itensSacola = sacola.map(i => ({ ...i, p: porId.get(i.id) })).filter((i): i is ItemSacola & { p: BlackProduto } => !!i.p)
@@ -692,7 +692,7 @@ export default function Black() {
                 {cfg.secoes.promo.texto && <p className="tarja-frase">{cfg.secoes.promo.texto}</p>}
               </button>
               <button className="ver-black" onClick={() => abrirMenuFiltro('black')}>Ver todas da <span>Black</span> ›</button>
-              {daBlack.length > 0 && <div className="grade">{daBlack.map(p => card(p))}</div>}
+              {daBlack.length > 0 && <div className="grade">{porFotos(daBlack).map(({ p, i }) => card(p, i))}</div>}
             </section>
           )}
 
