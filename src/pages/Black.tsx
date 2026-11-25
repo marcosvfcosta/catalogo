@@ -108,7 +108,7 @@ export default function Black() {
   const maisVendidos = base.filter(p => p.destaque)
   const daBlackTodas = produtos.filter(ehBlack)
   const daBlack = base.filter(p => ehBlack(p) && (p.filtros || []).includes('destaque-black')) // só os destaques escolhidos no Admin
-  const listaVideos = videos.filter(v => !v.produto_id || (porId.has(v.produto_id) && base.includes(porId.get(v.produto_id) as BlackProduto)))
+  const listaVideos = videos // o vídeo sempre aparece; o produto ligado é opcional (se ele estiver fora do site, o vídeo aparece sem o produto)
   const totalItens = sacola.reduce((s, i) => s + i.q, 0)
   const itensSacola = sacola.map(i => ({ ...i, p: porId.get(i.id) })).filter((i): i is ItemSacola & { p: BlackProduto } => !!i.p)
   const totalSacola = itensSacola.reduce((s, i) => s + precoFinal(i.p) * i.q, 0)
