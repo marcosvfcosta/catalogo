@@ -432,3 +432,8 @@
 .bk .gaveta .acoes { margin-top: 12px !important; }
 .bk .gaveta .btn-exp { margin-top: 12px !important; }
 .bk .gaveta .corpo { text-align: center; }
+
+/* Ver todas em cima das capinhas; tarja Mais vendidas */
+.bk .vitrine-black .ver-black { margin: 16px auto 14px; }
+.bk .tarja-black .tarja-mais { font-size: clamp(30px, 9vw, 52px); }
+.bk .vitrine .tarja-black + .grade { margin-top: 14px; }

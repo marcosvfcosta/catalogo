@@ -522,9 +522,14 @@ export default function Black() {
             </span>
             {s.texto && <p className="tarja-frase">{s.texto}</p>}
           </div>
+        ) : chave === 'mais' ? (
+          <div className="tarja-black">
+            <span className="esquenta tarja-mais">MAIS VENDIDAS</span>
+            <p className="tarja-frase">As mais desejadas</p>
+          </div>
         ) : <div className="vitrine-topo"><h2>{antes}{depois && <span className="fogo">{depois}</span>}</h2></div>}
-        {s.texto && chave !== 'promo' && <p className="vitrine-desc">{s.texto}</p>}
-        {lista.length ? <div className="trilho sem-barra">{lista.map(p => card(p))}</div>
+        {s.texto && chave === 'lancamentos' && <p className="vitrine-desc">{s.texto}</p>}
+        {lista.length ? (chave === 'mais' ? <div className="grade">{lista.map(p => card(p))}</div> : <div className="trilho sem-barra">{lista.map(p => card(p))}</div>)
           : <p className="vazio">Nada nessa vitrine pro filtro escolhido. Toque em "Limpar filtro".</p>}
       </section>
     )
@@ -651,8 +656,8 @@ export default function Black() {
                 </span>
                 {cfg.secoes.promo.texto && <p className="tarja-frase">{cfg.secoes.promo.texto}</p>}
               </button>
-              {daBlack.length > 0 && <div className="grade">{daBlack.map(p => card(p))}</div>}
               <button className="ver-black" onClick={() => abrirMenuFiltro('black')}>Ver todas da <span>Black</span> ›</button>
+              {daBlack.length > 0 && <div className="grade">{daBlack.map(p => card(p))}</div>}
             </section>
           )}
 
