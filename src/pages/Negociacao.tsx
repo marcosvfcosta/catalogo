@@ -1219,8 +1219,18 @@ export default function Negociacao() {
     if (!form.modelo.trim() || !valorAparelho) { alert('Escolha o celular primeiro'); return }
     const texto = textoProposta()
     if (!fotoProposta) { alert('A foto desse celular ainda não carregou. Espera um segundinho e tenta de novo.'); return }
-        try { await navigator.clipboard?.writeText(texto) } catch { /* sem copiar */ }
-    try { await navigator.share({ files: [fotoProposta], text: texto }) } catch { /* fechou */ }
+        // iPad/iPhone: o compartilhar tem que abrir NA HORA do toque (nada de esperar antes, senão o Safari bloqueia)
+    navigator.clipboard?.writeText(texto).catch(() => { /* sem copiar */ })
+    try {
+      await navigator.share({ files: [fotoProposta], text: texto })
+    } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') return // fechou sem enviar
+      // alguns aparelhos não aceitam foto + texto juntos: manda só a foto (o texto já está copiado pra colar)
+      try { await navigator.share({ files: [fotoProposta] }) } catch (e2) {
+        if (e2 instanceof Error && e2.name === 'AbortError') return
+        alert('Não abriu o compartilhar. Toque de novo no botão.')
+      }
+    }
   }
 
   function usarFornecedorNeg(f: string) {
