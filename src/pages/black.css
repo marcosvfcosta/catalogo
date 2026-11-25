@@ -404,3 +404,11 @@
 /* fotos dos cards como estavam (recorte, sem quadrado, com o +); nome e preço continuam iguais */
 .bk .card .foto { aspect-ratio: 3 / 4 !important; background: transparent !important; border-radius: 0; }
 .bk .card .foto img { padding: 4% 6% !important; mix-blend-mode: normal !important; border-radius: 0 !important; filter: drop-shadow(0 4px 6px rgba(0,0,0,.16)); }
+
+/* fotos: sem sombra e com a parte de baixo branca (some o cinza que sobra embaixo) */
+.bk .card .foto img { filter: none !important; }
+.bk .card .foto::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 9%; background: linear-gradient(to bottom, rgba(255,255,255,0), #fff 60%); pointer-events: none; z-index: 1; }
+.bk .card .foto .add { z-index: 2; }
+/* desconto numa bolinha */
+.bk .card .bolinha { position: absolute; left: 4px; top: 4px; z-index: 2; width: 42px; height: 42px; border-radius: 50%; background: #111; color: #fff; font-size: 12px; font-weight: 900; letter-spacing: -.3px; display: flex; align-items: center; justify-content: center; }
+.bk .card .bolinha.pq { font-size: 8.5px; letter-spacing: .2px; }
