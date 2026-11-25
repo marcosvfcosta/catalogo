@@ -1,7 +1,7 @@
 // Painel do catálogo da Black (capinhas e cordinhas) — abre em Admin → Capas.
 import { pintarFundo } from '../lib/corDoFundo'
 // Visual igual ao painel da Elegância. Separado da Negociação.
-import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode, type TouchEvent as ToqueEv } from 'react'
 import { supabase } from '../supabase'
 import {
   BLACK_PADRAO, ehBlack, emPromocao, lerConfig, precoFinal, reais,
@@ -1302,8 +1302,32 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     { v: 'modelos', rotulo: 'Modelos', Icone: IcMais, ativa: vista === 'modelos' },
   ]
 
+  // arrastar o dedo da esquerda pra direita volta uma tela
+  const toqueVolta = useRef<{ x: number; y: number; ok: boolean } | null>(null)
+  function voltarTela() {
+    if (edVideo) return setEdVideo(null)
+    if (lote) return setLote(null)
+    if (vista === 'capas' && modeloAdm) return sairDoModeloAdm()
+    if (vista === 'editar') return ir('produtos')
+    if (vista !== 'capas') return ir('capas')
+  }
+  function inicioVolta(e: ToqueEv) {
+    const t = e.touches[0]
+    const alvo = e.target as HTMLElement
+    const rolaLado = !!alvo.closest('.pb-sem-barra, .pb-cap-checks, .pb-videos, .pb-fotos, input, select, textarea, video')
+    toqueVolta.current = { x: t.clientX, y: t.clientY, ok: !rolaLado && t.clientX > 20 }
+  }
+  function fimVolta(e: ToqueEv) {
+    const i = toqueVolta.current
+    toqueVolta.current = null
+    if (!i?.ok) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - i.x, dy = t.clientY - i.y
+    if (dx > 80 && Math.abs(dy) < dx * 0.5) voltarTela()
+  }
+
   return (
-    <div className="pb">
+    <div className="pb" onTouchStart={inicioVolta} onTouchEnd={fimVolta}>
       <header className="pb-topo">
         <div className="pb-marca">
           <div className="pb-selo"><b>Marcos</b><i>Magazine</i></div>
