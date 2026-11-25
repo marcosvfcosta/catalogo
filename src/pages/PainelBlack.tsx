@@ -840,15 +840,15 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
             <div className="pb-videos pb-sem-barra">
               {videos.map(v => (
                 <div className="pb-v" key={v.id}>
-                  <video src={v.video_url + '#t=0.5'} muted playsInline preload="metadata" />
+                  <video src={v.video_url + '#t=0.5'} playsInline preload="metadata" onClick={e => { const el = e.currentTarget; if (el.paused) { el.muted = false; el.play().catch(() => { el.muted = true; el.play().catch(() => {}) }) } else el.pause() }} />
                   <button className="pb-x" aria-label="Apagar vídeo" onClick={() => apagarVideo(v)}>×</button>
                   <select value={config.video_tipos?.[v.id] ? 'tipo:' + config.video_tipos[v.id] : v.produto_id || ''} onChange={e => ligarVideo(v, e.target.value)} aria-label="Produto do vídeo">
                     <option value="">Sem produto (opcional)</option>
                     <optgroup label="Tipo de capa (puxa todos os modelos)">
                       {config.filtros.map(f => <option key={f.slug} value={'tipo:' + f.slug}>Tipo: Case {f.nome} ({produtos.filter(p => temFiltro(p, f.slug, filtrosOp)).length})</option>)}
                     </optgroup>
-                    <optgroup label="Um produto">
-                      {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                    <optgroup label="Um produto só">
+                      {produtos.map(p => <option key={p.id} value={p.id}>Produto: {p.nome}{p.modelos.length ? ' (' + p.modelos.join(', ') + ')' : ''}</option>)}
                     </optgroup>
                   </select>
                 </div>
