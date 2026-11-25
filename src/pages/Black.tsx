@@ -96,6 +96,7 @@ export default function Black() {
     timerToast.current = window.setTimeout(() => setToastTxt(''), 1800)
   }
 
+  const porFotosTodas = (l: BlackProduto[]) => l.flatMap(p => (p.fotos.length ? p.fotos : ['']).map((_, i) => ({ p, i })))
   const porId = useMemo(() => new Map(produtos.map(p => [p.id, p])), [produtos])
   // capinha sem modelo marcado aparece em todos os iPhones
   const serveNo = (p: BlackProduto, m: string) => p.tipo === 'cordinha' || !p.modelos?.length || p.modelos.includes(m)
@@ -107,7 +108,17 @@ export default function Black() {
   const limparTudo = () => { setFiltroModelo(''); setFiltroTipo('tudo'); setFiltrosSel([]) }
   const maisVendidos = base.filter(p => p.destaque)
   const daBlackTodas = produtos.filter(ehBlack)
-  const daBlack = produtos.filter(p => ehBlack(p) && (p.filtros || []).includes('destaque-black')) // só os destaques escolhidos no Admin
+  const daBlack = produtos.filter(p => ehBlack(p) && (p.filtros || []).includes('destaque-black'))
+  // vitrine Black da página inicial: sempre 9 (os destaques primeiro, completa com outras da Black)
+  const blackHome = (() => {
+    const lista = porFotosTodas(daBlack)
+    const usados = new Set(lista.map(x => x.p.id + '|' + x.i))
+    for (const x of porFotosTodas(produtos.filter(p => ehBlack(p) && !daBlack.includes(p)))) {
+      if (lista.length >= 9) break
+      if (!usados.has(x.p.id + '|' + x.i)) lista.push(x)
+    }
+    return lista.slice(0, 9)
+  })() // só os destaques escolhidos no Admin
   const listaVideos = videos // o vídeo sempre aparece; o produto ligado é opcional (se ele estiver fora do site, o vídeo aparece sem o produto)
   const totalItens = sacola.reduce((s, i) => s + i.q, 0)
   const itensSacola = sacola.map(i => ({ ...i, p: porId.get(i.id) })).filter((i): i is ItemSacola & { p: BlackProduto } => !!i.p)
@@ -361,7 +372,7 @@ export default function Black() {
     const sel = cfg.video_sel?.[videoId] || []
     const todos = porFotos(produtos.filter(x => temFiltro(x, t.slug, filtrosOp)))
     if (!sel.length) return todos
-    return sel.map(k => { const [id, i] = k.split('|'); const p = porId.get(id); return p ? { p, i: Number(i) || 0 } : null })
+    return sel.map(k => { const [id, i] = k.split('|'); const p = porId.get(id); return p ? { p, i: p.fotos[Number(i)] ? Number(i) : 0 } : null })
       .filter((x): x is { p: BlackProduto; i: number } => !!x)
   }
   const [videoAberto, setVideoAberto] = useState('')
@@ -622,7 +633,7 @@ export default function Black() {
                   {tipoDe(v.id) ? (() => {
                     const t = tipoDe(v.id)!
                     const its = itensDoVideo(v.id)
-                    const f0 = its[0] ? its[0].p.fotos[its[0].i] || its[0].p.fotos[0] : ''
+                    const f0 = its.map(x => x.p.fotos[x.i] || x.p.fotos[0]).find(Boolean) || ''
                     return (
                       <span className="mini">
                         <span className="ico">{f0 && <img src={f0} alt="" />}</span>
@@ -692,7 +703,7 @@ export default function Black() {
                 {cfg.secoes.promo.texto && <p className="tarja-frase">{cfg.secoes.promo.texto}</p>}
               </button>
               <button className="ver-black" onClick={() => abrirMenuFiltro('black')}>Ver todas da <span>Black</span> ›</button>
-              {daBlack.length > 0 && <div className="grade">{porFotos(daBlack).slice(0, 9).map(({ p, i }) => card(p, i))}</div>}
+              {blackHome.length > 0 && <div className="grade">{blackHome.map(({ p, i }) => card(p, i))}</div>}
             </section>
           )}
 
