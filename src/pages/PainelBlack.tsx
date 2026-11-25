@@ -1064,6 +1064,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
   const [modeloAdm, setModeloAdm] = useState('')
   const [edicoes, setEdicoes] = useState<Record<string, Ed>>({})
   const [valorTodas, setValorTodas] = useState('')
+  const [tipoCapa, setTipoCapa] = useState('')
   const capasDo = (nome: string) => produtos.filter(p => p.tipo === 'capa' && (p.modelos.includes(nome) || !p.modelos.length))
   const itensDo = (nome: string) => capasDo(nome).flatMap(p => (p.fotos.length ? p.fotos : ['']).map((foto, i) => ({ p, i, foto, chave: p.id + '|' + i })))
   const edDe = (p: BlackProduto, chave: string): Ed => edicoes[chave] || {
@@ -1082,7 +1083,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
   const qtdSujos = Object.keys(edicoes).length
   function sairDoModeloAdm() {
     if (qtdSujos && !confirm('Tem alterações sem salvar. Sair mesmo assim?')) return
-    setEdicoes({}); setValorTodas(''); setModeloAdm(''); window.scrollTo(0, 0)
+    setEdicoes({}); setValorTodas(''); setTipoCapa(''); setModeloAdm(''); window.scrollTo(0, 0)
   }
   function dadosDe(ed: Ed, p: BlackProduto) {
     const preco = paraNumero(ed.preco)
@@ -1236,7 +1237,8 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
         </>
       )
     }
-    const itens = itensDo(modeloAdm)
+    const todosItens = itensDo(modeloAdm)
+    const itens = tipoCapa ? todosItens.filter(it => temFiltro(it.p, tipoCapa, filtrosOp)) : todosItens
     return (
       <>
         <div className="pb-cap-topo">
@@ -1248,6 +1250,14 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
           <IcCamera />Subir fotos pra esse modelo
           <input type="file" accept="image/*" multiple hidden onChange={e => { subirFotosDoModelo(e.target.files); e.target.value = '' }} />
         </label>
+        {todosItens.length > 0 && config.filtros.length > 0 && (
+          <div className="pb-chips pb-sem-barra pb-chips-tipo" style={{ marginBottom: 12 }}>
+            <button className={`pb-chip ${!tipoCapa ? 'on' : ''}`} onClick={() => setTipoCapa('')}>Todos os tipos</button>
+            {config.filtros.map(f => (
+              <button key={f.slug} className={`pb-chip ${tipoCapa === f.slug ? 'on' : ''}`} onClick={() => setTipoCapa(tipoCapa === f.slug ? '' : f.slug)}>{f.nome}<span>{todosItens.filter(it => temFiltro(it.p, f.slug, filtrosOp)).length}</span></button>
+            ))}
+          </div>
+        )}
         {itens.length > 0 && (
           <div className="pb-cap-todas">
             <div className="pb-cap-campo"><small>PRA TODAS</small>
@@ -1263,7 +1273,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
             }}>Pôr em todas</button>
           </div>
         )}
-        {!itens.length ? <p className="pb-sub pb-vazio">Nenhuma capinha nesse modelo ainda.</p> : (
+        {!itens.length ? <p className="pb-sub pb-vazio">{tipoCapa ? 'Nenhuma capinha desse tipo nesse modelo.' : 'Nenhuma capinha nesse modelo ainda.'}</p> : (
           <div className="pb-cap-grade">
             {itens.map(({ p, i, foto, chave }) => {
               const ed = edDe(p, chave)
