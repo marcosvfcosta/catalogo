@@ -54,7 +54,8 @@ export type BlackConfig = {
   endereco: string
   horario: string
   parcelas: string // frase embaixo do preço (vazio = não mostra)
-  video_tipos?: Record<string, string> // vídeo -> tipo de capa (slug do filtro): puxa todas desse tipo
+  video_tipos?: Record<string, string> // vídeo -> tipo de capa (slug do filtro)
+  video_sel?: Record<string, string[]> // vídeo -> capinhas marcadas ('idProduto|indiceFoto'); vazio = todas do tipo
   filtros: FiltroCfg[] // filtros das capinhas (menu ☰, tela do modelo, Admin → Capas)
 }
 export type FiltroCfg = { slug: string; nome: string }

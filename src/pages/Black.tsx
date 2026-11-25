@@ -354,8 +354,21 @@ export default function Black() {
   const porFotos = (l: BlackProduto[]) => l.flatMap(p => (p.fotos.length ? p.fotos : ['']).map((_, i) => ({ p, i })))
   const [blackModelo, setBlackModelo] = useState('')
   const modelosComBlack = modelos.filter(m => produtos.some(p => ehBlack(p) && p.tipo === 'capa' && p.modelos.includes(m.nome)))
+  // capinhas de um vídeo ligado a tipo: as marcadas no Admin (ou todas do tipo)
+  const itensDoVideo = (videoId: string) => {
+    const t = cfg.filtros.find(f => f.slug === cfg.video_tipos?.[videoId])
+    if (!t) return []
+    const sel = cfg.video_sel?.[videoId] || []
+    const todos = porFotos(produtos.filter(x => temFiltro(x, t.slug, filtrosOp)))
+    if (!sel.length) return todos
+    return sel.map(k => { const [id, i] = k.split('|'); const p = porId.get(id); return p ? { p, i: Number(i) || 0 } : null })
+      .filter((x): x is { p: BlackProduto; i: number } => !!x)
+  }
+  const [videoAberto, setVideoAberto] = useState('')
+  function verDoVideo(videoId: string) { setVideoAberto(videoId); abrirMenuFiltro('__video') }
   const cardsModelo = filtroMenu
-    ? porFotos(produtos.filter(p => (filtroMenu === 'black' ? ehBlack(p) && (!blackModelo || serveNo(p, blackModelo))
+    ? filtroMenu === '__video' ? itensDoVideo(videoAberto)
+    : porFotos(produtos.filter(p => (filtroMenu === 'black' ? ehBlack(p) && (!blackModelo || serveNo(p, blackModelo))
       : filtroMenu === '__cordinhas' ? p.tipo === 'cordinha'
       : temFiltro(p, filtroMenu, filtrosOp))))
     : porFotos(base.filter(p => !estiloSel || temFiltro(p, estiloSel, filtrosOp)))
@@ -549,7 +562,7 @@ export default function Black() {
   const tipoDe = (videoId: string) => cfg.filtros.find(f => f.slug === cfg.video_tipos?.[videoId])
   // vídeo ligado a um tipo de capa (ex.: Case Laço): mostra "Ver todas" e abre todas desse tipo, de todos os modelos
   const tipoStory = storyAtual ? cfg.filtros.find(f => f.slug === cfg.video_tipos?.[storyAtual.id]) : undefined
-  const qtdTipoStory = tipoStory ? produtos.filter(p => temFiltro(p, tipoStory.slug, filtrosOp)).reduce((t, p) => t + Math.max(1, p.fotos.length), 0) : 0
+  const qtdTipoStory = tipoStory && storyAtual ? itensDoVideo(storyAtual.id).length : 0
 
   return (
     <div className="bk" ref={raiz} onTouchStart={inicioToque} onTouchEnd={fimToque}>
@@ -608,11 +621,12 @@ export default function Black() {
                   <span className="play"><svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M7 4l14 8-14 8z" /></svg></span>
                   {tipoDe(v.id) ? (() => {
                     const t = tipoDe(v.id)!
-                    const lista = produtos.filter(x => temFiltro(x, t.slug, filtrosOp))
+                    const its = itensDoVideo(v.id)
+                    const f0 = its[0] ? its[0].p.fotos[its[0].i] || its[0].p.fotos[0] : ''
                     return (
                       <span className="mini">
-                        <span className="ico">{lista[0]?.fotos[0] && <img src={lista[0].fotos[0]} alt="" />}</span>
-                        <span><span>Case {t.nome}</span><em className="mini-preco">{precoDoTipo(lista)}</em><b>Ver todas ›</b></span>
+                        <span className="ico">{f0 && <img src={f0} alt="" />}</span>
+                        <span><span>Case {t.nome}</span><em className="mini-preco">{precoDoTipo(its.map(x => x.p))}</em><b>Ver todas ›</b></span>
                       </span>
                     )
                   })() : p && (
@@ -700,6 +714,7 @@ export default function Black() {
         <div className="tm-titulo" style={filtroMenu === 'black' ? { display: 'none' } : undefined}>
           {filtroMenu === 'black' ? null
             : filtroMenu === '__cordinhas' ? <b>Todas as <span>cordinhas</span></b>
+            : filtroMenu === '__video' ? <b>Case <span>{tipoDe(videoAberto)?.nome}</span></b>
             : filtroMenu ? <b>Capinhas de <span>{cfg.filtros.find(f => f.slug === filtroMenu)?.nome.toLowerCase()}</span></b>
             : <b>{filtroTipo === 'cordinha' ? 'Cordinhas' : 'Capinhas'} pro <span>{filtroModelo}</span></b>}
         </div>
@@ -902,8 +917,8 @@ export default function Black() {
           </div>
           {tipoStory && (
             <div className="comprar">
-              <div className="t"><b>Case {tipoStory.nome}</b><small>{precoDoTipo(produtos.filter(p => temFiltro(p, tipoStory.slug, filtrosOp)))} · {qtdTipoStory} {qtdTipoStory === 1 ? 'opção' : 'opções'}</small></div>
-              <button className="btn-laranja" style={{ fontSize: 15, padding: '11px 16px' }} onClick={() => { const t = tipoStory.slug; setStory(null); window.setTimeout(() => abrirMenuFiltro(t), 60) }}>Ver todas</button>
+              <div className="t"><b>Case {tipoStory.nome}</b><small>{precoDoTipo(itensDoVideo(storyAtual!.id).map(x => x.p))} · {qtdTipoStory} {qtdTipoStory === 1 ? 'opção' : 'opções'}</small></div>
+              <button className="btn-laranja" style={{ fontSize: 15, padding: '11px 16px' }} onClick={() => { const id = storyAtual!.id; setStory(null); window.setTimeout(() => verDoVideo(id), 60) }}>Ver todas</button>
             </div>
           )}
           {!tipoStory && produtoStory && (

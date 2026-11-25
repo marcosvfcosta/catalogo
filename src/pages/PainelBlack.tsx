@@ -301,17 +301,82 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     setOcupado('')
     carregar()
   }
-  async function ligarVideo(v: BlackVideo, valor: string) {
-    const tipo = valor.startsWith('tipo:') ? valor.slice(5) : ''
-    const produtoId = tipo ? '' : valor
-    const vt = { ...(config.video_tipos || {}) }
-    if (tipo) vt[v.id] = tipo; else delete vt[v.id]
-    const novo = { ...config, video_tipos: vt }
+
+  // ── editar vídeo: abre o vídeo, escolhe o tipo e marca as capinhas que aparecem nele
+  const [edVideo, setEdVideo] = useState<BlackVideo | null>(null)
+  const [edTipo, setEdTipo] = useState('')
+  const [edSel, setEdSel] = useState<string[]>([])
+  function abrirEdVideo(v: BlackVideo) {
+    setEdVideo(v)
+    setEdTipo(config.video_tipos?.[v.id] || '')
+    setEdSel(config.video_sel?.[v.id] || [])
+  }
+  const itensTipo = (slug: string) => produtos.filter(p => temFiltro(p, slug, filtrosOp))
+    .flatMap(p => (p.fotos.length ? p.fotos : ['']).map((f, i) => ({ p, f, chave: p.id + '|' + i })))
+  function resumoVideo(v: BlackVideo) {
+    const t = config.filtros.find(f => f.slug === config.video_tipos?.[v.id])
+    if (t) { const n = (config.video_sel?.[v.id] || []).length || itensTipo(t.slug).length; return `${t.nome} · ${n} ${n === 1 ? 'capinha' : 'capinhas'}` }
+    const p = v.produto_id ? produtos.find(x => x.id === v.produto_id) : null
+    return p ? p.nome : 'Toque pra ligar'
+  }
+  async function salvarEdVideo() {
+    if (!edVideo) return
+    const vt = { ...(config.video_tipos || {}) }, vs = { ...(config.video_sel || {}) }
+    if (edTipo) { vt[edVideo.id] = edTipo; vs[edVideo.id] = edSel } else { delete vt[edVideo.id]; delete vs[edVideo.id] }
+    const novo = { ...config, video_tipos: vt, video_sel: vs }
+    setOcupado('Salvando...')
+    const { error } = await supabase.from('black_config').upsert({ id: 1, dados: novo })
+    if (!error && edTipo) await supabase.from('black_videos').update({ produto_id: null }).eq('id', edVideo.id)
+    setOcupado('')
+    if (error) return avisar('Não salvou: ' + error.message)
     setConfig(novo)
-    await supabase.from('black_config').upsert({ id: 1, dados: novo })
-    setVideos(l => l.map(x => (x.id === v.id ? { ...x, produto_id: produtoId || null } : x)))
-    await supabase.from('black_videos').update({ produto_id: produtoId || null }).eq('id', v.id)
-    if (tipo) avisar('Vídeo ligado a todas as ' + (config.filtros.find(f => f.slug === tipo)?.nome || '') + ' ✓')
+    if (edTipo) setVideos(l => l.map(x => (x.id === edVideo.id ? { ...x, produto_id: null } : x)))
+    setEdVideo(null)
+    avisar('Vídeo salvo ✓')
+  }
+  function telaEdVideo() {
+    if (!edVideo) return null
+    const its = edTipo ? itensTipo(edTipo) : []
+    const todas = its.length > 0 && its.every(x => edSel.includes(x.chave))
+    return (
+      <div className="pb-edv">
+        <div className="pb-edv-video">
+          <video src={edVideo.video_url} autoPlay controls playsInline />
+          <button className="pb-edv-x" aria-label="Fechar" onClick={() => setEdVideo(null)}>×</button>
+        </div>
+        <div className="pb-edv-painel">
+          <h3 className="pb-serif">Capinhas desse vídeo</h3>
+          <p className="pb-dica">Escolha o tipo e marque as que aparecem no vídeo</p>
+          <div className="pb-edv-tipos">
+            {config.filtros.map(f => (
+              <button key={f.slug} className={edTipo === f.slug ? 'on' : ''} onClick={() => { if (edTipo !== f.slug) { setEdTipo(f.slug); setEdSel([]) } }}>{f.nome}</button>
+            ))}
+            {edTipo && <button className="pb-edv-tirar" onClick={() => { setEdTipo(''); setEdSel([]) }}>Tirar ligação</button>}
+          </div>
+          {edTipo && (
+            <>
+              <div className="pb-edv-topo">
+                <b>{config.filtros.find(f => f.slug === edTipo)?.nome} · {edSel.filter(k => its.some(x => x.chave === k)).length} de {its.length} marcadas</b>
+                <button onClick={() => setEdSel(todas ? [] : its.map(x => x.chave))}>{todas ? 'Desmarcar' : 'Marcar todas'}</button>
+              </div>
+              {!its.length ? <p className="pb-dica">Nenhuma capinha desse tipo ainda. Marque o tipo nas capinhas pela Lista.</p> : (
+                <div className="pb-edv-grade">
+                  {its.map(x => (
+                    <button key={x.chave} className={edSel.includes(x.chave) ? 'on' : ''} onClick={() => setEdSel(l => (l.includes(x.chave) ? l.filter(k => k !== x.chave) : [...l, x.chave]))}>
+                      <span className="ck">✓</span>
+                      {x.f ? <img src={x.f} alt="" loading="lazy" /> : <IcCamera />}
+                      <small>{x.p.modelos.join(', ') || x.p.nome}</small>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <p className="pb-dica" style={{ marginTop: 10 }}>Sem nenhuma marcada, o vídeo mostra todas desse tipo.</p>
+            </>
+          )}
+        </div>
+        <button className="pb-edv-salvar" onClick={salvarEdVideo} disabled={!!ocupado}>Salvar</button>
+      </div>
+    )
   }
   async function apagarVideo(v: BlackVideo) {
     if (!confirm('Apagar este vídeo?')) return
@@ -840,17 +905,9 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
             <div className="pb-videos pb-sem-barra">
               {videos.map(v => (
                 <div className="pb-v" key={v.id}>
-                  <video src={v.video_url + '#t=0.5'} playsInline preload="metadata" onClick={e => { const el = e.currentTarget; if (el.paused) { el.muted = false; el.play().catch(() => { el.muted = true; el.play().catch(() => {}) }) } else el.pause() }} />
+                  <video src={v.video_url + '#t=0.5'} muted playsInline preload="metadata" onClick={() => abrirEdVideo(v)} />
+                  <button className="pb-v-tag" onClick={() => abrirEdVideo(v)}>{resumoVideo(v)}</button>
                   <button className="pb-x" aria-label="Apagar vídeo" onClick={() => apagarVideo(v)}>×</button>
-                  <select value={config.video_tipos?.[v.id] ? 'tipo:' + config.video_tipos[v.id] : v.produto_id || ''} onChange={e => ligarVideo(v, e.target.value)} aria-label="Produto do vídeo">
-                    <option value="">Sem produto (opcional)</option>
-                    <optgroup label="Tipo de capa (puxa todos os modelos)">
-                      {config.filtros.map(f => <option key={f.slug} value={'tipo:' + f.slug}>Tipo: Case {f.nome} ({produtos.filter(p => temFiltro(p, f.slug, filtrosOp)).length})</option>)}
-                    </optgroup>
-                    <optgroup label="Um produto só">
-                      {produtos.map(p => <option key={p.id} value={p.id}>Produto: {p.nome}{p.modelos.length ? ' (' + p.modelos.join(', ') + ')' : ''}</option>)}
-                    </optgroup>
-                  </select>
                 </div>
               ))}
               <label className="pb-v pb-add">
@@ -858,7 +915,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
                 <input type="file" accept="video/*" multiple hidden onChange={e => { adicionarVideo(e.target.files); e.target.value = '' }} />
               </label>
             </div>
-            <p className="pb-dica" style={{ marginTop: 8 }}>Ligue cada vídeo a um produto: aparece o card com preço e o botão de comprar.</p>
+            <p className="pb-dica" style={{ marginTop: 8 }}>Toque no vídeo pra assistir e escolher as capinhas dele.</p>
           </>
         ))}
         {blocoSecao('mais', 'Mais vendidos')}
@@ -1274,6 +1331,7 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
       </main>
 
       {telaLote()}
+      {telaEdVideo()}
 
       <nav className="pb-menu">
         {abas.map(({ v, rotulo, Icone, ativa }) => (
