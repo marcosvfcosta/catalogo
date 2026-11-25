@@ -167,8 +167,9 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     if (valor !== null && (!isFinite(valor) || valor < 0)) { avisar('Valor inválido'); return }
     if ((p[campo] ?? null) === valor) return
     if (campo === 'preco' && !valor) { avisar('Coloque o preço'); return }
-    setProdutos(l => l.map(x => (x.id === p.id ? { ...x, [campo]: valor } : x)))
-    const { error } = await supabase.from('black_produtos').update({ [campo]: valor }).eq('id', p.id)
+    const publicar = p.rascunho && campo === 'preco' && valor ? { rascunho: false, no_site: true } : {}
+    setProdutos(l => l.map(x => (x.id === p.id ? { ...x, [campo]: valor, ...publicar } : x)))
+    const { error } = await supabase.from('black_produtos').update({ [campo]: valor, ...publicar }).eq('id', p.id)
     if (error) { avisar('Não salvou: ' + error.message); carregar(); return }
     avisar(campo === 'preco' ? 'Preço salvo' : valor === null ? 'Preço Black tirado' : 'Preço Black salvo')
   }
@@ -340,6 +341,13 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
     setOcupado('Salvando...')
     const { error } = await supabase.from('black_config').upsert({ id: 1, dados: novo })
     if (!error && edTipo) await supabase.from('black_videos').update({ produto_id: null }).eq('id', edVideo.id)
+    // capinha marcada que ainda era rascunho (só subiu a foto) não aparecia no site: publica
+    const marcadasIds = [...new Set(edSel.map(k => k.split('|')[0]))]
+    const rasc = produtos.filter(p => marcadasIds.includes(p.id) && p.rascunho).map(p => p.id)
+    if (!error && edTipo && rasc.length) {
+      await supabase.from('black_produtos').update({ rascunho: false, no_site: true }).in('id', rasc)
+      setProdutos(l => l.map(x => (rasc.includes(x.id) ? { ...x, rascunho: false, no_site: true } : x)))
+    }
     setOcupado('')
     if (error) return avisar('Não salvou: ' + error.message)
     setConfig(novo)
@@ -379,12 +387,12 @@ export default function PainelBlack({ onSair, enviarFoto, enviarArquivo }: Props
                       <span className="ck">✓</span>
                       {x.f ? <img src={x.f} alt="" loading="lazy" /> : <IcCamera />}
                       <small>{x.p.modelos.join(', ') || x.p.nome}</small>
-                      {(!x.p.no_site || x.p.rascunho) && <em className="pb-edv-esc">{x.p.rascunho ? 'Sem preço' : 'Escondida'}</em>}
+                      {(!x.p.no_site || x.p.rascunho) && <em className="pb-edv-esc">{x.p.rascunho ? 'Não publicada' : 'Escondida'}</em>}
                     </button>
                   ))}
                 </div>
               )}
-              {its.some(x => edSel.includes(x.chave) && (!x.p.no_site || x.p.rascunho)) && <p className="pb-edv-aviso">As marcadas com <b>Escondida</b> ou <b>Sem preço</b> não aparecem no site. Mostre no 👁️ (e ponha o valor) lá em Capas.</p>}
+              {its.some(x => edSel.includes(x.chave) && (!x.p.no_site || x.p.rascunho)) && <p className="pb-edv-aviso">As marcadas com <b>Escondida</b> não aparecem no site: mostre no 👁️ lá em Capas. As <b>Não publicadas</b> vão pro site quando você tocar em Salvar.</p>}
               <p className="pb-dica" style={{ marginTop: 10 }}>Sem nenhuma marcada, o vídeo mostra todas desse tipo.</p>
             </>
           )}
