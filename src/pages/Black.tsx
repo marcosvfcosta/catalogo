@@ -320,16 +320,11 @@ export default function Black() {
   function mudarQtd(i: number, d: number) {
     setSacola(s => s.map((x, k) => (k === i ? { ...x, q: x.q + d } : x)).filter(x => x.q > 0))
   }
-  async function finalizar() {
+  function finalizar() {
     if (!entrega) { setAvisoEntrega(true); return }
-    let usado = cupom
-    if (cupom) {
-      // gasta 1 uso do cupom agora; se acabou no meio do caminho, avisa e não manda
-      const { data } = await supabase.rpc('black_cupom', { p_codigo: cupom.codigo, p_usar: true })
-      const r = data as { ok: boolean; motivo?: string } | null
-      if (!r?.ok) { setCupom(null); setCupomMsg(motivoCupom(r?.motivo || 'expirado')); return }
-      usado = cupom
-    }
+    const usado = cupom
+    // gasta 1 uso do cupom sem esperar: o iPhone bloqueia abrir o WhatsApp se esperar a resposta antes
+    if (cupom) void supabase.rpc('black_cupom', { p_codigo: cupom.codigo, p_usar: true }).then(() => {}, () => {})
     const linhas = itensSacola.map(i => `• ${i.q}x ${i.p.nome}${i.modelo ? ' (' + i.modelo + ')' : ''} — ${precoFinal(i.p) > 0 ? reais(precoFinal(i.p) * i.q) : 'valor a consultar'}${i.foto ? '\n  ' + i.foto : ''}`).join('\n')
     const fim = usado
       ? `Subtotal: ${reais(totalSacola)}\nCupom ${usado.codigo} (-${usado.pct}%): -${reais(descontoCupom)}\nTotal: ${reais(totalComCupom)}`
