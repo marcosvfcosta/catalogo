@@ -1812,7 +1812,7 @@ export default function Negociacao() {
               <button type="button" onClick={() => {
                   if (!form.modelo.trim() || !valorAparelho) { alert('Escolha o celular e o valor primeiro'); return }
                   setExtrasProposta(l => [...l, { modelo: form.modelo, cor: form.cor, valor: valorAparelho, foto: urlFotoProposta }])
-                  setForm(f => ({ ...f, modelo: '', cor: '', valor_aparelho: '' }))
+                  setForm({ ...form, modelo: '', cor: '', valor_aparelho: '' })
                   setTimeout(() => aparelhoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
                 }}
                 style={{ width: '100%', margin: '2px 0 12px', height: 44, border: '2px dashed #25D366', background: 'transparent', color: '#25D366', borderRadius: 12, fontSize: 15, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
