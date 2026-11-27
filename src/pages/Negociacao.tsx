@@ -347,6 +347,7 @@ export default function Negociacao() {
   const [fotoProposta, setFotoProposta] = useState<File | null>(null)
   // Mesma foto em PNG: é o formato que o iPhone/iPad aceita pra copiar imagem
   const [fotoPropostaPng, setFotoPropostaPng] = useState<Blob | null>(null)
+  const [linkFotoProposta, setLinkFotoProposta] = useState<string | null>(null)
   // Parcelas que vão juntas na proposta do WhatsApp (escolhe várias de uma vez)
   const [simulacoes, setSimulacoes] = useState<string[]>(() => {
     try { const v = JSON.parse(localStorage.getItem('simulacoes') || 'null'); if (Array.isArray(v) && v.length) return v } catch { /* padrão */ }
@@ -1134,7 +1135,7 @@ export default function Negociacao() {
     return (form.cor && f[form.cor]?.[0]) || apNeg.cores.map(c => f[c]?.[0]).find(Boolean) || Object.values(f).flat()[0] || null
   })()
   useEffect(() => {
-    setFotoProposta(null); setFotoPropostaPng(null)
+    setFotoProposta(null); setFotoPropostaPng(null); setLinkFotoProposta(null)
     if (!urlFotoProposta) return
     let cancelado = false
     ;(async () => {
@@ -1150,6 +1151,14 @@ export default function Negociacao() {
         ctx.drawImage(img, (lado - w) / 2, (lado - h) / 2, w, h)
         const jpg = await new Promise<Blob | null>(ok => c.toBlob(ok, 'image/jpeg', 0.9))
         if (jpg && !cancelado) setFotoProposta(new File([jpg], 'celular.jpg', { type: 'image/jpeg' }))
+        // sobe a foto com fundo branco pra mandar o link junto da proposta (o WhatsApp mostra a foto na conversa)
+        if (jpg && !cancelado) {
+          let h = 0; for (const ch of urlFotoProposta) h = (h * 31 + ch.charCodeAt(0)) | 0
+          const caminho = `propostas/${(h >>> 0).toString(36)}.jpg`
+          const up = await supabase.storage.from('fotos').upload(caminho, jpg, { upsert: true, contentType: 'image/jpeg' })
+          if (up.error) console.error('Subir foto da proposta:', up.error)
+          if (!cancelado) setLinkFotoProposta(up.error ? urlFotoProposta : supabase.storage.from('fotos').getPublicUrl(caminho).data.publicUrl)
+        }
         const png = await new Promise<Blob | null>(ok => c.toBlob(ok, 'image/png'))
         if (png && !cancelado) setFotoPropostaPng(png)
       } catch (e) { console.error('Foto da proposta:', e) }
@@ -1190,7 +1199,8 @@ export default function Negociacao() {
     // Com o número do cliente: abre direto a conversa dele com o texto pronto e deixa a foto copiada pra colar
     if (digitosCliente) {
       if (digitosCliente.length < 10) { alert('Confira o WhatsApp do cliente (com DDD)'); return }
-      const link = linkWhatsApp(form.telefone, texto)
+      const fotoLink = linkFotoProposta || urlFotoProposta
+      const link = linkWhatsApp(form.telefone, fotoLink ? `${texto}\n\n📷 Foto: ${fotoLink}` : texto)
       if (fotoPropostaPng && typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
         const copiar = navigator.clipboard.write([new ClipboardItem({ 'image/png': fotoPropostaPng })]).catch(e => console.error('Copiar foto:', e))
         // Espera a cópia terminar (rapidinho) antes de sair pro WhatsApp
@@ -1789,7 +1799,7 @@ export default function Negociacao() {
                   📲 Enviar proposta no WhatsApp{fotoProposta ? ' (com foto)' : ''}
                 </button>
                 {digitosCliente.length >= 10
-                  ? <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0', textAlign: 'center' }}>Abre direto a conversa de {form.telefone} com o texto pronto.{fotoProposta ? ' A foto fica copiada: segure na caixa de mensagem e toque em Colar.' : ''}</p>
+                  ? <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0', textAlign: 'center' }}>Abre direto a conversa de {form.telefone} com o texto pronto.{fotoProposta ? ' A foto vai junto pelo link.' : ''}</p>
                   : fotoProposta && <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0', textAlign: 'center' }}>Escolha o WhatsApp e o cliente. Se o texto não for junto, é só colar: ele já fica copiado.</p>}
               </div>
             </div>
