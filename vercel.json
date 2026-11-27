@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/f/:arq",
+      "destination": "https://bahcoajavayvdfavdhpg.supabase.co/storage/v1/object/public/fotos/propostas/:arq"
+    },
+    {
       "source": "/links",
       "destination": "/links.html"
     },

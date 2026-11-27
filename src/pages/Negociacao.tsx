@@ -348,6 +348,9 @@ export default function Negociacao() {
   // Mesma foto em PNG: é o formato que o iPhone/iPad aceita pra copiar imagem
   const [fotoPropostaPng, setFotoPropostaPng] = useState<Blob | null>(null)
   const [linkFotoProposta, setLinkFotoProposta] = useState<string | null>(null)
+  // outros aparelhos que vão juntos na mesma proposta (cliente que compra 2 ou mais)
+  const [extrasProposta, setExtrasProposta] = useState<{ modelo: string; cor: string; valor: number; foto: string | null }[]>([])
+  const aparelhoRef = useRef<HTMLDivElement>(null)
   // Parcelas que vão juntas na proposta do WhatsApp (escolhe várias de uma vez)
   const [simulacoes, setSimulacoes] = useState<string[]>(() => {
     try { const v = JSON.parse(localStorage.getItem('simulacoes') || 'null'); if (Array.isArray(v) && v.length) return v } catch { /* padrão */ }
@@ -832,6 +835,9 @@ export default function Negociacao() {
   const valorAparelho = parseValor(form.valor_aparelho)
   const valorEntrada = parseValor(form.valor_entrada)
   const valorFinanciar = Math.max(0, valorAparelho - valorEntrada)
+  const valorExtras = extrasProposta.reduce((t, x) => t + x.valor, 0)
+  const totalProposta = valorAparelho + valorExtras
+  const financiarProposta = Math.max(0, totalProposta - valorEntrada)
   const valorComTaxa = parcelaSelecionada ? valorFinanciar / (1 - taxaAtual.taxa / 100) : valorFinanciar
   const valorParcela = !parcelaSelecionada ? 0 : parcelaSelecionada === 1 ? valorComTaxa : valorComTaxa / parcelaSelecionada
   const valorTotal = valorComTaxa + valorEntrada
@@ -890,6 +896,7 @@ export default function Negociacao() {
 
   function limpar() {
     setMsgCaixa('')
+    setExtrasProposta([])
     setForm({ nome: '', telefone: '', instagram: '', modelo: '', cor: '', valor_aparelho: '', valor_entrada: '', lucro: '', observacoes: '', vendedor: '' })
     setOpcaoPagamento(null)
     setErros({})
@@ -899,6 +906,7 @@ export default function Negociacao() {
   }
 
   function editarNegociacao(c: Negociacao) {
+    setExtrasProposta([])
     setForm({
       nome: c.nome, telefone: c.telefone, instagram: c.instagram || '',
       modelo: c.modelo || '', cor: c.cor || '',
@@ -1049,6 +1057,7 @@ export default function Negociacao() {
   // ---------- Entradas (aparelhos enviados pelo catálogo) ----------
 
   function usarEntrada(e: Entrada) {
+    setExtrasProposta([])
     setForm({
       nome: e.nome, telefone: e.telefone, instagram: '',
       modelo: e.interesse || '', cor: '',
@@ -1134,43 +1143,49 @@ export default function Negociacao() {
     const f = apNeg.fotos || {}
     return (form.cor && f[form.cor]?.[0]) || apNeg.cores.map(c => f[c]?.[0]).find(Boolean) || Object.values(f).flat()[0] || null
   })()
+  // com 2 ou mais aparelhos, junta as fotos lado a lado numa imagem só (o WhatsApp mostra 1 foto por link)
+  const fotosProposta = [...extrasProposta.map(x => x.foto), urlFotoProposta].filter((u): u is string => !!u)
+  const chaveFotos = fotosProposta.join('|')
   useEffect(() => {
     setFotoProposta(null); setFotoPropostaPng(null); setLinkFotoProposta(null)
-    if (!urlFotoProposta) return
+    if (!chaveFotos) return
+    const urls = chaveFotos.split('|')
     let cancelado = false
     ;(async () => {
       try {
-        const blob = await (await fetch(urlFotoProposta)).blob()
-        const img = await createImageBitmap(blob)
+        const imgs = await Promise.all(urls.map(async u => createImageBitmap(await (await fetch(u)).blob())))
         const lado = 1080, c = document.createElement('canvas')
         c.width = lado; c.height = lado
         const ctx = c.getContext('2d')!
         ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, lado, lado) // fundo branco (PNG sem fundo fica preto no WhatsApp)
-        const esc = Math.min((lado * 0.88) / img.width, (lado * 0.88) / img.height)
-        const w = img.width * esc, h = img.height * esc
-        ctx.drawImage(img, (lado - w) / 2, (lado - h) / 2, w, h)
+        const larg = lado / imgs.length
+        imgs.forEach((img, i) => {
+          const esc = Math.min((larg * 0.92) / img.width, (lado * 0.88) / img.height)
+          const w = img.width * esc, h = img.height * esc
+          ctx.drawImage(img, larg * i + (larg - w) / 2, (lado - h) / 2, w, h)
+        })
         const jpg = await new Promise<Blob | null>(ok => c.toBlob(ok, 'image/jpeg', 0.9))
         if (jpg && !cancelado) setFotoProposta(new File([jpg], 'celular.jpg', { type: 'image/jpeg' }))
         // sobe a foto com fundo branco pra mandar o link junto da proposta (o WhatsApp mostra a foto na conversa)
         if (jpg && !cancelado) {
-          let h = 0; for (const ch of urlFotoProposta) h = (h * 31 + ch.charCodeAt(0)) | 0
+          let h = 0; for (const ch of chaveFotos) h = (h * 31 + ch.charCodeAt(0)) | 0
           const caminho = `propostas/${(h >>> 0).toString(36)}.jpg`
           const up = await supabase.storage.from('fotos').upload(caminho, jpg, { upsert: true, contentType: 'image/jpeg' })
           if (up.error) console.error('Subir foto da proposta:', up.error)
-          if (!cancelado) setLinkFotoProposta(up.error ? urlFotoProposta : supabase.storage.from('fotos').getPublicUrl(caminho).data.publicUrl)
+          if (!cancelado) setLinkFotoProposta(up.error ? (urls.length === 1 ? urls[0] : null) : `${location.origin}/f/${caminho.split('/')[1]}`) // link curto (o site repassa pra foto)
         }
         const png = await new Promise<Blob | null>(ok => c.toBlob(ok, 'image/png'))
         if (png && !cancelado) setFotoPropostaPng(png)
       } catch (e) { console.error('Foto da proposta:', e) }
     })()
     return () => { cancelado = true }
-  }, [urlFotoProposta])
+  }, [chaveFotos])
 
   // Valor de cada parcela numa opção de pagamento (mesma conta da lista de parcelamento)
   function simular(label: string) {
     const t = TAXAS.find(x => x.label === label)
     if (!t) return null
-    const total = valorFinanciar / (1 - t.taxa / 100)
+    const total = financiarProposta / (1 - t.taxa / 100)
     return { t, parcela: t.parcelas === 1 ? total : total / t.parcelas }
   }
 
@@ -1184,7 +1199,9 @@ export default function Negociacao() {
 
   function textoProposta() {
     const escolhidas = TAXAS.map(t => t.label).filter(l => simulacoes.includes(l))
-    return `Segue a proposta:\n\n📱 *${form.modelo}${form.cor ? ' ' + form.cor : ''}*\n✅ Valor: ${fmt(valorAparelho)}`
+    const todos = [...extrasProposta, ...(form.modelo.trim() && valorAparelho ? [{ modelo: form.modelo, cor: form.cor, valor: valorAparelho }] : [])]
+    return `Segue a proposta:\n\n` + todos.map(x => `📱 *${x.modelo}${x.cor ? ' ' + x.cor : ''}*\n✅ Valor: ${fmt(x.valor)}`).join('\n\n')
+      + (todos.length > 1 ? `\n\n💰 *Total: ${fmt(totalProposta)}*` : '')
       + (valorEntrada > 0 ? `\n✅ Entrada: ${fmt(valorEntrada)}` : '')
       + (escolhidas.length ? `\n\n💳 *Formas de pagamento*${valorEntrada > 0 ? ' (depois da entrada)' : ''}:\n` + escolhidas.map(linhaSimulacao).join('\n') : '')
       + `\n\n_Marcos Magazine_`
@@ -1193,14 +1210,14 @@ export default function Negociacao() {
   const digitosCliente = form.telefone.replace(/\D/g, '')
 
   async function enviarProposta() {
-    if (!form.modelo.trim() || !valorAparelho) { alert('Escolha o celular primeiro'); return }
+    if (!extrasProposta.length && (!form.modelo.trim() || !valorAparelho)) { alert('Escolha o celular primeiro'); return }
     const texto = textoProposta()
 
     // Com o número do cliente: abre direto a conversa dele com o texto pronto e deixa a foto copiada pra colar
     if (digitosCliente) {
       if (digitosCliente.length < 10) { alert('Confira o WhatsApp do cliente (com DDD)'); return }
-      const fotoLink = linkFotoProposta || urlFotoProposta
-      const link = linkWhatsApp(form.telefone, fotoLink ? `${texto}\n\n📷 Foto: ${fotoLink}` : texto)
+      const fotoLink = linkFotoProposta || (extrasProposta.length ? null : urlFotoProposta)
+      const link = linkWhatsApp(form.telefone, fotoLink ? `${fotoLink}\n\n${texto}` : texto)
       if (fotoPropostaPng && typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
         const copiar = navigator.clipboard.write([new ClipboardItem({ 'image/png': fotoPropostaPng })]).catch(e => console.error('Copiar foto:', e))
         // Espera a cópia terminar (rapidinho) antes de sair pro WhatsApp
@@ -1226,7 +1243,7 @@ export default function Negociacao() {
 
   // Manda a foto já anexada (abre o compartilhar do celular: escolhe o WhatsApp e o cliente)
   async function enviarComFotoAnexada() {
-    if (!form.modelo.trim() || !valorAparelho) { alert('Escolha o celular primeiro'); return }
+    if (!extrasProposta.length && (!form.modelo.trim() || !valorAparelho)) { alert('Escolha o celular primeiro'); return }
     const texto = textoProposta()
     if (!fotoProposta) { alert('A foto desse celular ainda não carregou. Espera um segundinho e tenta de novo.'); return }
         // iPad/iPhone: o compartilhar tem que abrir NA HORA do toque (nada de esperar antes, senão o Safari bloqueia)
@@ -1596,7 +1613,7 @@ export default function Negociacao() {
                 </div>
               </div>
             </div>
-            <div style={s.section}>
+            <div style={s.section} ref={aparelhoRef}>
               <h3 style={s.sectionTitle}>Aparelho</h3>
               {manualNeg && !aparelhoSelecionado ? (
                 <div style={{ marginBottom: 16 }}>
@@ -1778,6 +1795,30 @@ export default function Negociacao() {
             </div>
             <div style={{ ...s.section, border: '1px solid #25D366' }}>
               <h3 style={{ ...s.sectionTitle, color: '#25D366' }}>📲 Proposta no WhatsApp</h3>
+              <p style={{ color: '#888', fontSize: 13, margin: '0 0 8px' }}>Aparelhos na proposta:</p>
+              {[...extrasProposta.map((x, i) => ({ ...x, i })), ...(form.modelo && valorAparelho > 0 ? [{ modelo: form.modelo, cor: form.cor, valor: valorAparelho, foto: urlFotoProposta, i: -1 }] : [])].map(x => (
+                <div key={x.i} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#151515', border: '1px solid #2a2a2a', borderRadius: 12, padding: 8, marginBottom: 8 }}>
+                  <div style={{ width: 44, height: 54, borderRadius: 8, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+                    {x.foto ? <img src={x.foto} alt="" style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }} /> : '📱'}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, color: '#fff', fontWeight: 700, fontSize: 14 }}>{x.modelo}</p>
+                    <p style={{ margin: '2px 0 0', color: '#aaa', fontSize: 13 }}>{x.cor ? x.cor + ' · ' : ''}{fmt(x.valor)}</p>
+                  </div>
+                  {x.i >= 0 && <button type="button" onClick={() => setExtrasProposta(l => l.filter((_, k) => k !== x.i))}
+                    style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: '#262626', color: '#fff', fontSize: 15, cursor: 'pointer' }}>✕</button>}
+                </div>
+              ))}
+              <button type="button" onClick={() => {
+                  if (!form.modelo.trim() || !valorAparelho) { alert('Escolha o celular e o valor primeiro'); return }
+                  setExtrasProposta(l => [...l, { modelo: form.modelo, cor: form.cor, valor: valorAparelho, foto: urlFotoProposta }])
+                  setForm(f => ({ ...f, modelo: '', cor: '', valor_aparelho: '' }))
+                  setTimeout(() => aparelhoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+                }}
+                style={{ width: '100%', margin: '2px 0 12px', height: 44, border: '2px dashed #25D366', background: 'transparent', color: '#25D366', borderRadius: 12, fontSize: 15, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+                + Adicionar outro aparelho
+              </button>
+              {extrasProposta.length > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed #333', padding: '10px 0 12px', color: '#fff' }}><span>Total da proposta</span><b style={{ fontSize: 20 }}>{fmt(totalProposta)}</b></div>}
               <p style={{ color: '#888', fontSize: 13, margin: '0 0 10px' }}>Marque as parcelas que vão juntas na mensagem:</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
                 {TAXAS.filter(t => t.label !== 'Débito sem juros').map(t => {
@@ -1787,12 +1828,12 @@ export default function Negociacao() {
                     <button key={t.label} type="button" onClick={() => alternarSimulacao(t.label)}
                       style={{ background: on ? '#25D366' : '#151515', color: on ? '#000' : '#ccc', border: '1px solid ' + (on ? '#25D366' : '#333'), borderRadius: 12, padding: '8px 12px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
                       {on ? '✓ ' : ''}{t.label === 'À vista sem juros' ? 'À vista' : t.label}
-                      {valorAparelho > 0 && sim && <span style={{ display: 'block', fontSize: 11, fontWeight: 400, opacity: 0.8 }}>{fmt(sim.parcela)}</span>}
+                      {totalProposta > 0 && sim && <span style={{ display: 'block', fontSize: 11, fontWeight: 400, opacity: 0.8 }}>{fmt(sim.parcela)}</span>}
                     </button>
                   )
                 })}
               </div>
-              {(!form.modelo || valorAparelho <= 0) && <p style={{ color: '#ffc800', fontSize: 13, margin: '0 0 10px', textAlign: 'center' }}>Escolha o celular e o valor pra enviar</p>}
+              {!extrasProposta.length && (!form.modelo || valorAparelho <= 0) && <p style={{ color: '#ffc800', fontSize: 13, margin: '0 0 10px', textAlign: 'center' }}>Escolha o celular e o valor pra enviar</p>}
               <div>
                 <button type="button" onClick={() => { if (digitosCliente.length < 10 && fotoProposta && navigator.canShare?.({ files: [fotoProposta] })) enviarComFotoAnexada(); else enviarProposta() }}
                   style={{ width: '100%', background: '#25D366', color: '#000', border: 'none', borderRadius: 14, padding: 15, fontSize: 17, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
