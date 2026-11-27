@@ -347,7 +347,6 @@ export default function Negociacao() {
   const [fotoProposta, setFotoProposta] = useState<File | null>(null)
   // Mesma foto em PNG: é o formato que o iPhone/iPad aceita pra copiar imagem
   const [fotoPropostaPng, setFotoPropostaPng] = useState<Blob | null>(null)
-  const [linkFotoProposta, setLinkFotoProposta] = useState<string | null>(null)
   // outros aparelhos que vão juntos na mesma proposta (cliente que compra 2 ou mais)
   const [extrasProposta, setExtrasProposta] = useState<{ modelo: string; cor: string; valor: number; foto: string | null }[]>([])
   const aparelhoRef = useRef<HTMLDivElement>(null)
@@ -1147,7 +1146,7 @@ export default function Negociacao() {
   const fotosProposta = [...extrasProposta.map(x => x.foto), urlFotoProposta].filter((u): u is string => !!u)
   const chaveFotos = fotosProposta.join('|')
   useEffect(() => {
-    setFotoProposta(null); setFotoPropostaPng(null); setLinkFotoProposta(null)
+    setFotoProposta(null); setFotoPropostaPng(null)
     if (!chaveFotos) return
     const urls = chaveFotos.split('|')
     let cancelado = false
@@ -1166,14 +1165,6 @@ export default function Negociacao() {
         })
         const jpg = await new Promise<Blob | null>(ok => c.toBlob(ok, 'image/jpeg', 0.9))
         if (jpg && !cancelado) setFotoProposta(new File([jpg], 'celular.jpg', { type: 'image/jpeg' }))
-        // sobe a foto com fundo branco pra mandar o link junto da proposta (o WhatsApp mostra a foto na conversa)
-        if (jpg && !cancelado) {
-          let h = 0; for (const ch of chaveFotos) h = (h * 31 + ch.charCodeAt(0)) | 0
-          const caminho = `propostas/${(h >>> 0).toString(36)}.jpg`
-          const up = await supabase.storage.from('fotos').upload(caminho, jpg, { upsert: true, contentType: 'image/jpeg' })
-          if (up.error) console.error('Subir foto da proposta:', up.error)
-          if (!cancelado) setLinkFotoProposta(up.error ? (urls.length === 1 ? urls[0] : null) : `${location.origin}/api/f?i=${caminho.split('/')[1].replace('.jpg', '')}`) // link curto (o site repassa pra foto)
-        }
         const png = await new Promise<Blob | null>(ok => c.toBlob(ok, 'image/png'))
         if (png && !cancelado) setFotoPropostaPng(png)
       } catch (e) { console.error('Foto da proposta:', e) }
@@ -1216,8 +1207,7 @@ export default function Negociacao() {
     // Com o número do cliente: abre direto a conversa dele com o texto pronto e deixa a foto copiada pra colar
     if (digitosCliente) {
       if (digitosCliente.length < 10) { alert('Confira o WhatsApp do cliente (com DDD)'); return }
-      const fotoLink = linkFotoProposta || (extrasProposta.length ? null : urlFotoProposta)
-      const link = linkWhatsApp(form.telefone, fotoLink ? `${fotoLink}\n\n${texto}` : texto)
+      const link = linkWhatsApp(form.telefone, texto) // sem link da foto: a foto vai copiada pra colar
       if (fotoPropostaPng && typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
         const copiar = navigator.clipboard.write([new ClipboardItem({ 'image/png': fotoPropostaPng })]).catch(e => console.error('Copiar foto:', e))
         // Espera a cópia terminar (rapidinho) antes de sair pro WhatsApp
@@ -1840,7 +1830,7 @@ export default function Negociacao() {
                   📲 Enviar proposta no WhatsApp{fotoProposta ? ' (com foto)' : ''}
                 </button>
                 {digitosCliente.length >= 10
-                  ? <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0', textAlign: 'center' }}>Abre direto a conversa de {form.telefone} com o texto pronto.{fotoProposta ? ' A foto vai junto pelo link.' : ''}</p>
+                  ? <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0', textAlign: 'center' }}>Abre direto a conversa de {form.telefone} com o texto pronto.{fotoProposta ? ' A foto fica copiada: segure na caixa de mensagem e toque em Colar.' : ''}</p>
                   : fotoProposta && <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0', textAlign: 'center' }}>Escolha o WhatsApp e o cliente. Se o texto não for junto, é só colar: ele já fica copiado.</p>}
               </div>
             </div>
