@@ -350,6 +350,17 @@ export default function Negociacao() {
   // outros aparelhos que vão juntos na mesma proposta (cliente que compra 2 ou mais)
   const [extrasProposta, setExtrasProposta] = useState<{ modelo: string; cor: string; valor: number; foto: string | null }[]>([])
   const aparelhoRef = useRef<HTMLDivElement>(null)
+  const valoresRef = useRef<HTMLDivElement>(null)
+  // toca num aparelho da proposta: ele vira o aparelho de cima (pra mudar o valor) e a tela sobe até Valores
+  function editarDaProposta(i: number) {
+    if (i >= 0) {
+      const x = extrasProposta[i]
+      const atual = form.modelo.trim() && valorAparelho ? { modelo: form.modelo, cor: form.cor, valor: valorAparelho, foto: urlFotoProposta } : null
+      setExtrasProposta(l => (atual ? l.map((y, k) => (k === i ? atual : y)) : l.filter((_, k) => k !== i)))
+      setForm({ ...form, modelo: x.modelo, cor: x.cor, valor_aparelho: String(x.valor).replace('.', ',') })
+    }
+    setTimeout(() => valoresRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+  }
   // Parcelas que vão juntas na proposta do WhatsApp (escolhe várias de uma vez)
   const [simulacoes, setSimulacoes] = useState<string[]>(() => {
     try { const v = JSON.parse(localStorage.getItem('simulacoes') || 'null'); if (Array.isArray(v) && v.length) return v } catch { /* padrão */ }
@@ -1709,7 +1720,7 @@ export default function Negociacao() {
                 </div>
               )}
             </div>
-            <div style={s.section}>
+            <div style={s.section} ref={valoresRef}>
               <h3 style={s.sectionTitle}>Valores</h3>
               <div style={s.formGrid3}>
                 <div>
@@ -1787,7 +1798,7 @@ export default function Negociacao() {
               <h3 style={{ ...s.sectionTitle, color: '#25D366' }}>📲 Proposta no WhatsApp</h3>
               <p style={{ color: '#888', fontSize: 13, margin: '0 0 8px' }}>Aparelhos na proposta:</p>
               {[...extrasProposta.map((x, i) => ({ ...x, i })), ...(form.modelo && valorAparelho > 0 ? [{ modelo: form.modelo, cor: form.cor, valor: valorAparelho, foto: urlFotoProposta, i: -1 }] : [])].map(x => (
-                <div key={x.i} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#151515', border: '1px solid #2a2a2a', borderRadius: 12, padding: 8, marginBottom: 8 }}>
+                <div key={x.i} onClick={() => editarDaProposta(x.i)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#151515', border: '1px solid #2a2a2a', borderRadius: 12, padding: 8, marginBottom: 8, cursor: 'pointer' }}>
                   <div style={{ width: 44, height: 54, borderRadius: 8, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
                     {x.foto ? <img src={x.foto} alt="" style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }} /> : '📱'}
                   </div>
@@ -1795,7 +1806,7 @@ export default function Negociacao() {
                     <p style={{ margin: 0, color: '#fff', fontWeight: 700, fontSize: 14 }}>{x.modelo}</p>
                     <p style={{ margin: '2px 0 0', color: '#aaa', fontSize: 13 }}>{x.cor ? x.cor + ' · ' : ''}{fmt(x.valor)}</p>
                   </div>
-                  {x.i >= 0 && <button type="button" onClick={() => setExtrasProposta(l => l.filter((_, k) => k !== x.i))}
+                  {x.i >= 0 && <button type="button" onClick={e => { e.stopPropagation(); setExtrasProposta(l => l.filter((_, k) => k !== x.i)) }}
                     style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: '#262626', color: '#fff', fontSize: 15, cursor: 'pointer' }}>✕</button>}
                 </div>
               ))}
