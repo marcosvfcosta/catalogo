@@ -1172,7 +1172,7 @@ export default function Negociacao() {
           const caminho = `propostas/${(h >>> 0).toString(36)}.jpg`
           const up = await supabase.storage.from('fotos').upload(caminho, jpg, { upsert: true, contentType: 'image/jpeg' })
           if (up.error) console.error('Subir foto da proposta:', up.error)
-          if (!cancelado) setLinkFotoProposta(up.error ? (urls.length === 1 ? urls[0] : null) : `${location.origin}/f/${caminho.split('/')[1]}`) // link curto (o site repassa pra foto)
+          if (!cancelado) setLinkFotoProposta(up.error ? (urls.length === 1 ? urls[0] : null) : `${location.origin}/api/f?i=${caminho.split('/')[1].replace('.jpg', '')}`) // link curto (o site repassa pra foto)
         }
         const png = await new Promise<Blob | null>(ok => c.toBlob(ok, 'image/png'))
         if (png && !cancelado) setFotoPropostaPng(png)
